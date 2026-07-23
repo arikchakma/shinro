@@ -46,7 +46,7 @@ belong to the user's server entry:
 // app/server.ts
 import { serve } from "@hono/node-server";
 
-import app from "virtual:daroyan/app";
+import app from "daroyan/entry";
 import { shutdown } from "./shutdown";
 import { initDatabase } from "./lib/db";
 import { initRedis } from "./lib/redis";
@@ -110,18 +110,18 @@ route files.
 incoming requests to the correct file without taking ownership of the
 application or its process.
 
-| Concept                        | Public name           |
-| ------------------------------ | --------------------- |
-| Framework package              | `daroyan`             |
-| Vite plugin                    | `daroyan()`           |
-| Hono app factory               | `defineApp()`         |
-| Route handler helper           | `defineHandler()`     |
-| Directory middleware helper    | `defineMiddleware()`  |
-| Generated assembled app        | `virtual:daroyan/app` |
-| Generated RPC application type | `AppType`             |
-| Generated client factory       | `createClient()`      |
-| Generated working directory    | `.daroyan/`           |
-| Log prefix                     | `[daroyan]`           |
+| Concept                        | Public name          |
+| ------------------------------ | -------------------- |
+| Framework package              | `daroyan`            |
+| Vite plugin                    | `daroyan()`          |
+| Hono app factory               | `defineApp()`        |
+| Route handler helper           | `defineHandler()`    |
+| Directory middleware helper    | `defineMiddleware()` |
+| Generated assembled app        | `daroyan/entry`      |
+| Generated RPC application type | `AppType`            |
+| Generated client factory       | `createClient()`     |
+| Generated working directory    | `.daroyan/`          |
+| Log prefix                     | `[daroyan]`          |
 
 The names intentionally resemble Kumoh, while the process model is better
 suited to long-running Node.js and Bun servers.
@@ -396,7 +396,7 @@ export default app;
 
 Daroyan's generated application wrapper imports this instance, registers
 directory middleware and routes, and exports the assembled instance through
-`virtual:daroyan/app`.
+`daroyan/entry`.
 
 The user's app module contains no generated imports and does not manually
 mount file routes.
@@ -685,10 +685,39 @@ part of the Hono RPC contract.
 // app/routes/api/_middleware.ts
 import { defineMiddleware } from "daroyan/app";
 
-export default defineMiddleware(async (c, next) => {
-  c.header("x-api-version", "1");
-  await next();
-});
+export default defineMiddleware(
+  async (c, next) => {
+    c.header("x-api-version", "1");
+    await next();
+  },
+  async (c, next) => {
+    c.set("requestStartedAt", Date.now());
+    await next();
+  },
+);
+```
+
+`defineMiddleware()` is variadic. It accepts one or more ordinary Hono
+middleware handlers and returns a typed middleware bundle:
+
+```ts
+defineMiddleware(middleware);
+defineMiddleware(middlewareA, middlewareB, middlewareC);
+
+defineMiddleware<Middleware>(middleware);
+defineMiddleware<Middleware>(middlewareA, middlewareB);
+```
+
+The bundle preserves tuple order. Daroyan spreads it during registration,
+so request-side code runs left-to-right. Code after `await next()` unwinds
+right-to-left, following normal Hono middleware behavior.
+
+Existing bundles can be composed without a separate array API:
+
+```ts
+const security = defineMiddleware(cors(), secureHeaders());
+
+export default defineMiddleware(...security, authenticate());
 ```
 
 Generated middleware companion types are also optional:
@@ -697,7 +726,7 @@ Generated middleware companion types are also optional:
 import { defineMiddleware } from "daroyan/app";
 import type { Middleware } from "./+types/_middleware";
 
-export default defineMiddleware<Middleware>(async (c, next) => {
+export default defineMiddleware<Middleware>(requestId(), authenticate(), async (c, next) => {
   await next();
 });
 ```
@@ -772,10 +801,10 @@ raw server bindings. Those remain application and adapter concerns.
 
 ## 18. Assembled application
 
-`virtual:daroyan/app` is the generated runtime application module:
+`daroyan/entry` is the generated application entry:
 
 ```ts
-import app from "virtual:daroyan/app";
+import app from "daroyan/entry";
 ```
 
 Conceptually, it:
@@ -796,11 +825,22 @@ export const fetch: typeof app.fetch;
 export type AppType = /* generated RPC type */;
 ```
 
-The virtual module has no listener and performs no initialization or
-shutdown behavior.
+The entry module has no listener and performs no initialization or shutdown
+behavior.
 
-The user's server entry imports the assembled virtual app. Tests can import
-the same module, ensuring runtime and test route assembly cannot drift.
+The user's server imports the assembled entry. Tests import the same module,
+ensuring runtime and test route assembly cannot drift.
+
+The public name follows Kumoh's `kumoh/entry` convention. Vite internally
+resolves it to the private ID `\0daroyan/entry`; the private ID must never
+appear in user code, generated source imports, errors, or documentation.
+
+The package ships a fallback `daroyan/entry` declaration so TypeScript can
+resolve the subpath before generation. `.daroyan/types/entry.d.ts` refines
+that declaration to the current project's assembled `AppType`. The Vite
+plugin must resolve the runtime import before normal package resolution.
+Importing the package's runtime placeholder without the plugin throws an
+actionable error instead of returning an unassembled app.
 
 ## 19. User-owned server entry
 
@@ -811,7 +851,7 @@ the same module, ensuring runtime and test route assembly cannot drift.
 import { serve } from "@hono/node-server";
 import type { ServerType } from "@hono/node-server";
 
-import app from "virtual:daroyan/app";
+import app from "daroyan/entry";
 import { closeDatabase, initDatabase } from "./lib/db";
 import { closeRedis, initRedis } from "./lib/redis";
 
@@ -864,7 +904,7 @@ This is application code. Daroyan neither supplies nor calls `shutdown()`.
 
 ```ts
 // app/server.ts
-import app from "virtual:daroyan/app";
+import app from "daroyan/entry";
 
 import { closeDatabase, initDatabase } from "./lib/db";
 
@@ -1201,7 +1241,7 @@ Vite-powered tests import the same assembled app as the server:
 ```ts
 import { testClient } from "hono/testing";
 import { expect, test } from "vite-plus/test";
-import app from "virtual:daroyan/app";
+import app from "daroyan/entry";
 
 const client = testClient(app);
 
@@ -1234,7 +1274,7 @@ spawn the user's server entry explicitly.
 ├── rpc.ts
 └── types/
     ├── app.d.ts
-    ├── virtual.d.ts
+    ├── entry.d.ts
     └── app/routes/
         ├── +types/
         │   ├── _middleware.d.ts
@@ -1291,6 +1331,7 @@ Build errors:
 - mixed default sub-router and method exports;
 - unsupported method export values;
 - default export that is not a Hono sub-router;
+- unresolved `daroyan/entry`, which means the Vite plugin did not run;
 - production output unexpectedly split into multiple JavaScript chunks.
 
 Warnings:
@@ -1333,6 +1374,10 @@ Remove one file or choose a different URL.
       "types": "./dist/app.d.mts",
       "import": "./dist/app.mjs",
     },
+    "./entry": {
+      "types": "./dist/entry.d.mts",
+      "import": "./dist/entry.mjs",
+    },
     "./package.json": "./package.json",
   },
   "peerDependencies": {
@@ -1347,6 +1392,10 @@ it themselves, while Bun applications use their selected Bun API.
 
 Route modules import runtime-safe helpers from `daroyan/app`. Vite plugin
 implementation and Node built-ins must not enter route or browser graphs.
+
+`daroyan/entry` is a Vite-resolved project module. Its packaged JavaScript
+target is only an explanatory fallback for imports made without the
+Daroyan plugin; it is never the application used by a valid build.
 
 Exact peer version ranges must be chosen from compatibility testing before
 publication.
@@ -1405,18 +1454,23 @@ import { defineMiddleware } from "daroyan/app";
 
 import { authenticate } from "../lib/auth";
 
-export default defineMiddleware(async (c, next) => {
-  const user = await authenticate(c.req.raw);
+export default defineMiddleware(
+  async (c, next) => {
+    c.set("requestId", crypto.randomUUID());
+    await next();
+  },
+  async (c, next) => {
+    const user = await authenticate(c.req.raw);
 
-  if (!user) {
-    return c.json({ error: "UNAUTHORIZED" as const }, 401);
-  }
+    if (!user) {
+      return c.json({ error: "UNAUTHORIZED" as const }, 401);
+    }
 
-  c.set("user", user);
-  c.set("requestId", crypto.randomUUID());
+    c.set("user", user);
 
-  await next();
-});
+    await next();
+  },
+);
 ```
 
 ### 28.4 Collection route
@@ -1486,7 +1540,7 @@ export const GET = defineHandler<Route>(zValidator("param", params), async (c) =
 // app/server.ts
 import { serve } from "@hono/node-server";
 
-import app from "virtual:daroyan/app";
+import app from "daroyan/entry";
 import { shutdown } from "./shutdown";
 import { initDatabase } from "./lib/db";
 import { initRedis } from "./lib/redis";
@@ -1545,7 +1599,7 @@ This section constrains the future implementation without implementing it.
 - Register global app middleware first because it already exists on the
   instance.
 - Register cascaded middleware and routes deterministically.
-- Export the same assembled instance through `virtual:daroyan/app`.
+- Export the same assembled instance through `daroyan/entry`.
 - Never start or stop a listener.
 
 ### 29.3 Type generator
@@ -1563,7 +1617,8 @@ This section constrains the future implementation without implementing it.
 - `configResolved`: scan, validate, and generate.
 - development hooks: execute the configured user entry in an isolated,
   reloadable environment without taking over its lifecycle.
-- `resolveId` and `load`: expose `virtual:daroyan/app`.
+- `resolveId` and `load`: resolve `daroyan/entry` internally as
+  `\0daroyan/entry`.
 - build hooks: assert the expected entry filename and no unexpected chunks.
 - test integration: expose the assembled app without executing the server
   entry.
@@ -1577,7 +1632,9 @@ v0.1 is complete when:
 
 - `plugins: [daroyan()]` is the only required Vite integration.
 - `defineApp()` returns a normal Hono instance.
-- the app module uses ordinary Hono APIs and default-exports the instance;
+- the app module uses ordinary Hono APIs and default-exports the instance.
+- `daroyan/entry` exposes the assembled app without a user-facing
+  `virtual:` import.
 - Daroyan exposes no application lifecycle or shutdown API.
 - the user's Node or Bun entry controls the native server handle and
   signals.
@@ -1587,6 +1644,7 @@ v0.1 is complete when:
   without requiring `Route`.
 - static, dynamic, nested, index, and catch-all routes work.
 - ancestor middleware stacks root-to-leaf and runs once.
+- one `_middleware.ts` can declare multiple ordered middleware handlers.
 - validators and typed JSON responses reach the generated client.
 - route changes update runtime registration, companion types, and RPC.
 - runtime and RPC manifests cannot diverge.
