@@ -270,7 +270,7 @@ Generated companion types use TypeScript's `rootDirs` support:
     "moduleResolution": "Bundler",
     "rootDirs": [".", "./.daroyan/types"],
   },
-  "include": ["app", ".daroyan/types/**/*.d.ts"],
+  "include": ["app", ".daroyan/**/*.d.ts"],
 }
 ```
 
@@ -281,6 +281,11 @@ import type { Route } from "./+types/$id";
 ```
 
 without writing generated files into `app/routes`.
+
+Daroyan keeps the project environment binding in
+`.daroyan/daroyan.d.ts`. The TypeScript include above guarantees that
+editors and standalone `tsc` load the project-specific `daroyan/app`
+augmentation without requiring an import in every route.
 
 Projects should ignore:
 
@@ -310,6 +315,7 @@ copy-pasteable correction when they are missing.
 │               └── $id.ts
 ├── .daroyan/
 │   ├── client.ts
+│   ├── daroyan.d.ts
 │   ├── manifest.json
 │   ├── rpc.ts
 │   └── types/
@@ -657,9 +663,17 @@ Requirements:
 
 - handlers must be chained to retain Hono's RPC schema;
 - a module cannot mix a default sub-router and uppercase method exports;
+- the default sub-router is imported by both assemblers and mounted with
+  `.route("/admin", admin)`;
+- a default sub-router owns its complete mount namespace, so
+  `app/routes/admin.ts` cannot coexist with files under
+  `app/routes/admin/**`;
 - named HTTP exports are the primary convention;
 - filename companion types do not describe paths declared inside the
   sub-router because Hono already types those inline paths.
+
+Owning the complete namespace prevents an opaque route declared inside the
+sub-router from silently colliding with a descendant file route.
 
 ## 16. Middleware
 
@@ -708,9 +722,11 @@ defineMiddleware<Middleware>(middleware);
 defineMiddleware<Middleware>(middlewareA, middlewareB);
 ```
 
-The bundle preserves tuple order. Daroyan spreads it during registration,
-so request-side code runs left-to-right. Code after `await next()` unwinds
-right-to-left, following normal Hono middleware behavior.
+The bundle preserves the original tuple, including each middleware's input
+and return type. It must not widen the result to `MiddlewareHandler[]`.
+Daroyan spreads it during registration, so request-side code runs
+left-to-right. Code after `await next()` unwinds right-to-left, following
+normal Hono middleware behavior.
 
 Existing bundles can be composed without a separate array API:
 
@@ -743,6 +759,35 @@ A request under `/api/admin` runs them in that order. Child middleware
 augments rather than replaces ancestor middleware, and each handler runs
 once per request.
 
+For named method routes, Daroyan flattens the applicable directory
+middleware into that route's handler chain. Given a root middleware, an API
+middleware, and `GET /api/users`, runtime registration is conceptually:
+
+```ts
+app.on("GET", "/api/users", ...rootMiddleware, ...apiMiddleware, ...usersGet);
+```
+
+Daroyan does not implement directory middleware by assuming a particular
+Hono wildcard behavior. Flattening guarantees that middleware applies to
+the route at the directory's own URL as well as its descendants. Because
+conflicting route shapes are rejected, exactly one flattened route chain
+handles a request and each inherited middleware runs once.
+
+For a default sub-router, the runtime assembler creates an internal wrapper
+sub-app so inherited middleware still applies once to the mount root and
+all internal paths:
+
+```ts
+const mountedAdmin = new Hono<ProjectEnv>()
+  .use("*", ...rootMiddleware, ...adminMiddleware)
+  .route("/", admin);
+
+app.route("/admin", mountedAdmin);
+```
+
+The wrapper is an implementation detail and is never imported by user
+code.
+
 Execution order:
 
 1. middleware registered by the user on the app instance;
@@ -751,10 +796,45 @@ Execution order:
 4. route-local middleware;
 5. final route handler.
 
-Directory middleware can return early responses. Hono cannot automatically
-attach a separately registered middleware response to every RPC route
-type. Daroyan should document this Hono limitation rather than introducing
-a required global response generic.
+The RPC generator uses the same flattened chain for named method routes.
+Consequently, a typed early response from directory middleware, such as a
+`401` authentication response, becomes part of that route's Hono RPC
+response union.
+
+```ts
+// app/routes/api/_middleware.ts
+export default defineMiddleware(async (c, next) => {
+  const user = await authenticate(c.req.raw);
+
+  if (!user) {
+    return c.json({ error: "UNAUTHORIZED" as const }, 401);
+  }
+
+  c.set("user", user);
+  await next();
+});
+```
+
+```ts
+const response = await api.api.users.$get();
+
+if (response.status === 401) {
+  const error = await response.json();
+  // { error: "UNAUTHORIZED" }
+}
+```
+
+Two boundaries remain:
+
+- middleware manually registered on the base app is not reconstructable as
+  part of every file route's response schema;
+- a default-exported Hono sub-router retains its own RPC schema, but Daroyan
+  cannot automatically add responses from surrounding directory
+  middleware to every opaque internal route in v0.1.
+
+Authors of default sub-routers should attach contract-relevant middleware
+inside their chained sub-router when its early responses must appear in the
+client. Daroyan does not introduce a required global response generic.
 
 ## 17. Environment typing
 
@@ -795,6 +875,53 @@ export const GET = defineHandler((c) => {
 
 This project-level binding is independent of optional `+types`. A route
 without a `Route` import still receives the configured environment.
+
+The package declarations use a mergeable project marker rather than trying
+to replace a generic default through module augmentation:
+
+```ts
+// Conceptual declarations shipped by daroyan/app
+import type { Env, Hono } from "hono";
+
+export interface DaroyanProject {}
+
+type ProjectApp = DaroyanProject extends {
+  readonly app: infer App;
+}
+  ? App
+  : Hono;
+
+export type ProjectEnv = ProjectApp extends Hono<infer E, any, any> ? E : Env;
+
+export const defineHandler: DefineHandler<ProjectEnv>;
+export const defineMiddleware: DefineMiddleware<ProjectEnv>;
+```
+
+Type generation writes this project-specific merge:
+
+```ts
+// .daroyan/daroyan.d.ts
+import type app from "../app/app";
+
+declare module "daroyan/app" {
+  interface DaroyanProject {
+    readonly app: typeof app;
+  }
+}
+```
+
+The generated declaration is loaded through the project's
+`.daroyan/**/*.d.ts` TypeScript include. It is generated automatically by
+the plugin and by `daroyan typegen`; users do not import or edit it.
+
+The fallback before type generation is the ordinary Hono `Env`. After type
+generation, failing to infer the environment from the configured app is a
+type-generation error rather than silently requiring
+`defineHandler<AppEnv>(...)`.
+
+v0.1 supports one Daroyan application per TypeScript project. Separate
+applications in a monorepo use separate `tsconfig.json` programs so their
+`DaroyanProject` declarations cannot collide.
 
 Daroyan does not normalize `process.env`, `Bun.env`, or runtime-specific
 raw server bindings. Those remain application and adapter concerns.
@@ -1050,20 +1177,38 @@ Example:
   "basePath": "/",
   "routes": [
     {
+      "kind": "methods",
       "file": "app/routes/api/users/index.ts",
       "path": "/api/users",
       "methods": ["GET", "POST"],
       "middleware": ["app/routes/api/_middleware.ts"]
     },
     {
+      "kind": "methods",
       "file": "app/routes/api/users/$id.ts",
       "path": "/api/users/:id",
       "methods": ["GET"],
       "middleware": ["app/routes/api/_middleware.ts"]
+    },
+    {
+      "kind": "sub-router",
+      "file": "app/routes/admin.ts",
+      "mountPath": "/admin",
+      "middleware": []
     }
   ]
 }
 ```
+
+Every route record has an explicit `kind`:
+
+- `methods` records contain a normalized path and detected uppercase
+  method exports;
+- `sub-router` records contain a mount path and a default Hono export.
+
+Both record kinds contain the ordered root-to-leaf directory middleware
+files that apply to them. A sub-router record reserves its entire mount
+namespace.
 
 Generated artifacts use project-relative normalized paths, never absolute
 machine paths.
@@ -1076,30 +1221,53 @@ The generator creates a chained Hono application in `.daroyan/rpc.ts`:
 
 ```ts
 import { Hono } from "hono";
+import type { ProjectEnv } from "daroyan/app";
 
+import admin from "../app/routes/admin";
+import apiMiddleware from "../app/routes/api/_middleware";
 import { GET as usersGet, POST as usersPost } from "../app/routes/api/users";
 import { GET as userGet } from "../app/routes/api/users/$id";
 
-const routes = new Hono()
-  .get("/api/users", ...usersGet)
-  .post("/api/users", ...usersPost)
-  .get("/api/users/:id", ...userGet);
+const routes = new Hono<ProjectEnv>()
+  .get("/api/users", ...apiMiddleware, ...usersGet)
+  .post("/api/users", ...apiMiddleware, ...usersPost)
+  .get("/api/users/:id", ...apiMiddleware, ...userGet)
+  .route("/admin", admin);
 
 export type AppType = typeof routes;
 ```
+
+Named method registrations contain the same ordered directory and
+route-local handler chain used by the runtime assembler. This allows Hono
+to merge validator inputs, middleware early responses, and handler
+responses into the generated schema.
+
+Default sub-routers are imported as default values and mounted through a
+chained `.route(mountPath, router)` call. Their internal chained schema
+therefore reaches `AppType` and the generated client.
 
 The real generator also incorporates any chain-typed manual routes from
 the base app when feasible.
 
 Invariants:
 
-- runtime and RPC paths come from the same manifest;
+- runtime assembly and RPC generation consume the same normalized
+  route-kind, path, method, and middleware metadata;
+- named method routes use the same ordered root-to-leaf directory,
+  route-local, and final-handler chain in both representations;
+- every default sub-router is mounted through `.route()` in both
+  representations;
 - method detection uses parsed exports, not source substring searches;
 - every generated Hono registration is chained and assigned;
 - optional `Route` imports do not affect RPC generation;
-- validators and handler responses remain the source of request and
-  response types;
+- validators, typed middleware responses, and handler responses remain the
+  source of request and response types;
 - generated imports are portable and project-relative.
+
+This shared metadata guarantee does not claim that middleware manually
+registered on the base app, or surrounding directory middleware responses
+for opaque default sub-router internals, become part of every RPC response
+union.
 
 ### 23.1 Generated client
 
@@ -1216,8 +1384,12 @@ await api.api.users.$get({
 Daroyan guarantees:
 
 - discovered paths and exported methods appear on `Client`;
+- paths declared by a chained default sub-router appear beneath its mount
+  path on `Client`;
 - validator-declared request inputs flow to the client;
 - filename parameters flow to the client's `param` input;
+- typed early responses from flattened directory middleware flow to named
+  method routes;
 - `c.json()` bodies and explicit statuses flow to the client;
 - adding, removing, or renaming a route updates the contract.
 
@@ -1226,8 +1398,9 @@ Daroyan does not claim:
 - runtime validation without a validator;
 - filename-derived server parameter-key checking without optional `Route`;
 - inference for an untyped `await c.req.json()`;
-- automatic inference of responses hidden behind global or directory
-  middleware;
+- automatic inference of responses hidden behind base-app middleware;
+- automatic addition of surrounding directory-middleware responses to
+  every internal route of an opaque default sub-router;
 - version compatibility between independently deployed client and server.
 
 Handlers should return typed JSON responses with explicit status codes. A
@@ -1270,6 +1443,7 @@ spawn the user's server entry explicitly.
 ```text
 .daroyan/
 ├── client.ts
+├── daroyan.d.ts
 ├── manifest.json
 ├── rpc.ts
 └── types/
@@ -1288,6 +1462,8 @@ spawn the user's server entry explicitly.
 Requirements:
 
 - every generated file begins with a “do not edit” notice;
+- `.daroyan/daroyan.d.ts` contains the project marker augmentation needed
+  to bind `daroyan/app` helpers to the configured app environment;
 - writes are atomic;
 - unchanged files keep their modification time;
 - removed and renamed routes delete stale companions;
@@ -1326,6 +1502,8 @@ Build errors:
 - missing server entry during dev or build;
 - duplicate normalized paths;
 - equivalent dynamic route shapes;
+- a default sub-router whose mount namespace overlaps a descendant file
+  route;
 - non-final catch-all segments;
 - invalid dynamic parameter names;
 - mixed default sub-router and method exports;
@@ -1341,8 +1519,10 @@ Warnings:
 - generated client package export is missing;
 - a parameter schema does not correspond to the filename parameters when
   Daroyan can prove the mismatch;
-- global or directory middleware returns responses absent from the RPC
-  contract;
+- base-app middleware returns responses absent from file-route RPC
+  contracts;
+- directory middleware surrounding a default sub-router returns responses
+  absent from the sub-router's internal RPC contracts;
 - external runtime assets weaken the one-entry deployment model.
 
 Omitting `Route` or `Middleware` companion types is never a warning. It is
@@ -1356,6 +1536,17 @@ Example conflict:
   - app/routes/api/users/index.ts
 
 Remove one file or choose a different URL.
+```
+
+Example sub-router namespace conflict:
+
+```text
+[daroyan] Route namespace conflict at /admin
+  - app/routes/admin.ts default-exports a Hono sub-router
+  - app/routes/admin/stats.ts maps beneath the same mount
+
+A default sub-router owns its complete mount namespace.
+Move the nested route into the sub-router or use named method files.
 ```
 
 ## 27. Public package exports
@@ -1577,6 +1768,11 @@ const response = await api.api.users[":id"].$get({
 if (response.status === 200) {
   const { user } = await response.json();
 }
+
+if (response.status === 401) {
+  const { error } = await response.json();
+  // error: "UNAUTHORIZED"
+}
 ```
 
 ## 29. Implementation architecture
@@ -1588,7 +1784,9 @@ This section constrains the future implementation without implementing it.
 - Resolve paths relative to Vite's resolved project root.
 - Parse route modules with an AST parser.
 - Normalize separators to `/`.
-- Detect method exports and default sub-routers.
+- Classify every route as a named-method record or default sub-router
+  record.
+- Reserve a default sub-router's complete mount namespace.
 - Validate conflicts before runtime or RPC generation.
 - Produce one serializable normalized manifest.
 
@@ -1598,16 +1796,26 @@ This section constrains the future implementation without implementing it.
 - Import all directory middleware and route modules.
 - Register global app middleware first because it already exists on the
   instance.
-- Register cascaded middleware and routes deterministically.
+- For every named method route, flatten its root-to-leaf directory
+  middleware and exported handler tuple into one runtime registration.
+- Mount every default sub-router through `.route()` and ensure its
+  root-to-leaf directory middleware still runs once at runtime.
+- Register all routes deterministically.
 - Export the same assembled instance through `daroyan/entry`.
 - Never start or stop a listener.
 
 ### 29.3 Type generator
 
 - Infer the Hono environment from the configured app export.
-- Bind project-level `defineHandler` and `defineMiddleware` types.
+- Generate `.daroyan/daroyan.d.ts`, merging the configured app type into
+  `DaroyanProject`.
+- Derive `ProjectEnv` from that marker and bind project-level
+  `defineHandler` and `defineMiddleware` types without route-level
+  `AppEnv` generics.
 - Generate optional route and middleware companions.
-- Generate the chained Hono RPC source from the manifest.
+- Generate named RPC registrations with the same flattened middleware and
+  handler tuples used at runtime.
+- Generate chained `.route()` registrations for default sub-routers.
 - Generate a precomputed client module.
 - Use atomic content-aware writes.
 
@@ -1639,15 +1847,25 @@ v0.1 is complete when:
 - the user's Node or Bun entry controls the native server handle and
   signals.
 - route files work without generated imports.
+- an environment declared once through `defineApp<AppEnv>()` types
+  `c.var` in every `defineHandler()` and `defineMiddleware()` call without
+  repeating `AppEnv`;
 - optional `defineHandler<Route>()` provides exact filename parameters.
 - `zValidator("param", ...)` provides typed, runtime-validated parameters
   without requiring `Route`.
 - static, dynamic, nested, index, and catch-all routes work.
-- ancestor middleware stacks root-to-leaf and runs once.
+- ancestor middleware stacks root-to-leaf, applies to a route at the
+  middleware directory's exact URL, and runs once.
 - one `_middleware.ts` can declare multiple ordered middleware handlers.
-- validators and typed JSON responses reach the generated client.
+- validators, typed directory-middleware early responses, and typed JSON
+  handler responses reach the generated client for named method routes.
+- a default-exported chained Hono sub-router is mounted through `.route()`
+  and its internal paths reach the generated client.
+- a default sub-router cannot overlap descendant file routes beneath its
+  mount namespace.
 - route changes update runtime registration, companion types, and RPC.
-- runtime and RPC manifests cannot diverge.
+- runtime and RPC generation consume the same normalized route-kind, path,
+  method, and middleware metadata.
 - Node and Bun example entries build and run independently.
 - conflicts and invalid modules fail with actionable diagnostics.
 - `daroyan typegen` prepares a clean checkout for type checking.
