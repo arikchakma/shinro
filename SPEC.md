@@ -80,14 +80,14 @@ Generated `+types` are available but optional:
 import { defineHandler } from "daroyan/app";
 import type { Route } from "./+types/$id";
 
-export const GET = defineHandler<Route>((c) => {
+export const GET = defineHandler<Route.Handler>((c) => {
   return c.json({ id: c.req.param("id") }, 200);
 });
 ```
 
-The minimal and strict forms produce the same runtime route and RPC
-contract. The generated type only improves server-side filename-derived
-typing.
+The minimal and strict forms produce the same runtime route. The generated
+type only improves server-side filename-derived typing; the explicit
+generic's response-inference limitation is documented in section 14.2.
 
 ## 2. Meaning of “single”
 
@@ -589,7 +589,7 @@ It does not provide exact filename-derived parameter-key checking inside
 import { defineHandler } from "daroyan/app";
 import type { Route } from "./+types/$id";
 
-export const GET = defineHandler<Route>((c) => {
+export const GET = defineHandler<Route.Handler>((c) => {
   const id = c.req.param("id");
 
   // Known filename parameters are definitely present.
@@ -606,13 +606,15 @@ export const GET = defineHandler<Route>((c) => {
 The companion is conceptually:
 
 ```ts
-export type Route = DaroyanRoute<{
-  path: "/api/users/:id";
-  params: {
-    id: string;
-  };
-  env: AppEnv;
-}>;
+export namespace Route {
+  export type Handler = DaroyanRoute<{
+    path: "/api/users/:id";
+    params: {
+      id: string;
+    };
+    env: AppEnv;
+  }>;
+}
 ```
 
 Supported call forms:
@@ -621,12 +623,16 @@ Supported call forms:
 defineHandler(handler);
 defineHandler(middleware, handler);
 
-defineHandler<Route>(handler);
-defineHandler<Route>(middleware, handler);
+defineHandler<Route.Handler>(handler);
+defineHandler<Route.Handler>(middleware, handler);
 ```
 
 The generated generic changes types only. It does not register the route,
-add validation, or change runtime behavior.
+add validation, or change runtime behavior. Supplying the explicit
+`Route.Handler` generic can widen response and status inference because
+TypeScript does not partially infer later generic parameters after an
+explicit one. Routes that prioritize the narrowest RPC response contract
+can omit the companion generic and use validators for runtime input.
 
 ### 14.3 Recommended parameter validation
 
@@ -658,7 +664,7 @@ The two features can be combined:
 ```ts
 import type { Route } from "./+types/$id";
 
-export const GET = defineHandler<Route>(zValidator("param", params), async (c) => {
+export const GET = defineHandler<Route.Handler>(zValidator("param", params), async (c) => {
   const { id } = c.req.valid("param");
   return c.json({ id }, 200);
 });
@@ -667,7 +673,8 @@ export const GET = defineHandler<Route>(zValidator("param", params), async (c) =
 Use:
 
 - a validator when input must be checked at runtime;
-- `Route` when exact filename-derived `c.req.param()` keys are useful;
+- `Route.Handler` when exact filename-derived `c.req.param()` keys are
+  useful;
 - both when a team wants both guarantees;
 - neither for a low-ceremony route that accepts normal Hono typing.
 
@@ -750,8 +757,8 @@ middleware handlers and returns a typed middleware bundle:
 defineMiddleware(middleware);
 defineMiddleware(middlewareA, middlewareB, middlewareC);
 
-defineMiddleware<Middleware>(middleware);
-defineMiddleware<Middleware>(middlewareA, middlewareB);
+defineMiddleware<Route.Middleware>(middleware);
+defineMiddleware<Route.Middleware>(middlewareA, middlewareB);
 ```
 
 The bundle preserves the original tuple, including each middleware's input
@@ -772,11 +779,22 @@ Generated middleware companion types are also optional:
 
 ```ts
 import { defineMiddleware } from "daroyan/app";
-import type { Middleware } from "./+types/_middleware";
+import type { Route } from "./+types/_middleware";
 
-export default defineMiddleware<Middleware>(requestId(), authenticate(), async (c, next) => {
+export default defineMiddleware<Route.Middleware>(requestId(), authenticate(), async (c, next) => {
   await next();
 });
+```
+
+The middleware companion is conceptually:
+
+```ts
+export namespace Route {
+  export type Middleware = DaroyanMiddleware<{
+    path: "/api";
+    env: AppEnv;
+  }>;
+}
 ```
 
 Middleware stacks root-to-leaf:
@@ -1645,8 +1663,8 @@ Warnings:
   absent from the sub-router's internal RPC contracts;
 - external runtime assets weaken the one-entry deployment model.
 
-Omitting `Route` or `Middleware` companion types is never a warning. It is
-a supported API choice.
+Omitting `Route.Handler` or `Route.Middleware` companion types is never a
+warning. It is a supported API choice.
 
 Example conflict:
 
@@ -1839,7 +1857,7 @@ The same route could additionally opt into filename-derived typing:
 ```ts
 import type { Route } from "./+types/$id";
 
-export const GET = defineHandler<Route>(zValidator("param", params), async (c) => {
+export const GET = defineHandler<Route.Handler>(zValidator("param", params), async (c) => {
   const { id } = c.req.valid("param");
   return c.json({ user: await findUser(id) }, 200);
 });
@@ -1992,7 +2010,8 @@ v0.1 is complete when:
 - an environment declared once through `defineApp<AppEnv>()` types
   `c.var` in every `defineHandler()` and `defineMiddleware()` call without
   repeating `AppEnv`;
-- optional `defineHandler<Route>()` provides exact filename parameters.
+- optional `defineHandler<Route.Handler>()` provides exact filename
+  parameters.
 - `zValidator("param", ...)` provides typed, runtime-validated parameters
   without requiring `Route`.
 - static, dynamic, nested, index, and catch-all routes work.

@@ -167,8 +167,9 @@ descendant. It can export multiple middleware handlers:
 ```ts
 // app/routes/api/_middleware.ts
 import { defineMiddleware } from "daroyan/app";
+import type { Route } from "./+types/_middleware";
 
-export default defineMiddleware(
+export default defineMiddleware<Route.Middleware>(
   async (c, next) => {
     c.header("x-api-version", "1");
     await next();
@@ -221,7 +222,7 @@ Daroyan also generates an optional filename companion:
 import { defineHandler } from "daroyan/app";
 import type { Route } from "./+types/$id";
 
-export const GET = defineHandler<Route>((c) => {
+export const GET = defineHandler<Route.Handler>((c) => {
   const id = c.req.param("id");
   return c.json({ id }, 200);
 });
@@ -229,7 +230,9 @@ export const GET = defineHandler<Route>((c) => {
 
 The companion supplies the filename-derived path and parameter names. It
 does not validate requests at runtime; use `zValidator` when validation is
-required.
+required. Supplying the explicit `Route.Handler` generic can widen response
+and status inference because TypeScript does not partially infer later
+generic parameters after an explicit one.
 
 ## Chained sub-routers and manual routes
 

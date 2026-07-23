@@ -49,19 +49,46 @@ test("typegen prepares every generated type artifact in a clean checkout", async
   );
   await writeFile(
     `${root}/app/app.ts`,
-    'import { defineApp } from "daroyan/app";\nexport default defineApp();\n',
+    [
+      'import { defineApp } from "daroyan/app";',
+      "type AppEnv = { Variables: { requestId: string } };",
+      "export default defineApp<AppEnv>();",
+      "",
+    ].join("\n"),
   );
   await writeFile(
     `${root}/app/routes/users/$id.ts`,
     [
       'import { defineHandler } from "daroyan/app";',
       'import type { Route } from "./+types/$id";',
-      "export const GET = defineHandler<Route>((c) => {",
+      "export const GET = defineHandler<Route.Handler>((c) => {",
       '  const id: string = c.req.param("id");',
+      "  const requestId: string = c.var.requestId;",
       "  // @ts-expect-error An unknown filename parameter is possibly undefined.",
       '  const missing: string = c.req.param("missing");',
-      "  return c.json({ id, missing });",
+      "  // @ts-expect-error Route is a namespace, not the removed route contract alias.",
+      "  const legacy: Route = {};",
+      "  return c.json({ id, legacy, missing, requestId });",
       "});",
+      "",
+    ].join("\n"),
+  );
+  await writeFile(
+    `${root}/app/routes/users/_middleware.ts`,
+    [
+      'import { defineMiddleware } from "daroyan/app";',
+      'import type { Route } from "./+types/_middleware";',
+      "// @ts-expect-error The old top-level middleware alias was removed.",
+      'import type { Middleware } from "./+types/_middleware";',
+      "export default defineMiddleware<Route.Middleware>(",
+      "  async (c, next) => {",
+      "    const requestId: string = c.var.requestId;",
+      "    void requestId;",
+      "    await next();",
+      "  },",
+      "  async (_c, next) => { await next(); },",
+      ");",
+      "type LegacyMiddleware = Middleware;",
       "",
     ].join("\n"),
   );
@@ -97,6 +124,7 @@ test("typegen prepares every generated type artifact in a clean checkout", async
       ".daroyan/rpc.ts",
       ".daroyan/types/app.d.ts",
       ".daroyan/types/entry.d.ts",
+      ".daroyan/types/app/routes/users/+types/_middleware.d.ts",
       ".daroyan/types/app/routes/users/+types/$id.d.ts",
     ]) {
       await expect(readFile(`${root}/${file}`, "utf8")).resolves.toContain(

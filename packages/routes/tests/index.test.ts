@@ -391,6 +391,32 @@ test("an optional route companion provides exact filename parameter types", asyn
   await expect(response.json()).resolves.toEqual({ id: "usr_123" });
 });
 
+test("a route companion exposes its contract through Route.Handler", async () => {
+  const root = await mkdtemp(`${tmpdir()}/daroyan-route-handler-companion-`);
+
+  await mkdir(`${root}/app/routes/users`, { recursive: true });
+  await writeFile(`${root}/app/app.ts`, temporaryAppSource);
+  await writeFile(
+    `${root}/app/routes/users/$id.ts`,
+    "export const GET = [(c: any) => c.json({ id: c.req.param('id') })] as const;\n",
+  );
+
+  try {
+    await resolveConfig({ configFile: false, plugins: [daroyan()], root }, "serve");
+    const source = await readFile(
+      `${root}/.daroyan/types/app/routes/users/+types/$id.d.ts`,
+      "utf8",
+    );
+
+    expect(source).toMatch(
+      /export namespace Route \{[\s\S]*export type Handler = DaroyanRoute<\{[\s\S]*path: "\/users\/:id"/,
+    );
+    expect(source).not.toMatch(/export type Route\s*=/);
+  } finally {
+    await rm(root, { recursive: true });
+  }
+});
+
 test("route companions are generated correctly when the project path contains spaces", async () => {
   const root = await mkdtemp(`${tmpdir()}/daroyan route types `);
   await mkdir(`${root}/app/routes`, { recursive: true });
@@ -1022,14 +1048,41 @@ test("a named method exported through an export list is discovered", async () =>
 });
 
 test("directory middleware receives an optional generated companion type", async () => {
-  const companion = new URL(
-    "../.daroyan/types/tests/fixtures/basic/app/routes/api/+types/_middleware.d.ts",
-    import.meta.url,
+  const root = await mkdtemp(`${tmpdir()}/daroyan-middleware-companion-`);
+  const helper = JSON.stringify(fileURLToPath(new URL("../src/app.ts", import.meta.url)));
+
+  await mkdir(`${root}/app/routes/api`, { recursive: true });
+  await writeFile(`${root}/app/app.ts`, temporaryAppSource);
+  await writeFile(
+    `${root}/app/routes/api/_middleware.ts`,
+    [
+      `import { defineMiddleware } from ${helper};`,
+      "export default defineMiddleware(",
+      "  async (_c, next) => { await next(); },",
+      "  async (_c, next) => { await next(); },",
+      ");",
+      "",
+    ].join("\n"),
+  );
+  await writeFile(
+    `${root}/app/routes/api/index.ts`,
+    "export const GET = [(c: any) => c.text('ok')] as const;\n",
   );
 
-  await expect(readFile(companion, "utf8")).resolves.toMatch(
-    /export type Middleware = DaroyanMiddleware<\{[\s\S]*path: "\/api"/,
-  );
+  try {
+    await resolveConfig({ configFile: false, plugins: [daroyan()], root }, "serve");
+    const source = await readFile(
+      `${root}/.daroyan/types/app/routes/api/+types/_middleware.d.ts`,
+      "utf8",
+    );
+
+    expect(source).toMatch(
+      /export namespace Route \{[\s\S]*export type Middleware = DaroyanMiddleware<\{[\s\S]*path: "\/api"/,
+    );
+    expect(source).not.toMatch(/^export type Middleware\s*=/m);
+  } finally {
+    await rm(root, { recursive: true });
+  }
 });
 
 test("a production build fails when it emits more than one JavaScript chunk", async () => {

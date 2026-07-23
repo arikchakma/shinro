@@ -1,6 +1,7 @@
 import { defineMiddleware } from "daroyan/app";
+import type { Route } from "./+types/_middleware";
 
-export default defineMiddleware(
+export default defineMiddleware<Route.Middleware>(
   async (c, next) => {
     c.header("x-middleware-order", "first");
     await next();
