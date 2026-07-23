@@ -145,6 +145,16 @@ Files beginning with `_` or `.`, declaration files, test/spec files, and
 files under `__tests__`, `__fixtures__`, `.dot-directories`, or `+types`
 are not routes.
 
+Additional files can be excluded with route-relative
+[minimatch](https://www.npmjs.com/package/minimatch) globs. A match
+excludes both route modules and directory middleware:
+
+```ts
+daroyan({
+  ignoredRouteFiles: ["internal/**", "**/*.draft.ts"],
+});
+```
+
 Supported method values must be local `defineHandler()` tuples. Daroyan
 rejects method-named function/class declarations and external method
 re-exports early instead of allowing a later spread failure.

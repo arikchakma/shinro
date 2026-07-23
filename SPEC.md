@@ -218,6 +218,7 @@ export type DaroyanOptions = {
   app?: string;
   entry?: string;
   routes?: string;
+  ignoredRouteFiles?: string[];
   basePath?: `/${string}` | "/";
   build?: {
     outDir?: string;
@@ -241,6 +242,7 @@ const defaults = {
   app: "app/app.ts",
   entry: "app/server.ts",
   routes: "app/routes",
+  ignoredRouteFiles: [],
   basePath: "/",
   build: {
     outDir: "dist",
@@ -464,6 +466,20 @@ Ignored files:
 - `*.d.ts`;
 - `*.test.*` and `*.spec.*`;
 - files under `__tests__`, `__fixtures__`, or `+types`.
+
+`ignoredRouteFiles` adds project-specific exclusions using minimatch
+patterns relative to the configured routes directory, with `/` separators
+on every operating system. Matching is performed before route parsing or
+middleware validation. A pattern therefore excludes both ordinary route
+modules and reserved `_middleware` modules:
+
+```ts
+daroyan({
+  ignoredRouteFiles: ["internal/**", "**/*.draft.ts"],
+});
+```
+
+Built-in exclusions always apply and cannot be re-enabled by this option.
 
 ### 12.1 Conflicts
 

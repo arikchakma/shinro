@@ -39,6 +39,9 @@
     "check": "vp check",
     "prepublishOnly": "vp run build"
   },
+  "dependencies": {
+    "minimatch": "catalog:"
+  },
   "devDependencies": {
     "@hono/node-server": "catalog:",
     "@hono/zod-validator": "catalog:",

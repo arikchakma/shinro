@@ -631,6 +631,48 @@ test("reserved basenames and directories are excluded from route discovery", asy
   }
 });
 
+test("ignoredRouteFiles excludes route-relative minimatch globs", async () => {
+  const packageRoot = fileURLToPath(new URL("..", import.meta.url));
+  const root = await mkdtemp(`${packageRoot}/.daroyan-custom-ignored-routes-`);
+
+  await mkdir(`${root}/app/routes/internal`, { recursive: true });
+  await mkdir(`${root}/app/routes/public`, { recursive: true });
+  await writeFile(`${root}/app/app.ts`, temporaryAppSource);
+  await writeFile(
+    `${root}/app/routes/internal/_middleware.ts`,
+    "throw new Error('ignored middleware must not be loaded');\n",
+  );
+  await writeFile(
+    `${root}/app/routes/internal/health.ts`,
+    "export const GET = [(c: any) => c.json({ internal: true })] as const;\n",
+  );
+  await writeFile(
+    `${root}/app/routes/public/health.ts`,
+    "export const GET = [(c: any) => c.json({ public: true })] as const;\n",
+  );
+
+  const server = await createServer({
+    configFile: false,
+    customLogger: createLogger("silent"),
+    plugins: [daroyan({ ignoredRouteFiles: ["internal/**"] })],
+    root,
+    server: { middlewareMode: true },
+  });
+
+  try {
+    const runner = createServerModuleRunner(server.environments.ssr);
+    const entry = (await runner.import("daroyan/entry")) as {
+      default: { request(path: string): Promise<Response> };
+    };
+
+    expect((await entry.default.request("/internal/health")).status).toBe(404);
+    expect((await entry.default.request("/public/health")).status).toBe(200);
+  } finally {
+    await server.close();
+    await rm(root, { recursive: true });
+  }
+});
+
 test("a catch-all route captures one or more path segments", async () => {
   const response = await app.request("/files/reports/2026/july");
   const emptyResponse = await app.request("/files");

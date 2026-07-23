@@ -1,5 +1,6 @@
 import { readFile, readdir } from "node:fs/promises";
 import { dirname, relative, resolve, sep } from "node:path";
+import { minimatch } from "minimatch";
 import { parseAst } from "vite-plus";
 import { HTTP_METHODS } from "../constants.ts";
 import { toProjectPath } from "./paths.ts";
@@ -24,7 +25,10 @@ type RouteManifest = {
 
 export async function discoverRoutes(
   routesDirectory: string,
-  options: { warn?: (message: string) => void } = {},
+  options: {
+    ignoredRouteFiles?: string[];
+    warn?: (message: string) => void;
+  } = {},
 ): Promise<RouteManifest> {
   let entries;
   try {
@@ -48,7 +52,11 @@ export async function discoverRoutes(
         entry.isFile() && (entry.name === "_middleware.ts" || entry.name === "_middleware.js"),
     )
     .map((entry) => resolve(entry.parentPath, entry.name))
-    .filter((file) => !isInIgnoredDirectory(routesDirectory, file));
+    .filter(
+      (file) =>
+        !isInIgnoredDirectory(routesDirectory, file) &&
+        !matchesIgnoredRouteFile(routesDirectory, file, options.ignoredRouteFiles),
+    );
 
   await Promise.all(middleware.map(validateMiddlewareModule));
 
@@ -59,7 +67,10 @@ export async function discoverRoutes(
 
     const file = resolve(entry.parentPath, entry.name);
 
-    if (isIgnoredRouteFile(routesDirectory, file)) {
+    if (
+      isIgnoredRouteFile(routesDirectory, file) ||
+      matchesIgnoredRouteFile(routesDirectory, file, options.ignoredRouteFiles)
+    ) {
       continue;
     }
 
@@ -247,6 +258,19 @@ export function validateRoutes(routes: Route[], root: string): void {
       );
     }
   }
+}
+
+function matchesIgnoredRouteFile(
+  routesDirectory: string,
+  file: string,
+  patterns: string[] | undefined,
+): boolean {
+  if (!patterns || patterns.length === 0) {
+    return false;
+  }
+
+  const routeRelativeFile = relative(routesDirectory, file).split(sep).join("/");
+  return patterns.some((pattern) => minimatch(routeRelativeFile, pattern));
 }
 
 function isIgnoredRouteFile(routesDirectory: string, file: string): boolean {

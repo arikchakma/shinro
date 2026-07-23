@@ -45,6 +45,7 @@ export async function createSources(
   }
   const appAnalysis = await validateAppModule(appFile);
   const discovered = await discoverRoutes(routesDirectory, {
+    ignoredRouteFiles: options.ignoredRouteFiles,
     warn: (message) => config.logger.warn(message),
   });
   const routes = discovered.routes.map((route) => ({

@@ -18,6 +18,7 @@ export type DaroyanOptions = {
     sourcemap?: false | "inline";
   };
   entry?: string;
+  ignoredRouteFiles?: string[];
   rpc?: {
     enabled?: boolean;
     outDir?: string;
