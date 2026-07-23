@@ -47,11 +47,16 @@ type MiddlewarePath<Route extends AnyRoute | undefined> = Route extends AnyRoute
 type DirectoryMiddlewarePath<Middleware extends AnyMiddleware | undefined> =
   Middleware extends AnyMiddleware ? Middleware["path"] : string;
 
-type DefineHandlerFor<Route extends AnyRoute | undefined> = {
-  <I extends Input = BlankInput, R extends HandlerResponse<any> = HandlerResponse<any>>(
+type PrimaryDefineHandler = {
+  <
+    Route extends AnyRoute | undefined = undefined,
+    I extends Input = BlankInput,
+    R extends HandlerResponse<any> = HandlerResponse<any>,
+  >(
     handler: Handler<RouteEnv<Route>, RoutePath<Route>, I, R>,
   ): [Handler<RouteEnv<Route>, RoutePath<Route>, I, R>];
   <
+    Route extends AnyRoute | undefined = undefined,
     I extends Input = BlankInput,
     R1 extends HandlerResponse<any> = HandlerResponse<any>,
     R2 extends HandlerResponse<any> = HandlerResponse<any>,
@@ -63,6 +68,7 @@ type DefineHandlerFor<Route extends AnyRoute | undefined> = {
     Handler<RouteEnv<Route>, MiddlewarePath<Route>, I, R2>,
   ];
   <
+    Route extends AnyRoute | undefined = undefined,
     const Handlers extends [
       H<RouteEnv<Route>, MiddlewarePath<Route>>,
       ...H<RouteEnv<Route>, MiddlewarePath<Route>>[],
@@ -72,24 +78,10 @@ type DefineHandlerFor<Route extends AnyRoute | undefined> = {
   ): Handlers;
 };
 
-type PrimaryDefineHandler = DefineHandlerFor<undefined> & {
-  <Route extends AnyRoute = never>(
-    ...requiresExplicitRoute: [Route] extends [never] ? [routeType: never] : []
-  ): DefineHandlerFor<Route>;
-};
-
 const handlerFactory: Factory<ProjectEnv> = createFactory<ProjectEnv>();
-const createHandlers = handlerFactory.createHandlers as unknown as (
-  ...handlers: unknown[]
-) => unknown[];
 
-export const defineHandler = ((...handlers: unknown[]) => {
-  if (handlers.length === 0) {
-    return (...strictHandlers: unknown[]) => createHandlers(...strictHandlers);
-  }
-
-  return createHandlers(...handlers);
-}) as PrimaryDefineHandler;
+export const defineHandler = handlerFactory.createHandlers as PrimaryDefineHandler &
+  typeof handlerFactory.createHandlers;
 
 export function defineMiddleware<
   Middleware extends AnyMiddleware | undefined = undefined,

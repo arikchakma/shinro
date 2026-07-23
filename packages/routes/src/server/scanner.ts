@@ -590,16 +590,10 @@ function isHandlerBundleExpression(
   if (node.type === "CallExpression") {
     const callee = asNode(node.callee);
     const arguments_ = (node as NodeView & { arguments?: unknown[] }).arguments ?? [];
-    const curriedFactory =
-      callee?.type === "CallExpression" &&
-      ((callee as NodeView & { arguments?: unknown[] }).arguments ?? []).length === 0
-        ? asNode(callee.callee)
-        : undefined;
     return (
-      ((callee?.type === "Identifier" && callee.name !== undefined && factories.has(callee.name)) ||
-        (curriedFactory?.type === "Identifier" &&
-          curriedFactory.name !== undefined &&
-          factories.has(curriedFactory.name))) &&
+      callee?.type === "Identifier" &&
+      callee.name !== undefined &&
+      factories.has(callee.name) &&
       arguments_.length > 0 &&
       arguments_.every(isHandlerValue)
     );

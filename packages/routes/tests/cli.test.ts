@@ -56,7 +56,7 @@ test("typegen prepares every generated type artifact in a clean checkout", async
     [
       'import { defineHandler } from "daroyan/app";',
       'import type { Route } from "./+types/$id";',
-      "export const GET = defineHandler<Route>()((c) => {",
+      "export const GET = defineHandler<Route>((c) => {",
       '  const id: string = c.req.param("id");',
       "  // @ts-expect-error An unknown filename parameter is possibly undefined.",
       '  const missing: string = c.req.param("missing");',

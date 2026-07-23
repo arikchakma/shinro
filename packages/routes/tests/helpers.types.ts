@@ -44,7 +44,7 @@ type TeamRoute = DaroyanRoute<{
   path: "/teams/:teamId";
 }>;
 
-defineHandler<TeamRoute>()((c) => {
+defineHandler<TeamRoute>((c) => {
   const teamId: string = c.req.param("teamId");
 
   // @ts-expect-error An unknown parameter is possibly undefined.
