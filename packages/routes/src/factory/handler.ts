@@ -1,7 +1,7 @@
 import type { Env } from "hono";
 import { createFactory, type Factory } from "hono/factory";
 import type { BlankInput, H, Handler, HandlerResponse, Input } from "hono/types";
-import type { ProjectEnv } from "../app.ts";
+import type { ProjectEnv } from "../app";
 
 export type DaroyanRoute<
   T extends {

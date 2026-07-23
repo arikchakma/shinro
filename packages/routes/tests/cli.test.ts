@@ -49,7 +49,7 @@ test("typegen prepares every generated type artifact in a clean checkout", async
   );
   await writeFile(
     `${root}/app/app.ts`,
-    `import { defineApp } from ${JSON.stringify(appHelper)};\nexport default defineApp();\n`,
+    'import { defineApp } from "daroyan/app";\nexport default defineApp();\n',
   );
   await writeFile(
     `${root}/app/routes/users/$id.ts`,
@@ -69,7 +69,6 @@ test("typegen prepares every generated type artifact in a clean checkout", async
     `${root}/tsconfig.json`,
     JSON.stringify({
       compilerOptions: {
-        allowImportingTsExtensions: true,
         module: "ESNext",
         moduleResolution: "Bundler",
         noEmit: true,
@@ -106,7 +105,7 @@ test("typegen prepares every generated type artifact in a clean checkout", async
     }
 
     const typecheck = await run(`${packageRoot}/node_modules/.bin/tsc`, ["--noEmit"], root);
-    expect(typecheck.code).toBe(0);
+    expect(typecheck.code, `${typecheck.stdout}${typecheck.stderr}`).toBe(0);
   } finally {
     await rm(root, { recursive: true });
   }
@@ -119,20 +118,26 @@ function run(
 ): Promise<{
   code: number | null;
   stderr: string;
+  stdout: string;
 }> {
   return new Promise((resolve) => {
     const child = spawn(command, args, {
       cwd,
-      stdio: ["ignore", "ignore", "pipe"],
+      stdio: ["ignore", "pipe", "pipe"],
     });
     let stderr = "";
+    let stdout = "";
 
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => {
+      stdout += chunk;
+    });
     child.stderr.setEncoding("utf8");
     child.stderr.on("data", (chunk: string) => {
       stderr += chunk;
     });
     child.on("close", (code) => {
-      resolve({ code, stderr });
+      resolve({ code, stderr, stdout });
     });
   });
 }
