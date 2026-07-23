@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { parseAst } from "vite-plus";
+import { parseSync } from "vite-plus";
 
 export type AppModuleAnalysis = {
   hasEarlyResponseMiddleware: boolean;
@@ -7,17 +7,15 @@ export type AppModuleAnalysis = {
 
 export async function validateAppModule(file: string): Promise<AppModuleAnalysis> {
   const source = await readFile(file, "utf8");
-  let ast: ReturnType<typeof parseAst>;
-  try {
-    ast = parseAst(source, { lang: "ts" });
-  } catch (error) {
+  const result = parseSync(file, source, { lang: "ts" });
+  if (result.errors.length > 0) {
     throw new Error(
-      `[daroyan] Failed to parse app module ${file}: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-      { cause: error },
+      `[daroyan] Failed to parse app module ${file}:\n${result.errors
+        .map((error) => error.codeframe ?? error.message)
+        .join("\n")}`,
     );
   }
+  const ast = result.program;
   const factories = new Set<string>();
   const apps = new Set<string>();
 

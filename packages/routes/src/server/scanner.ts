@@ -1,7 +1,7 @@
 import { readFile, readdir } from "node:fs/promises";
 import { dirname, relative, resolve, sep } from "node:path";
 import { minimatch } from "minimatch";
-import { parseAst } from "vite-plus";
+import { parseSync } from "vite-plus";
 import { HTTP_METHODS } from "../constants.ts";
 import { toProjectPath } from "./path.ts";
 
@@ -647,17 +647,16 @@ function asNode(value: unknown): NodeView | undefined {
   return value as NodeView;
 }
 
-function parseModule(file: string, source: string): ReturnType<typeof parseAst> {
-  try {
-    return parseAst(source, { lang: "ts" });
-  } catch (error) {
+function parseModule(file: string, source: string): ReturnType<typeof parseSync>["program"] {
+  const result = parseSync(file, source, { lang: "ts" });
+  if (result.errors.length > 0) {
     throw new Error(
-      `[daroyan] Failed to parse route module ${file}: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-      { cause: error },
+      `[daroyan] Failed to parse route module ${file}:\n${result.errors
+        .map((error) => error.codeframe ?? error.message)
+        .join("\n")}`,
     );
   }
+  return result.program;
 }
 
 function parameterSchemasInExpression(
