@@ -1409,6 +1409,86 @@ response must appear in the RPC contract.
 
 ## 24. Testing
 
+### 24.1 Test-driven implementation
+
+Daroyan is implemented with test-driven development. Production code for a
+behavior must not be written before a test demonstrates that the behavior
+is missing.
+
+Every implementation slice follows:
+
+1. **Red:** add one test for one observable behavior from this specification;
+2. run the narrowest relevant test command and confirm it fails for the
+   intended missing behavior;
+3. **Green:** write only enough production code to make that test pass;
+4. rerun the targeted test and the relevant existing suite;
+5. **Refactor:** improve the design only while all tests remain green;
+6. repeat with the next behavior.
+
+A syntax error, missing dependency, broken test runner, or unrelated
+failure does not count as Red. The failure must prove that the public
+Daroyan behavior under development does not exist or is incorrect.
+
+Tests are added as vertical slices. The project must not write the complete
+test suite first and then implement the complete framework. Each new test
+is informed by the preceding working slice.
+
+Bug fixes use the same workflow: reproduce the bug with a failing
+public-interface regression test, implement the smallest correction, then
+refactor while green.
+
+### 24.2 Test boundaries
+
+Tests exercise public authoring and consumption interfaces:
+
+- `plugins: [daroyan()]`;
+- imports from `daroyan/app` and `daroyan/entry`;
+- route and `_middleware.ts` files;
+- `app.request()` and Hono's `testClient()`;
+- the generated public `Client` and `AppType`;
+- `daroyan typegen`;
+- Node and Bun server-entry builds.
+
+Tests must not primarily assert private scanner functions, internal hook
+call counts, or exact implementation structure. Generated-source snapshots
+may supplement a behavioral test, but a snapshot alone does not prove the
+runtime or TypeScript contract.
+
+Mocks are limited to true system boundaries such as external services,
+time, or randomness. Daroyan's scanner, manifest, assembler, generator, and
+Vite plugin should be exercised together through small fixture projects
+where practical.
+
+Runtime behavior uses real assembled Hono applications. Type behavior uses
+compile fixtures and `expectTypeOf` assertions through public exports.
+Negative type fixtures must prove that an invalid call fails while the
+corresponding valid call succeeds.
+
+### 24.3 Initial tracer-bullet order
+
+Implementation should grow in small end-to-end slices. The expected order
+is:
+
+1. one named `GET` file is discovered, assembled, requestable, and present
+   on the generated client;
+2. `defineApp<AppEnv>()` types a route's `c.var` without repeating
+   `AppEnv`;
+3. multiple directory middleware handlers run once in order for both the
+   directory URL and a descendant route;
+4. a typed directory-middleware `401` appears in the named route's client
+   response union;
+5. a default chained sub-router runs at its mount and appears on the
+   generated client;
+6. invalid route conflicts fail with the specified diagnostics;
+7. structural reloads, production builds, Node, and Bun behavior are added
+   one failing test at a time.
+
+This is an implementation sequence, not permission to write all seven
+tests in advance. Complete one Red–Green–Refactor cycle before starting the
+next.
+
+### 24.4 Application tests
+
 Vite-powered tests import the same assembled app as the server:
 
 ```ts
@@ -1834,10 +1914,32 @@ This section constrains the future implementation without implementing it.
 The implementation should use Vite's current environment/module-runner
 APIs rather than deprecated SSR-loading behavior.
 
+### 29.5 Required development discipline
+
+Sections 29.1 through 29.4 describe implementation responsibilities, not
+an implementation-first order. Each responsibility is introduced only
+through the Red–Green–Refactor workflow in Section 24.
+
+Every pull request or implementation change records:
+
+- the observable behavior being added or corrected;
+- the targeted test command;
+- the expected Red failure;
+- the Green result;
+- any refactor performed after Green.
+
+If an architectural change has no failing public-interface test, it must be
+justified as test infrastructure or a behavior-preserving refactor and all
+existing tests must remain green throughout.
+
 ## 30. Acceptance criteria
 
 v0.1 is complete when:
 
+- every implemented behavior has a public-interface test that was observed
+  failing for the intended reason before its production implementation.
+- implementation proceeded as one vertical Red–Green–Refactor slice at a
+  time rather than all tests followed by all production code.
 - `plugins: [daroyan()]` is the only required Vite integration.
 - `defineApp()` returns a normal Hono instance.
 - the app module uses ordinary Hono APIs and default-exports the instance.
