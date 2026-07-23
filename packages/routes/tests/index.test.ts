@@ -1374,6 +1374,33 @@ test("a default sub-router rejects unchained route mutations", async () => {
   }
 });
 
+test("a default sub-router rejects unchained middleware mutations", async () => {
+  const root = await mkdtemp(`${tmpdir()}/daroyan-unchained-subrouter-middleware-`);
+
+  await mkdir(`${root}/app/routes`, { recursive: true });
+  await writeFile(`${root}/app/app.ts`, temporaryAppSource);
+  await writeFile(
+    `${root}/app/routes/admin.ts`,
+    [
+      'import { Hono } from "hono";',
+      "const admin = new Hono();",
+      'admin.use("*", async (_c, next) => { await next(); });',
+      "export default admin;",
+      "",
+    ].join("\n"),
+  );
+
+  try {
+    await expect(
+      resolveConfig({ configFile: false, plugins: [daroyan()], root }, "serve"),
+    ).rejects.toThrow(
+      /\[daroyan\][\s\S]*app\/routes\/admin\.ts[\s\S]*(?:chain|chained)[\s\S]*(?:RPC|schema)/i,
+    );
+  } finally {
+    await rm(root, { recursive: true });
+  }
+});
+
 test("a named method export must be a handler tuple", async () => {
   const root = await mkdtemp(`${tmpdir()}/daroyan-invalid-handler-export-`);
 

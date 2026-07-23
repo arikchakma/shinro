@@ -693,7 +693,7 @@ This mounts at `/admin`, producing `/admin` and `/admin/stats`.
 
 Requirements:
 
-- handlers must be chained to retain Hono's RPC schema;
+- route and middleware handlers must be chained to retain Hono's RPC schema;
 - a module cannot mix a default sub-router and uppercase method exports;
 - the default sub-router is imported by both assemblers and mounted with
   `.route("/admin", admin)`;

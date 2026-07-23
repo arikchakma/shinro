@@ -500,6 +500,7 @@ const HONO_ROUTE_METHODS = new Set([
   "post",
   "put",
   "route",
+  "use",
 ]);
 
 function isUnchainedRouteMutation(value: unknown, honoName: string): boolean {
