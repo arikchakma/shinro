@@ -1,4 +1,4 @@
-import { cp, lstat, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { cp, lstat, mkdir, open, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, relative, resolve, sep } from "node:path";
 import { GENERATED_NOTICE } from "../constants.ts";
 import type { GeneratedSources } from "./codegen.ts";
@@ -6,6 +6,18 @@ import type { GeneratedSources } from "./codegen.ts";
 let temporaryFileCounter = 0;
 
 export async function writeGeneratedTypes(
+  outputDirectory: string,
+  sources: GeneratedSources,
+  options: { rpcEnabled: boolean },
+): Promise<void> {
+  await mkdir(dirname(outputDirectory), { recursive: true });
+
+  await withGenerationLock(outputDirectory, async () => {
+    await writeGeneratedTypesTransaction(outputDirectory, sources, options);
+  });
+}
+
+async function writeGeneratedTypesTransaction(
   outputDirectory: string,
   sources: GeneratedSources,
   options: { rpcEnabled: boolean },
@@ -29,7 +41,6 @@ export async function writeGeneratedTypes(
   ];
 
   await assertFileTargets(desiredFiles);
-  await mkdir(dirname(outputDirectory), { recursive: true });
   await rm(stagingDirectory, { recursive: true, force: true });
   await rm(backupDirectory, { recursive: true, force: true });
 
@@ -50,6 +61,46 @@ export async function writeGeneratedTypes(
     await commitStagingDirectory(outputDirectory, stagingDirectory, backupDirectory);
   } finally {
     await rm(stagingDirectory, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
+const GENERATION_LOCK_RETRY_MS = 20;
+const GENERATION_LOCK_TIMEOUT_MS = 30_000;
+
+async function withGenerationLock<T>(
+  outputDirectory: string,
+  action: () => Promise<T>,
+): Promise<T> {
+  const lockFile = `${outputDirectory}.lock`;
+  const startedAt = Date.now();
+
+  while (true) {
+    let lock;
+
+    try {
+      lock = await open(lockFile, "wx");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+        throw error;
+      }
+
+      if (Date.now() - startedAt >= GENERATION_LOCK_TIMEOUT_MS) {
+        throw new Error(
+          `[daroyan] Timed out waiting for another process to finish generating ${outputDirectory}. If no typegen process is running, remove ${lockFile} and try again.`,
+        );
+      }
+
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, GENERATION_LOCK_RETRY_MS));
+      continue;
+    }
+
+    try {
+      await lock.writeFile(`${process.pid}\n`);
+      return await action();
+    } finally {
+      await lock.close();
+      await rm(lockFile, { force: true });
+    }
   }
 }
 

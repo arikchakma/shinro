@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "vite-plus/test";
@@ -110,6 +110,56 @@ test("typegen prepares every generated type artifact in a clean checkout", async
     await rm(root, { recursive: true });
   }
 });
+
+test("concurrent typegen processes commit one complete generated directory", async () => {
+  const packageRoot = fileURLToPath(new URL("..", import.meta.url));
+  const root = await mkdtemp(`${packageRoot}/.daroyan-concurrent-typegen-`);
+  const plugin = fileURLToPath(new URL("../src/index.ts", import.meta.url));
+  const appHelper = fileURLToPath(new URL("../src/app.ts", import.meta.url));
+  const cli = fileURLToPath(new URL("../src/cli.ts", import.meta.url));
+
+  await mkdir(`${root}/app/routes`, { recursive: true });
+  await writeFile(
+    `${root}/vite.config.ts`,
+    [
+      `import { daroyan } from ${JSON.stringify(plugin)};`,
+      'import { defineConfig } from "vite-plus";',
+      "export default defineConfig({ plugins: [daroyan()] });",
+      "",
+    ].join("\n"),
+  );
+  await writeFile(
+    `${root}/app/app.ts`,
+    `import { defineApp } from ${JSON.stringify(appHelper)};\nexport default defineApp();\n`,
+  );
+  await Promise.all(
+    Array.from({ length: 40 }, (_, index) =>
+      writeFile(
+        `${root}/app/routes/route-${index}.ts`,
+        `export const GET = [(c: any) => c.json({ route: ${index} })] as const;\n`,
+      ),
+    ),
+  );
+
+  try {
+    const results = await Promise.all(
+      Array.from({ length: 8 }, () => run(process.execPath, [cli, "typegen"], root)),
+    );
+
+    expect(
+      results.map((result) => result.code),
+      results.map((result) => `${result.stdout}${result.stderr}`).join("\n"),
+    ).toEqual(Array.from({ length: 8 }, () => 0));
+
+    const manifest = JSON.parse(await readFile(`${root}/.daroyan/manifest.json`, "utf8")) as {
+      routes: unknown[];
+    };
+    expect(manifest.routes).toHaveLength(40);
+    expect((await readdir(root)).filter((name) => name.startsWith(".daroyan."))).toEqual([]);
+  } finally {
+    await rm(root, { recursive: true });
+  }
+}, 20_000);
 
 function run(
   command: string,
