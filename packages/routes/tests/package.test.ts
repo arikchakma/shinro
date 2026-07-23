@@ -45,5 +45,6 @@ test("the package build does not leak the fixture application environment", asyn
   const declaration = await readFile(new URL("../dist/app.d.mts", import.meta.url), "utf8");
   expect(declaration).not.toContain("tests/fixtures");
   expect(declaration).not.toContain("requestId");
-  expect(declaration).toContain("Factory<ProjectEnv");
+  expect(declaration).toContain("DefineHandlerFor<undefined>");
+  expect(declaration).toContain("DefineHandlerFor<Route>");
 });

@@ -221,11 +221,16 @@ Daroyan also generates an optional filename companion:
 import { defineHandler } from "daroyan/app";
 import type { Route } from "./+types/$id";
 
-export const GET = defineHandler<Route>((c) => {
+export const GET = defineHandler<Route>()((c) => {
   const id = c.req.param("id");
   return c.json({ id }, 200);
 });
 ```
+
+The additional call in the optional strict form lets TypeScript infer the
+handler's exact response after fixing the generated route context. Routes
+that do not import `Route` continue to use the single-call
+`defineHandler(handler)` form.
 
 The companion supplies the filename-derived path and parameter names. It
 does not validate requests at runtime; use `zValidator` when validation is

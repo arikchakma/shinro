@@ -80,7 +80,7 @@ Generated `+types` are available but optional:
 import { defineHandler } from "daroyan/app";
 import type { Route } from "./+types/$id";
 
-export const GET = defineHandler<Route>((c) => {
+export const GET = defineHandler<Route>()((c) => {
   return c.json({ id: c.req.param("id") }, 200);
 });
 ```
@@ -588,7 +588,7 @@ It does not provide exact filename-derived parameter-key checking inside
 import { defineHandler } from "daroyan/app";
 import type { Route } from "./+types/$id";
 
-export const GET = defineHandler<Route>((c) => {
+export const GET = defineHandler<Route>()((c) => {
   const id = c.req.param("id");
 
   // Known filename parameters are definitely present.
@@ -620,9 +620,16 @@ Supported call forms:
 defineHandler(handler);
 defineHandler(middleware, handler);
 
-defineHandler<Route>(handler);
-defineHandler<Route>(middleware, handler);
+defineHandler<Route>()(handler);
+defineHandler<Route>()(middleware, handler);
 ```
+
+The strict form is intentionally curried. TypeScript does not support
+supplying one type argument while inferring later type parameters in the
+same call. The first call fixes the generated route context; the second
+call can therefore infer validator inputs, middleware responses, and the
+handler's exact response body and status. The minimal form stays a single
+call.
 
 The generated generic changes types only. It does not register the route,
 add validation, or change runtime behavior.
@@ -657,7 +664,7 @@ The two features can be combined:
 ```ts
 import type { Route } from "./+types/$id";
 
-export const GET = defineHandler<Route>(zValidator("param", params), async (c) => {
+export const GET = defineHandler<Route>()(zValidator("param", params), async (c) => {
   const { id } = c.req.valid("param");
   return c.json({ id }, 200);
 });
@@ -1838,7 +1845,7 @@ The same route could additionally opt into filename-derived typing:
 ```ts
 import type { Route } from "./+types/$id";
 
-export const GET = defineHandler<Route>(zValidator("param", params), async (c) => {
+export const GET = defineHandler<Route>()(zValidator("param", params), async (c) => {
   const { id } = c.req.valid("param");
   return c.json({ user: await findUser(id) }, 200);
 });
