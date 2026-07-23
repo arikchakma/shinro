@@ -10,6 +10,7 @@ export default defineConfig({
   plugins: [
     daroyan({
       app: `${fixture}/app/app.ts`,
+      entry: `${fixture}/app/server.ts`,
       routes: `${fixture}/app/routes`,
     }),
   ],
@@ -19,11 +20,34 @@ export default defineConfig({
     },
   },
   pack: {
-    entry: ["src/index.ts", "src/app.ts", "src/entry.ts"],
+    entry: ["src/index.ts", "src/app.ts", "src/entry.ts", "src/cli.ts"],
     dts: {
       tsgo: true,
     },
-    exports: true,
+    exports: {
+      customExports(exports) {
+        return {
+          ...exports,
+          ".": {
+            types: "./dist/index.d.mts",
+            import: "./dist/index.mjs",
+          },
+          "./app": {
+            types: "./dist/app.d.mts",
+            import: "./dist/app.mjs",
+          },
+          "./cli": {
+            types: "./dist/cli.d.mts",
+            import: "./dist/cli.mjs",
+          },
+          "./entry": {
+            types: "./dist/entry.d.mts",
+            import: "./dist/entry.mjs",
+          },
+          "./package.json": "./package.json",
+        };
+      },
+    },
   },
   lint: {
     options: {

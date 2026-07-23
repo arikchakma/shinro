@@ -2,24 +2,31 @@
   "name": "daroyan",
   "version": "0.0.0",
   "description": "Type-safe file routing for Hono on Node.js and Bun.",
-  "homepage": "https://github.com/author/library#readme",
-  "bugs": {
-    "url": "https://github.com/author/library/issues"
-  },
   "license": "MIT",
-  "author": "Author Name <author.name@mail.com>",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/author/library.git"
+  "bin": {
+    "daroyan": "./dist/cli.mjs"
   },
   "files": [
     "dist"
   ],
   "type": "module",
   "exports": {
-    ".": "./dist/index.mjs",
-    "./app": "./dist/app.mjs",
-    "./entry": "./dist/entry.mjs",
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    },
+    "./app": {
+      "types": "./dist/app.d.mts",
+      "import": "./dist/app.mjs"
+    },
+    "./cli": {
+      "types": "./dist/cli.d.mts",
+      "import": "./dist/cli.mjs"
+    },
+    "./entry": {
+      "types": "./dist/entry.d.mts",
+      "import": "./dist/entry.mjs"
+    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -33,6 +40,8 @@
     "prepublishOnly": "vp run build"
   },
   "devDependencies": {
+    "@hono/node-server": "catalog:",
+    "@hono/zod-validator": "catalog:",
     "@types/node": "^26.1.1",
     "@typescript/native-preview": "catalog:",
     "bumpp": "^11.1.0",
@@ -40,7 +49,8 @@
     "typescript": "^7.0.2",
     "vite": "catalog:",
     "vite-plus": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "zod": "catalog:"
   },
   "peerDependencies": {
     "hono": "^4.0.0",

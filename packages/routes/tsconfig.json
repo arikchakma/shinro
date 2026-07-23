@@ -3,8 +3,9 @@
     "target": "esnext",
     "lib": ["es2023"],
     "moduleDetection": "force",
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "rootDirs": [".", "./.daroyan/types"],
     "paths": {
       "daroyan/app": ["./src/app.ts"],
       "daroyan/entry": ["./.daroyan/types/entry.d.ts"]

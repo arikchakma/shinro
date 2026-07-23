@@ -1,9 +1,12 @@
 {
   "compilerOptions": {
     "noEmit": true,
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "rootDirs": [".", "./.daroyan/types"],
+    "strict": true,
     "allowImportingTsExtensions": true,
     "esModuleInterop": true
-  }
+  },
+  "include": ["apps", "packages", "tools", ".daroyan/**/*.d.ts"]
 }

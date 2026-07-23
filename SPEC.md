@@ -460,6 +460,7 @@ Ignored files:
 - `_middleware.ts`, except for its reserved middleware role;
 - any other basename beginning with `_`;
 - dotfiles;
+- files under dot-directories;
 - `*.d.ts`;
 - `*.test.*` and `*.spec.*`;
 - files under `__tests__`, `__fixtures__`, or `+types`.
@@ -482,6 +483,11 @@ app/routes/users/$slug.ts
 
 Daroyan reports both source files and the normalized route, then fails
 generation and build.
+
+Sub-router namespace ownership uses route-pattern compatibility, not only
+literal string prefixes. For example, a sub-router at `/admin` conflicts
+with `app/routes/$section/stats.ts` because both can serve
+`/admin/stats`.
 
 ## 13. Route module API
 
@@ -521,11 +527,16 @@ export const POST = defineHandler(zValidator("json", createUser), async (c) => {
 });
 ```
 
-`defineHandler()` accepts zero or more Hono middleware handlers followed by
-the final handler, matching Hono's factory helper.
+`defineHandler()` accepts a final handler, optionally preceded by one or
+more Hono middleware handlers, matching Hono's factory helper. An empty
+call is a type error and an invalid route module.
 
 It is a typed identity/factory helper. The callback receives an ordinary
 Hono `Context`, and every Hono response helper remains available.
+
+Named method values must be locally provable handler tuples. Function,
+class, or enum declarations named after a supported method are rejected,
+as are external method re-exports whose tuple shape cannot be validated.
 
 ## 14. Optional generated route types
 
@@ -564,8 +575,12 @@ import type { Route } from "./+types/$id";
 export const GET = defineHandler<Route>((c) => {
   const id = c.req.param("id");
 
-  // TypeScript error: "userId" is not a parameter in $id.ts.
-  // c.req.param("userId");
+  // Known filename parameters are definitely present.
+  const exactId: string = id;
+
+  // Unknown keys follow Hono's fallback and are possibly undefined.
+  // TypeScript error: string | undefined is not assignable to string.
+  // const userId: string = c.req.param("userId");
 
   return c.json({ id }, 200);
 });
@@ -1078,8 +1093,9 @@ daroyan({
 });
 ```
 
-The server adapter is a user dependency and may remain external or be
-bundled according to the implementation's single-entry rules.
+The server adapter is a user dependency. Production builds bundle ordinary
+JavaScript dependencies, including Hono and a JavaScript server adapter,
+into the one emitted entry.
 
 ## 20. Development behavior
 
@@ -1223,12 +1239,14 @@ The generator creates a chained Hono application in `.daroyan/rpc.ts`:
 import { Hono } from "hono";
 import type { ProjectEnv } from "daroyan/app";
 
+import configuredApp from "../app/app";
 import admin from "../app/routes/admin";
 import apiMiddleware from "../app/routes/api/_middleware";
 import { GET as usersGet, POST as usersPost } from "../app/routes/api/users";
 import { GET as userGet } from "../app/routes/api/users/$id";
 
 const routes = new Hono<ProjectEnv>()
+  .route("/", configuredApp)
   .get("/api/users", ...apiMiddleware, ...usersGet)
   .post("/api/users", ...apiMiddleware, ...usersPost)
   .get("/api/users/:id", ...apiMiddleware, ...userGet)
@@ -1246,8 +1264,11 @@ Default sub-routers are imported as default values and mounted through a
 chained `.route(mountPath, router)` call. Their internal chained schema
 therefore reaches `AppType` and the generated client.
 
-The real generator also incorporates any chain-typed manual routes from
-the base app when feasible.
+The configured app is mounted first with `.route("/", configuredApp)`.
+Consequently, manual routes added through a retained chain such as
+`defineApp().get(...)` are included in `AppType`. Unassigned mutations
+still run in the assembled server but cannot appear in Hono's compile-time
+schema and are therefore absent from the generated client.
 
 Invariants:
 
@@ -1577,6 +1598,7 @@ for clean standalone type checking:
 Build errors:
 
 - missing or invalid default app export;
+- multiple `daroyan()` plugin instances in one TypeScript project;
 - configured app export is not created by `defineApp()`;
 - missing routes directory;
 - missing server entry during dev or build;
@@ -1588,6 +1610,7 @@ Build errors:
 - invalid dynamic parameter names;
 - mixed default sub-router and method exports;
 - unsupported method export values;
+- external method re-exports whose handler tuple cannot be proven;
 - default export that is not a Hono sub-router;
 - unresolved `daroyan/entry`, which means the Vite plugin did not run;
 - production output unexpectedly split into multiple JavaScript chunks.
@@ -1668,8 +1691,8 @@ implementation and Node built-ins must not enter route or browser graphs.
 target is only an explanatory fallback for imports made without the
 Daroyan plugin; it is never the application used by a valid build.
 
-Exact peer version ranges must be chosen from compatibility testing before
-publication.
+The package manifest declares the tested v0.1 peer ranges. Publication
+must keep those ranges aligned with the compatibility suite.
 
 ## 28. Complete example
 
@@ -1857,7 +1880,7 @@ if (response.status === 401) {
 
 ## 29. Implementation architecture
 
-This section constrains the future implementation without implementing it.
+This section describes and constrains the v0.1 implementation.
 
 ### 29.1 Scanner
 
@@ -1973,20 +1996,27 @@ v0.1 is complete when:
 - `daroyan typegen` prepares a clean checkout for type checking.
 - `vp check` and `vp test` pass for the package and example applications.
 
-## 31. Remaining decisions before implementation
+## 31. Finalized v0.1 implementation decisions
 
-1. **App defaults.** Decide whether `defineApp()` should use Hono's default
-   strict routing or set `strict: false`. The user can always override it
-   through `defineApp(options)`.
-2. **Development isolation.** Choose the Vite environment or child-process
-   mechanism that can reload the user-owned server entry without stealing
-   lifecycle ownership.
-3. **Manual route RPC.** Decide how much chain-typed schema from the base app
-   should be merged into generated file-route RPC.
-4. **Bun build testing.** Establish supported Bun versions and test native
-   shutdown behavior without abstracting it.
-5. **Single-entry dependencies.** Define the exact rule for externalized
-   dependencies and runtime assets.
+1. **App defaults.** `defineApp()` preserves Hono's default strict routing.
+   Users can pass normal Hono constructor options when they want different
+   behavior.
+2. **Development isolation.** Daroyan runs the user-owned server entry in an
+   isolated Node child that loads modules through Vite's SSR module runner.
+   Structural changes are validated before restart, and restarts begin with
+   `SIGTERM` so user shutdown handlers can run.
+3. **Manual route RPC.** The generated RPC app mounts the configured app at
+   `/` before file routes. Chained manual routes retain their schema and
+   enter the client; unassigned Hono mutations remain runtime-only.
+4. **Bun build testing.** Native build, request, `SIGTERM`, and
+   `Bun.Server.stop(false)` behavior is covered with Bun 1.3.11. Daroyan
+   exposes no Bun lifecycle abstraction.
+5. **Single-entry dependencies.** Production SSR builds bundle ordinary
+   JavaScript dependencies. Node built-ins stay native. More than one
+   JavaScript chunk is an error, and emitted runtime assets produce a
+   warning. Native `.node` addons, files read at runtime, migrations,
+   templates, and external WASM remain deployment responsibilities of the
+   application.
 
 These implementation decisions must not change the confirmed authoring
 surface:

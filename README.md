@@ -1,29 +1,35 @@
-# Vite+ Monorepo Starter
+# Daroyan
 
-A starter for creating a Vite+ monorepo.
+This repository contains Daroyan, type-safe file routing and Hono RPC for
+user-owned Node.js and Bun servers.
 
-## Development
+- Package and usage guide: [`packages/routes/README.md`](./packages/routes/README.md)
+- Complete v0.1 contract: [`SPEC.md`](./SPEC.md)
 
-- Check everything is ready:
+## Workspace commands
 
-```bash
-vp run ready
+```sh
+vp install
+vp check
+vp test
+vp run daroyan#build
 ```
 
-- Run the tests:
+Daroyan uses one Vite plugin:
 
-```bash
-vp run test -r
+```ts
+export default defineConfig({
+  plugins: [daroyan()],
+});
 ```
 
-- Build the monorepo:
+The configured app remains an ordinary Hono instance, and the application
+owns its listener and graceful shutdown:
 
-```bash
-vp run build -r
-```
+```ts
+const app = defineApp();
 
-- Run the development server:
+// Use normal Hono APIs.
 
-```bash
-vp run dev
+export default app;
 ```
