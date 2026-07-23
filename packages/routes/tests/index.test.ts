@@ -1748,6 +1748,31 @@ test("an incompatible TypeScript config receives a copy-pasteable correction", a
   }
 });
 
+test("a missing TypeScript config receives the generated-types configuration", async () => {
+  const root = await mkdtemp(`${tmpdir()}/daroyan-missing-tsconfig-`);
+  const warnings: string[] = [];
+  const logger = createLogger("silent");
+  logger.warn = (message) => {
+    warnings.push(message);
+  };
+
+  await mkdir(`${root}/app/routes`, { recursive: true });
+  await writeFile(`${root}/app/app.ts`, temporaryAppSource);
+
+  try {
+    await resolveConfig(
+      { configFile: false, customLogger: logger, plugins: [daroyan()], root },
+      "serve",
+    );
+
+    expect(warnings.join("\n")).toMatch(
+      /\[daroyan\][\s\S]*tsconfig\.json[\s\S]*missing[\s\S]*"strict": true[\s\S]*"rootDirs"[\s\S]*\.daroyan\/types[\s\S]*include/i,
+    );
+  } finally {
+    await rm(root, { recursive: true });
+  }
+});
+
 test("TypeScript settings inherited from a relative config are accepted", async () => {
   const root = await mkdtemp(`${tmpdir()}/daroyan-extended-tsconfig-`);
   const warnings: string[] = [];

@@ -21,14 +21,17 @@ export async function validateTypeScriptConfig(options: {
 }): Promise<void> {
   const file = resolve(options.root, "tsconfig.json");
   let config: TypeScriptConfig | undefined;
+  let missing = false;
 
   try {
     config = await readTypeScriptConfig(file, new Set());
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      config = {};
+      missing = true;
+    } else {
       return;
     }
-    return;
   }
   if (!config) {
     return;
@@ -56,7 +59,9 @@ export async function validateTypeScriptConfig(options: {
 
   options.logger.warn(
     [
-      `[daroyan] ${file} is missing settings required for generated route types.`,
+      missing
+        ? `[daroyan] ${file} is missing. Daroyan needs TypeScript configuration for generated route types.`
+        : `[daroyan] ${file} is missing settings required for generated route types.`,
       "Merge this configuration:",
       JSON.stringify(
         {
