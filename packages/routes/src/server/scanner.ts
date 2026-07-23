@@ -787,6 +787,7 @@ function routePath(routesDirectory: string, file: string): string {
     );
   }
 
+  const parameters = new Set<string>();
   for (const segment of segments) {
     if (!segment.startsWith("$")) {
       continue;
@@ -800,6 +801,14 @@ function routePath(routesDirectory: string, file: string): string {
         )}. Use letters, numbers, and underscores, starting with a letter or underscore.`,
       );
     }
+    if (parameters.has(parameter)) {
+      throw new Error(
+        `[daroyan] Invalid route ${file}: duplicate dynamic parameter ${JSON.stringify(
+          parameter,
+        )}. Every filename parameter in a route must have a unique name.`,
+      );
+    }
+    parameters.add(parameter);
   }
 
   const path = segments.map(routeSegment).join("/");

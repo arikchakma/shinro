@@ -846,6 +846,13 @@ test("removing a route during development deletes its stale companion and regist
 
   try {
     await expect(readFile(companionFile, "utf8")).resolves.toContain('path: "/notes"');
+    await expect
+      .poll(() =>
+        Object.values(server.watcher.getWatched())
+          .flat()
+          .some((file) => file === "notes.ts"),
+      )
+      .toBe(true);
     await rm(routeFile);
 
     await expect
@@ -936,6 +943,27 @@ test("an invalid dynamic parameter name fails with its source file and parameter
       resolveConfig({ configFile: false, plugins: [daroyan()], root }, "serve"),
     ).rejects.toThrow(
       /app\/routes\/users\/\$bad-name\.ts[\s\S]*invalid dynamic parameter name[\s\S]*bad-name/i,
+    );
+  } finally {
+    await rm(root, { recursive: true });
+  }
+});
+
+test("duplicate dynamic parameter names in one route fail before generation", async () => {
+  const root = await mkdtemp(`${tmpdir()}/daroyan-duplicate-route-parameter-`);
+
+  await mkdir(`${root}/app/routes/teams/$id/members`, { recursive: true });
+  await writeFile(`${root}/app/app.ts`, temporaryAppSource);
+  await writeFile(
+    `${root}/app/routes/teams/$id/members/$id.ts`,
+    "export const GET = [(c: any) => c.json({ id: c.req.param('id') })] as const;\n",
+  );
+
+  try {
+    await expect(
+      resolveConfig({ configFile: false, plugins: [daroyan()], root }, "serve"),
+    ).rejects.toThrow(
+      /\[daroyan\][\s\S]*teams\/\$id\/members\/\$id\.ts[\s\S]*duplicate[\s\S]*parameter[\s\S]*"id"/i,
     );
   } finally {
     await rm(root, { recursive: true });

@@ -453,6 +453,7 @@ Rules:
 - `$name` becomes the required Hono parameter `:name`.
 - `$...name` becomes the one-or-more catch-all `:name{.+}`.
 - Dynamic directories follow the same rules as dynamic files.
+- Every dynamic parameter name must be unique within one route.
 - Catch-all segments must be final.
 - Generated RPC URLs are canonicalized without trailing slashes, except
   `/`.
