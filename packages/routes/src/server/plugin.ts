@@ -3,10 +3,10 @@ import { dirname, relative, resolve, sep } from "node:path";
 import type { Plugin, ResolvedConfig, ViteDevServer } from "vite-plus";
 import { ENTRY_ID, RESOLVED_ENTRY_ID } from "../constants.ts";
 import { createSources } from "./codegen.ts";
-import { DevelopmentProcess } from "./dev-process.ts";
-import { warnForMissingClientExport } from "./package-diagnostics.ts";
+import { validateTypeScriptConfig } from "./config.ts";
+import { DevelopmentProcess } from "./dev.ts";
+import { warnForMissingClientExport } from "./package.ts";
 import { writeGeneratedTypes } from "./typegen.ts";
-import { validateTypeScriptConfig } from "./typescript-config.ts";
 
 export type DaroyanOptions = {
   app?: string;

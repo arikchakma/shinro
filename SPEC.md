@@ -47,9 +47,9 @@ belong to the user's server entry:
 import { serve } from "@hono/node-server";
 
 import app from "daroyan/entry";
-import { shutdown } from "./shutdown";
-import { initDatabase } from "./lib/db";
-import { initRedis } from "./lib/redis";
+import { shutdown } from "./shutdown.ts";
+import { initDatabase } from "./lib/db.ts";
+import { initRedis } from "./lib/redis.ts";
 
 await Promise.all([initDatabase(), initRedis()]);
 
@@ -78,7 +78,7 @@ Generated `+types` are available but optional:
 ```ts
 // app/routes/users/$id.ts
 import { defineHandler } from "daroyan/app";
-import type { Route } from "./+types/$id";
+import type { Route } from "./+types/$id.ts";
 
 export const GET = defineHandler<Route.Handler>((c) => {
   return c.json({ id: c.req.param("id") }, 200);
@@ -267,19 +267,26 @@ Generated companion types use TypeScript's `rootDirs` support:
 ```jsonc
 {
   "compilerOptions": {
+    "allowImportingTsExtensions": true,
     "strict": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "noEmit": true,
     "rootDirs": [".", "./.daroyan/types"],
   },
   "include": ["app", ".daroyan/**/*.d.ts"],
 }
 ```
 
+Daroyan emits explicit `.ts` import specifiers. TypeScript requires
+`allowImportingTsExtensions` together with `noEmit`, `emitDeclarationOnly`,
+or `rewriteRelativeImportExtensions`; the recommended Vite workflow uses
+`noEmit`.
+
 This lets a route optionally import:
 
 ```ts
-import type { Route } from "./+types/$id";
+import type { Route } from "./+types/$id.ts";
 ```
 
 without writing generated files into `app/routes`.
@@ -587,7 +594,7 @@ It does not provide exact filename-derived parameter-key checking inside
 ```ts
 // app/routes/api/users/$id.ts
 import { defineHandler } from "daroyan/app";
-import type { Route } from "./+types/$id";
+import type { Route } from "./+types/$id.ts";
 
 export const GET = defineHandler<Route.Handler>((c) => {
   const id = c.req.param("id");
@@ -662,7 +669,7 @@ generated `Route` type.
 The two features can be combined:
 
 ```ts
-import type { Route } from "./+types/$id";
+import type { Route } from "./+types/$id.ts";
 
 export const GET = defineHandler<Route.Handler>(zValidator("param", params), async (c) => {
   const { id } = c.req.valid("param");
@@ -779,7 +786,7 @@ Generated middleware companion types are also optional:
 
 ```ts
 import { defineMiddleware } from "daroyan/app";
-import type { Route } from "./+types/_middleware";
+import type { Route } from "./+types/_middleware.ts";
 
 export default defineMiddleware<Route.Middleware>(requestId(), authenticate(), async (c, next) => {
   await next();
@@ -951,7 +958,7 @@ Type generation writes this project-specific merge:
 
 ```ts
 // .daroyan/daroyan.d.ts
-import type app from "../app/app";
+import type app from "../app/app.ts";
 
 declare module "daroyan/app" {
   interface DaroyanProject {
@@ -1029,8 +1036,8 @@ import { serve } from "@hono/node-server";
 import type { ServerType } from "@hono/node-server";
 
 import app from "daroyan/entry";
-import { closeDatabase, initDatabase } from "./lib/db";
-import { closeRedis, initRedis } from "./lib/redis";
+import { closeDatabase, initDatabase } from "./lib/db.ts";
+import { closeRedis, initRedis } from "./lib/redis.ts";
 
 await Promise.all([initDatabase(), initRedis()]);
 
@@ -1083,7 +1090,7 @@ This is application code. Daroyan neither supplies nor calls `shutdown()`.
 // app/server.ts
 import app from "daroyan/entry";
 
-import { closeDatabase, initDatabase } from "./lib/db";
+import { closeDatabase, initDatabase } from "./lib/db.ts";
 
 await initDatabase();
 
@@ -1274,11 +1281,11 @@ The generator creates a chained Hono application in `.daroyan/rpc.ts`:
 import { Hono } from "hono";
 import type { ProjectEnv } from "daroyan/app";
 
-import configuredApp from "../app/app";
-import admin from "../app/routes/admin";
-import apiMiddleware from "../app/routes/api/_middleware";
-import { GET as usersGet, POST as usersPost } from "../app/routes/api/users";
-import { GET as userGet } from "../app/routes/api/users/$id";
+import configuredApp from "../app/app.ts";
+import admin from "../app/routes/admin.ts";
+import apiMiddleware from "../app/routes/api/_middleware.ts";
+import { GET as usersGet, POST as usersPost } from "../app/routes/api/users.ts";
+import { GET as userGet } from "../app/routes/api/users/$id.ts";
 
 const routes = new Hono<ProjectEnv>()
   .route("/", configuredApp)
@@ -1330,7 +1337,7 @@ union.
 `.daroyan/client.ts` precomputes the client type:
 
 ```ts
-import type { AppType } from "./rpc";
+import type { AppType } from "./rpc.ts";
 import { hc } from "hono/client";
 
 const typedClient = hc<AppType>("");
@@ -1750,7 +1757,7 @@ export default defineConfig({
 import { logger } from "hono/logger";
 import { defineApp } from "daroyan/app";
 
-import type { User } from "./types";
+import type { User } from "./types.ts";
 
 export type AppEnv = {
   Variables: {
@@ -1781,7 +1788,7 @@ export default app;
 // app/routes/_middleware.ts
 import { defineMiddleware } from "daroyan/app";
 
-import { authenticate } from "../lib/auth";
+import { authenticate } from "../lib/auth.ts";
 
 export default defineMiddleware(
   async (c, next) => {
@@ -1855,7 +1862,7 @@ export const GET = defineHandler(zValidator("param", params), async (c) => {
 The same route could additionally opt into filename-derived typing:
 
 ```ts
-import type { Route } from "./+types/$id";
+import type { Route } from "./+types/$id.ts";
 
 export const GET = defineHandler<Route.Handler>(zValidator("param", params), async (c) => {
   const { id } = c.req.valid("param");
@@ -1870,9 +1877,9 @@ export const GET = defineHandler<Route.Handler>(zValidator("param", params), asy
 import { serve } from "@hono/node-server";
 
 import app from "daroyan/entry";
-import { shutdown } from "./shutdown";
-import { initDatabase } from "./lib/db";
-import { initRedis } from "./lib/redis";
+import { shutdown } from "./shutdown.ts";
+import { initDatabase } from "./lib/db.ts";
+import { initRedis } from "./lib/redis.ts";
 
 await Promise.all([initDatabase(), initRedis()]);
 

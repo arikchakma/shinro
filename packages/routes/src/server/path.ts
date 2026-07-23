@@ -25,10 +25,7 @@ export function toVitePath(path: string): string {
 }
 
 export function generatedImport(outputDirectory: string, file: string): string {
-  const path = relative(outputDirectory, file)
-    .split(sep)
-    .join("/")
-    .replace(/\.[cm]?[jt]sx?$/, "");
+  const path = relative(outputDirectory, file).split(sep).join("/");
   return path.startsWith(".") ? path : `./${path}`;
 }
 

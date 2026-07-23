@@ -43,14 +43,21 @@ tree so the app environment is available in every route:
 // tsconfig.json
 {
   "compilerOptions": {
+    "allowImportingTsExtensions": true,
     "strict": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "noEmit": true,
     "rootDirs": [".", "./.daroyan/types"],
   },
   "include": ["app", ".daroyan/**/*.d.ts"],
 }
 ```
+
+Daroyan emits explicit `.ts` import specifiers. TypeScript requires
+`allowImportingTsExtensions` together with `noEmit`, `emitDeclarationOnly`,
+or `rewriteRelativeImportExtensions`; the recommended Vite workflow uses
+`noEmit`.
 
 Ignore generated and build output:
 
@@ -167,7 +174,7 @@ descendant. It can export multiple middleware handlers:
 ```ts
 // app/routes/api/_middleware.ts
 import { defineMiddleware } from "daroyan/app";
-import type { Route } from "./+types/_middleware";
+import type { Route } from "./+types/_middleware.ts";
 
 export default defineMiddleware<Route.Middleware>(
   async (c, next) => {
@@ -220,7 +227,7 @@ Daroyan also generates an optional filename companion:
 
 ```ts
 import { defineHandler } from "daroyan/app";
-import type { Route } from "./+types/$id";
+import type { Route } from "./+types/$id.ts";
 
 export const GET = defineHandler<Route.Handler>((c) => {
   const id = c.req.param("id");
@@ -269,7 +276,7 @@ retain that schema in `typeof app`, so it cannot enter the client type.
 Daroyan generates `.daroyan/client.ts`:
 
 ```ts
-import { createClient } from "./.daroyan/client";
+import { createClient } from "./.daroyan/client.ts";
 
 const api = createClient("http://localhost:3000");
 

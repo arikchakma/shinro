@@ -3,7 +3,7 @@ import { dirname, relative, resolve, sep } from "node:path";
 import { minimatch } from "minimatch";
 import { parseAst } from "vite-plus";
 import { HTTP_METHODS } from "../constants.ts";
-import { toProjectPath } from "./paths.ts";
+import { toProjectPath } from "./path.ts";
 
 export type Route = {
   file: string;

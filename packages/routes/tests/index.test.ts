@@ -1849,7 +1849,7 @@ test("an incompatible TypeScript config receives a copy-pasteable correction", a
     );
 
     expect(warnings.join("\n")).toMatch(
-      /\[daroyan\][\s\S]*tsconfig\.json[\s\S]*"strict": true[\s\S]*"module": "ESNext"[\s\S]*"moduleResolution": "Bundler"[\s\S]*"rootDirs"[\s\S]*\.daroyan\/types[\s\S]*\.daroyan\/\*\*\/\*\.d\.ts/i,
+      /\[daroyan\][\s\S]*tsconfig\.json[\s\S]*"allowImportingTsExtensions": true[\s\S]*"strict": true[\s\S]*"module": "ESNext"[\s\S]*"moduleResolution": "Bundler"[\s\S]*"noEmit": true[\s\S]*"rootDirs"[\s\S]*\.daroyan\/types[\s\S]*\.daroyan\/\*\*\/\*\.d\.ts/i,
     );
   } finally {
     await rm(root, { recursive: true });
@@ -1874,7 +1874,7 @@ test("a missing TypeScript config receives the generated-types configuration", a
     );
 
     expect(warnings.join("\n")).toMatch(
-      /\[daroyan\][\s\S]*tsconfig\.json[\s\S]*missing[\s\S]*"strict": true[\s\S]*"rootDirs"[\s\S]*\.daroyan\/types[\s\S]*include/i,
+      /\[daroyan\][\s\S]*tsconfig\.json[\s\S]*missing[\s\S]*"allowImportingTsExtensions": true[\s\S]*"strict": true[\s\S]*"noEmit": true[\s\S]*"rootDirs"[\s\S]*\.daroyan\/types[\s\S]*include/i,
     );
   } finally {
     await rm(root, { recursive: true });
@@ -1895,8 +1895,10 @@ test("TypeScript settings inherited from a relative config are accepted", async 
     `${root}/tsconfig.base.json`,
     JSON.stringify({
       compilerOptions: {
+        allowImportingTsExtensions: true,
         module: "ESNext",
         moduleResolution: "Bundler",
+        noEmit: true,
         strict: true,
       },
     }),
@@ -1946,8 +1948,10 @@ test("TypeScript settings inherited from a package config are accepted", async (
     `${root}/node_modules/@example/tsconfig/tsconfig.json`,
     JSON.stringify({
       compilerOptions: {
+        allowImportingTsExtensions: true,
         module: "ESNext",
         moduleResolution: "Bundler",
+        noEmit: true,
         strict: true,
       },
     }),
@@ -1975,6 +1979,46 @@ test("TypeScript settings inherited from a package config are accepted", async (
   }
 });
 
+test.each(["emitDeclarationOnly", "rewriteRelativeImportExtensions"] as const)(
+  "TypeScript's %s mode supports explicit TypeScript import extensions",
+  async (emissionOption) => {
+    const root = await mkdtemp(`${tmpdir()}/daroyan-ts-extension-emission-`);
+    const warnings: string[] = [];
+    const logger = createLogger("silent");
+    logger.warn = (message) => {
+      warnings.push(message);
+    };
+
+    await mkdir(`${root}/app/routes`, { recursive: true });
+    await writeFile(`${root}/app/app.ts`, temporaryAppSource);
+    await writeFile(
+      `${root}/tsconfig.json`,
+      JSON.stringify({
+        compilerOptions: {
+          allowImportingTsExtensions: true,
+          [emissionOption]: true,
+          module: "ESNext",
+          moduleResolution: "Bundler",
+          rootDirs: [".", "./.daroyan/types"],
+          strict: true,
+        },
+        include: ["app", ".daroyan/**/*.d.ts"],
+      }),
+    );
+
+    try {
+      await resolveConfig(
+        { configFile: false, customLogger: logger, plugins: [daroyan()], root },
+        "serve",
+      );
+
+      expect(warnings).toEqual([]);
+    } finally {
+      await rm(root, { recursive: true });
+    }
+  },
+);
+
 test("_middleware.js is discovered for JavaScript route projects", async () => {
   const root = await mkdtemp(`${tmpdir()}/daroyan-js-middleware-`);
 
@@ -1994,6 +2038,7 @@ test("_middleware.js is discovered for JavaScript route projects", async () => {
     const manifest = JSON.parse(await readFile(`${root}/.daroyan/manifest.json`, "utf8")) as {
       routes: Array<{ middleware: string[]; path: string }>;
     };
+    const rpc = await readFile(`${root}/.daroyan/rpc.ts`, "utf8");
 
     expect(manifest.routes).toContainEqual(
       expect.objectContaining({
@@ -2001,6 +2046,8 @@ test("_middleware.js is discovered for JavaScript route projects", async () => {
         path: "/api",
       }),
     );
+    expect(rpc).toContain('from "../app/routes/api/index.js";');
+    expect(rpc).toContain('from "../app/routes/api/_middleware.js";');
   } finally {
     await rm(root, { recursive: true });
   }

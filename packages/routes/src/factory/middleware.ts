@@ -1,6 +1,6 @@
 import type { Env } from "hono";
 import type { MiddlewareHandler } from "hono/types";
-import type { ProjectEnv } from "../app";
+import type { ProjectEnv } from "../app.ts";
 
 export type DaroyanMiddleware<
   T extends {

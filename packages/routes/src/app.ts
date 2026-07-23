@@ -1,9 +1,9 @@
 import { Hono, type Env } from "hono";
 
-export { defineHandler } from "./factory/handler";
-export type { DaroyanRoute } from "./factory/handler";
-export { defineMiddleware } from "./factory/middleware";
-export type { DaroyanMiddleware } from "./factory/middleware";
+export { defineHandler } from "./factory/handler.ts";
+export type { DaroyanRoute } from "./factory/handler.ts";
+export { defineMiddleware } from "./factory/middleware.ts";
+export type { DaroyanMiddleware } from "./factory/middleware.ts";
 
 export interface DaroyanProject {}
 

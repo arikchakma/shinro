@@ -1,5 +1,5 @@
 import { defineMiddleware } from "daroyan/app";
-import type { Route } from "./+types/_middleware";
+import type { Route } from "./+types/_middleware.ts";
 
 export default defineMiddleware<Route.Middleware>(
   async (c, next) => {

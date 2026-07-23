@@ -2,7 +2,7 @@ import { access } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { ResolvedConfig } from "vite-plus";
 import { GENERATED_NOTICE } from "../constants.ts";
-import { validateAppModule } from "./app-module.ts";
+import { validateAppModule } from "./app.ts";
 import {
   companionFile,
   generatedImport,
@@ -10,7 +10,7 @@ import {
   toProjectPath,
   toVitePath,
   withBasePath,
-} from "./paths.ts";
+} from "./path.ts";
 import { discoverRoutes, type Route, validateRoutes } from "./scanner.ts";
 import type { DaroyanOptions } from "./plugin.ts";
 
