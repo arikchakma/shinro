@@ -5,6 +5,10 @@
     "moduleDetection": "force",
     "module": "nodenext",
     "moduleResolution": "nodenext",
+    "paths": {
+      "daroyan/app": ["./src/app.ts"],
+      "daroyan/entry": ["./.daroyan/types/entry.d.ts"]
+    },
     "resolveJsonModule": true,
     "types": ["node"],
     "strict": true,
@@ -16,5 +20,6 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true
-  }
+  },
+  "include": ["src", "tests", ".daroyan/**/*.d.ts"]
 }

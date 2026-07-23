@@ -1,7 +1,7 @@
 {
-  "name": "routes",
+  "name": "daroyan",
   "version": "0.0.0",
-  "description": "A starter for creating a TypeScript package.",
+  "description": "Type-safe file routing for Hono on Node.js and Bun.",
   "homepage": "https://github.com/author/library#readme",
   "bugs": {
     "url": "https://github.com/author/library/issues"
@@ -18,6 +18,8 @@
   "type": "module",
   "exports": {
     ".": "./dist/index.mjs",
+    "./app": "./dist/app.mjs",
+    "./entry": "./dist/entry.mjs",
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -32,9 +34,16 @@
   },
   "devDependencies": {
     "@types/node": "^26.1.1",
+    "@typescript/native-preview": "catalog:",
     "bumpp": "^11.1.0",
+    "hono": "^4.10.0",
     "typescript": "^7.0.2",
     "vite": "catalog:",
-    "vite-plus": "catalog:"
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "hono": "^4.0.0",
+    "vite-plus": "^0.2.0"
   }
 }
