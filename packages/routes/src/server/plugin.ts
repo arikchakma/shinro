@@ -1,9 +1,14 @@
-import { access } from 'node:fs/promises';
+import { access, readdir } from 'node:fs/promises';
 import { basename, dirname, extname, relative, resolve, sep } from 'node:path';
 
 import type { Plugin, ResolvedConfig, ViteDevServer } from 'vite-plus';
 
-import { ENTRY_FILE, ENTRY_ID } from '../constants.ts';
+import {
+  ENTRY_FILE,
+  ENTRY_ID,
+  GENERATED_ENTRIES,
+  LEGACY_GENERATED_ENTRIES,
+} from '../constants.ts';
 import { createSources } from './codegen.ts';
 import { validateTypeScriptConfig } from './config.ts';
 import { DevelopmentProcess } from './dev.ts';
@@ -114,7 +119,7 @@ export function daroyan(options: DaroyanOptions = {}): Plugin {
 
       resolvedConfig = config;
       outputDirectory = resolve(config.root, options.rpc?.outDir ?? '.daroyan');
-      assertGeneratedDirectory(config.root, outputDirectory);
+      await assertGeneratedDirectory(config.root, outputDirectory);
 
       // The development child loads this same config only so it can run the
       // user's entry. The parent already generated `.daroyan` and reported its
@@ -149,12 +154,10 @@ export function daroyan(options: DaroyanOptions = {}): Plugin {
         server.config.root,
         options.routes ?? 'src/routes'
       );
-      const appFile = resolve(server.config.root, options.app ?? 'src/app.ts');
       const entryFile = resolve(
         server.config.root,
         options.entry ?? 'src/server.ts'
       );
-      const sourceDirectories = [dirname(appFile), dirname(entryFile)];
       const runsUserEntry =
         !server.config.server.middlewareMode && !isDevelopmentChild();
       if (runsUserEntry) {
@@ -199,14 +202,21 @@ export function daroyan(options: DaroyanOptions = {}): Plugin {
           root: server.config.root,
         });
         developmentProcess = processController;
+        // Any watched module can be part of the running server, including
+        // workspace packages outside the app's own source directory, so the
+        // restart set is not limited to the app directory. It is limited to
+        // importable source files: a server that writes a log, cache, or
+        // database file at runtime would otherwise restart itself forever.
+        // Route changes restart through `onRouteTreeChange`, and generated
+        // output must never restart anything.
         const restart = (file: string) => {
           if (
+            isSourceModule(file) &&
             !isWithin(routesDirectory, file) &&
             !isWithin(
               outputDirectory ?? resolve(server.config.root, '.daroyan'),
               file
-            ) &&
-            sourceDirectories.some((directory) => isWithin(directory, file))
+            )
           ) {
             processController.restart();
           }
@@ -279,11 +289,30 @@ export function daroyan(options: DaroyanOptions = {}): Plugin {
   };
 }
 
+const SOURCE_MODULE_EXTENSIONS = new Set([
+  '.cjs',
+  '.cts',
+  '.js',
+  '.json',
+  '.jsx',
+  '.mjs',
+  '.mts',
+  '.ts',
+  '.tsx',
+]);
+
+function isSourceModule(file: string): boolean {
+  return SOURCE_MODULE_EXTENSIONS.has(extname(file));
+}
+
 function isDevelopmentChild(): boolean {
   return process.env.DAROYAN_DEV_CHILD === '1';
 }
 
-function assertGeneratedDirectory(root: string, outputDirectory: string): void {
+async function assertGeneratedDirectory(
+  root: string,
+  outputDirectory: string
+): Promise<void> {
   const path = relative(root, outputDirectory);
   if (path === '') {
     throw new Error(
@@ -295,6 +324,46 @@ function assertGeneratedDirectory(root: string, outputDirectory: string): void {
       `[daroyan] rpc.outDir must stay inside the project root: ${outputDirectory}`
     );
   }
+
+  // Daroyan owns everything in this directory, including deleting files it no
+  // longer generates. Refuse to adopt a directory that already holds unrelated
+  // content, so a misconfigured `rpc.outDir` cannot point at source.
+  let entries: string[];
+  try {
+    entries = await readdir(outputDirectory);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return;
+    }
+    if ((error as NodeJS.ErrnoException).code === 'ENOTDIR') {
+      throw new Error(
+        `[daroyan] rpc.outDir is not a directory: ${outputDirectory}`
+      );
+    }
+    throw error;
+  }
+
+  // Match against every name Daroyan may own rather than a single marker file:
+  // a concurrent process can observe this directory mid-generation, when only
+  // some of the generated files exist yet.
+  const owned = new Set<string>([
+    ...GENERATED_ENTRIES,
+    ...LEGACY_GENERATED_ENTRIES,
+  ]);
+  const foreign = entries.filter(
+    (entry) => !owned.has(entry) && !entry.endsWith('.tmp')
+  );
+  if (foreign.length === 0) {
+    return;
+  }
+
+  throw new Error(
+    `[daroyan] Refusing to generate into ${outputDirectory}: it already contains files Daroyan did not generate (${foreign
+      .slice(0, 5)
+      .join(
+        ', '
+      )}).\nPoint rpc.outDir at a dedicated directory such as .daroyan, or empty this one first.`
+  );
 }
 
 async function assertServerEntry(entry: string): Promise<void> {

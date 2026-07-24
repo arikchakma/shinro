@@ -67,10 +67,12 @@ export async function validateTypeScriptConfig(options: {
     supportsTypeScriptImportExtensions &&
     rootDirs.includes('.') &&
     rootDirs.includes(generatedTypes) &&
+    // The ambient `modules.d.ts` only takes effect when it is part of the
+    // program, and TypeScript's `**/*.ts` glob does not match `.d.ts`, so a
+    // declaration-matching pattern is the load-bearing one here.
     includes.some((include) =>
       [
         `${normalizeConfigPath(generatedDirectory)}/**/*.d.ts`,
-        `${normalizeConfigPath(generatedDirectory)}/**/*.ts`,
         `${normalizeConfigPath(generatedDirectory)}/**/*`,
       ].includes(include)
     );
@@ -111,7 +113,11 @@ export async function validateTypeScriptConfig(options: {
             noEmit: true,
             rootDirs: ['.', `./${generatedDirectory}/types`],
           },
-          include: ['src', `${generatedDirectory}/**/*.ts`],
+          include: [
+            'src',
+            `${generatedDirectory}/**/*.d.ts`,
+            `${generatedDirectory}/**/*.ts`,
+          ],
         },
         undefined,
         2

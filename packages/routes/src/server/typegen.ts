@@ -10,12 +10,16 @@ import {
 } from 'node:fs/promises';
 import { dirname, relative, resolve, sep } from 'node:path';
 
-import { ENTRY_FILE, GENERATED_NOTICE } from '../constants.ts';
+import {
+  ENTRY_FILE,
+  GENERATED_NOTICE,
+  LEGACY_GENERATED_ENTRIES,
+} from '../constants.ts';
 import type { GeneratedSources } from './codegen.ts';
 
 let temporaryFileCounter = 0;
 
-const RPC_FILES = ['rpc.ts', 'client.ts', 'entry.d.ts'];
+const RPC_FILES = ['rpc.ts', 'client.ts', 'modules.d.ts'];
 
 export async function writeGeneratedTypes(
   outputDirectory: string,
@@ -57,7 +61,7 @@ async function writeGeneratedFiles(
       ? ([
           [resolve(outputDirectory, 'rpc.ts'), sources.rpc],
           [resolve(outputDirectory, 'client.ts'), sources.client],
-          [resolve(outputDirectory, 'entry.d.ts'), sources.entryTypes],
+          [resolve(outputDirectory, 'modules.d.ts'), sources.entryTypes],
         ] as const)
       : []),
     [resolve(outputDirectory, 'manifest.json'), sources.manifest],
@@ -67,6 +71,14 @@ async function writeGeneratedFiles(
   await removeStaleCompanions(
     resolve(outputDirectory, 'types'),
     new Set(companions.map((companion) => companion.file))
+  );
+
+  // Output written by an earlier Daroyan version is cleaned up on the first
+  // generation after an upgrade.
+  await Promise.all(
+    LEGACY_GENERATED_ENTRIES.map((name) =>
+      removeGeneratedFile(resolve(outputDirectory, name))
+    )
   );
 
   if (!options.rpcEnabled) {
@@ -89,7 +101,10 @@ async function withGenerationLock<T>(
   outputDirectory: string,
   action: () => Promise<T>
 ): Promise<T> {
-  const lockFile = `${outputDirectory}.lock`;
+  // Kept inside the generated directory so a single `.daroyan/` ignore rule
+  // covers it, and so watchers that already skip generated output are not woken
+  // by Daroyan taking its own lock.
+  const lockFile = resolve(outputDirectory, '.lock');
   const startedAt = Date.now();
 
   while (true) {

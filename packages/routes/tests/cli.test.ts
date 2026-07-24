@@ -135,7 +135,7 @@ test('typegen prepares every generated type artifact in a clean checkout', async
       '.daroyan/rpc.ts',
       '.daroyan/entry.ts',
       '.daroyan/types/app.d.ts',
-      '.daroyan/entry.d.ts',
+      '.daroyan/modules.d.ts',
       '.daroyan/types/src/routes/users/+types/_middleware.d.ts',
       '.daroyan/types/src/routes/users/+types/$id.d.ts',
     ]) {

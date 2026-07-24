@@ -53,13 +53,15 @@ without any hand-written `paths`:
 }
 ```
 
-`daroyan/entry` resolves through a generated `.daroyan/entry.d.ts` (an
+`daroyan/entry` resolves through a generated `.daroyan/modules.d.ts` (an
 ambient module declaration), and `daroyan/app` resolves through the package
 `exports` — neither needs a `paths` entry.
 
-The base config's `include` covers `.daroyan/**/*.ts`, so the generated entry
-is type checked with the rest of your project rather than only where it
-happens to be imported.
+The base config's `include` covers both `.daroyan/**/*.d.ts` and
+`.daroyan/**/*.ts`, so the ambient declarations load and the generated entry is
+type checked with the rest of your project rather than only where it happens to
+be imported. Both patterns are needed: TypeScript's `*.ts` glob does not match
+`.d.ts` files.
 
 The shipped base hardcodes the default `.daroyan` location. A project that
 sets `rpc.outDir` elsewhere cannot extend it and should merge the equivalent
