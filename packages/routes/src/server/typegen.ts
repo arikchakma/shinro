@@ -42,8 +42,11 @@ async function writeGeneratedFiles(
     file: assertWithinOutput(outputDirectory, companion.file),
     source: companion.source,
   }));
+  // `manifest.json` is written last so it doubles as the commit marker: once a
+  // watcher observes a new manifest, every other generated file it describes is
+  // already on disk. Writing it first would let readers see a manifest that
+  // advertises routes the entry does not register yet.
   const files = new Map<string, string>([
-    [resolve(outputDirectory, 'manifest.json'), sources.manifest],
     [resolve(outputDirectory, 'daroyan.d.ts'), sources.project],
     [resolve(outputDirectory, ENTRY_FILE), sources.entry],
     [resolve(outputDirectory, 'types/app.d.ts'), sources.app],
@@ -57,6 +60,7 @@ async function writeGeneratedFiles(
           [resolve(outputDirectory, 'entry.d.ts'), sources.entryTypes],
         ] as const)
       : []),
+    [resolve(outputDirectory, 'manifest.json'), sources.manifest],
   ]);
 
   await assertFileTargets([...files.keys()]);
@@ -65,16 +69,16 @@ async function writeGeneratedFiles(
     new Set(companions.map((companion) => companion.file))
   );
 
-  for (const [file, source] of files) {
-    await writeGeneratedFile(file, source);
-  }
-
   if (!options.rpcEnabled) {
     await Promise.all(
       RPC_FILES.map((name) =>
         removeGeneratedFile(resolve(outputDirectory, name))
       )
     );
+  }
+
+  for (const [file, source] of files) {
+    await writeGeneratedFile(file, source);
   }
 }
 
