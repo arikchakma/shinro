@@ -14,7 +14,7 @@ Package name: `daroyan`
 The central API is intentionally small:
 
 ```ts
-// app/app.ts
+// src/app.ts
 import { logger } from "hono/logger";
 import { defineApp } from "daroyan/app";
 
@@ -43,7 +43,7 @@ register signal handlers, close databases, drain queues, call
 belong to the user's server entry:
 
 ```ts
-// app/server.ts
+// src/server.ts
 import { serve } from "@hono/node-server";
 
 import app from "daroyan/entry";
@@ -65,7 +65,7 @@ process.once("SIGTERM", () => shutdown(server, "SIGTERM"));
 Routes are equally small:
 
 ```ts
-// app/routes/health.ts
+// src/routes/health.ts
 import { defineHandler } from "daroyan/app";
 
 export const GET = defineHandler((c) => {
@@ -76,7 +76,7 @@ export const GET = defineHandler((c) => {
 Generated `+types` are available but optional:
 
 ```ts
-// app/routes/users/$id.ts
+// src/routes/users/$id.ts
 import { defineHandler } from "daroyan/app";
 import type { Route } from "./+types/$id.ts";
 
@@ -239,9 +239,9 @@ Defaults:
 
 ```ts
 const defaults = {
-  app: "app/app.ts",
-  entry: "app/server.ts",
-  routes: "app/routes",
+  app: "src/app.ts",
+  entry: "src/server.ts",
+  routes: "src/routes",
   ignoredRouteFiles: [],
   basePath: "/",
   build: {
@@ -274,7 +274,7 @@ Generated companion types use TypeScript's `rootDirs` support:
     "noEmit": true,
     "rootDirs": [".", "./.daroyan/types"],
   },
-  "include": ["app", ".daroyan/**/*.d.ts"],
+  "include": ["src", ".daroyan/**/*.d.ts"],
 }
 ```
 
@@ -289,7 +289,7 @@ This lets a route optionally import:
 import type { Route } from "./+types/$id.ts";
 ```
 
-without writing generated files into `app/routes`.
+without writing generated files into `src/routes`.
 
 Daroyan keeps the project environment binding in
 `.daroyan/daroyan.d.ts`. The TypeScript include above guarantees that
@@ -310,7 +310,7 @@ copy-pasteable correction when they are missing.
 
 ```text
 .
-├── app/
+├── src/
 │   ├── app.ts
 │   ├── server.ts
 │   ├── shutdown.ts
@@ -335,7 +335,7 @@ copy-pasteable correction when they are missing.
 └── vite.config.ts
 ```
 
-`app/app.ts` and `app/routes` are required. `app/server.ts` is required for
+`src/app.ts` and `src/routes` are required. `src/server.ts` is required for
 development and production builds, but not for route scanning or RPC-only
 type generation.
 
@@ -399,7 +399,7 @@ defineServer({ app });
 The configured app module must default-export the Hono instance:
 
 ```ts
-// app/app.ts
+// src/app.ts
 import { defineApp } from "daroyan/app";
 
 const app = defineApp();
@@ -442,17 +442,17 @@ Daroyan must not claim RPC typing for those manual routes.
 
 ## 12. File-to-URL convention
 
-Daroyan scans `app/routes/**/*.{ts,js}` by default.
+Daroyan scans `src/routes/**/*.{ts,js}` by default.
 
 | Route file                         | URL                   |
 | ---------------------------------- | --------------------- |
-| `app/routes/index.ts`              | `/`                   |
-| `app/routes/health.ts`             | `/health`             |
-| `app/routes/api/users.ts`          | `/api/users`          |
-| `app/routes/api/users/index.ts`    | `/api/users`          |
-| `app/routes/api/users/$id.ts`      | `/api/users/:id`      |
-| `app/routes/api/$version/users.ts` | `/api/:version/users` |
-| `app/routes/files/$...path.ts`     | `/files/:path{.+}`    |
+| `src/routes/index.ts`              | `/`                   |
+| `src/routes/health.ts`             | `/health`             |
+| `src/routes/api/users.ts`          | `/api/users`          |
+| `src/routes/api/users/index.ts`    | `/api/users`          |
+| `src/routes/api/users/$id.ts`      | `/api/users/:id`      |
+| `src/routes/api/$version/users.ts` | `/api/:version/users` |
+| `src/routes/files/$...path.ts`     | `/files/:path{.+}`    |
 
 Rules:
 
@@ -494,15 +494,15 @@ Built-in exclusions always apply and cannot be re-enabled by this option.
 These files conflict because they produce the same URL:
 
 ```text
-app/routes/users.ts
-app/routes/users/index.ts
+src/routes/users.ts
+src/routes/users/index.ts
 ```
 
 These files also conflict because their matching shape is equivalent:
 
 ```text
-app/routes/users/$id.ts
-app/routes/users/$slug.ts
+src/routes/users/$id.ts
+src/routes/users/$slug.ts
 ```
 
 Daroyan reports both source files and the normalized route, then fails
@@ -510,7 +510,7 @@ generation and build.
 
 Sub-router namespace ownership uses route-pattern compatibility, not only
 literal string prefixes. For example, a sub-router at `/admin` conflicts
-with `app/routes/$section/stats.ts` because both can serve
+with `src/routes/$section/stats.ts` because both can serve
 `/admin/stats`.
 
 ## 13. Route module API
@@ -530,7 +530,7 @@ matching `GET` route and removes the response body.
 One file may export multiple methods:
 
 ```ts
-// app/routes/api/users/index.ts
+// src/routes/api/users/index.ts
 import { zValidator } from "@hono/zod-validator";
 import { defineHandler } from "daroyan/app";
 import { z } from "zod";
@@ -570,7 +570,7 @@ optional.
 ### 14.1 Minimal form
 
 ```ts
-// app/routes/api/users/$id.ts
+// src/routes/api/users/$id.ts
 import { defineHandler } from "daroyan/app";
 
 export const GET = defineHandler((c) => {
@@ -592,7 +592,7 @@ It does not provide exact filename-derived parameter-key checking inside
 ### 14.2 Strict filename-derived form
 
 ```ts
-// app/routes/api/users/$id.ts
+// src/routes/api/users/$id.ts
 import { defineHandler } from "daroyan/app";
 import type { Route } from "./+types/$id.ts";
 
@@ -647,7 +647,7 @@ For production inputs, `zValidator("param", schema)` is the recommended
 approach because it supplies both runtime validation and typed access:
 
 ```ts
-// app/routes/api/users/$id.ts
+// src/routes/api/users/$id.ts
 import { zValidator } from "@hono/zod-validator";
 import { defineHandler } from "daroyan/app";
 import { z } from "zod";
@@ -693,7 +693,7 @@ builds, or RPC generation.
 A route module may default-export a chained Hono sub-router:
 
 ```ts
-// app/routes/admin.ts
+// src/routes/admin.ts
 import { Hono } from "hono";
 
 const admin = new Hono()
@@ -712,8 +712,8 @@ Requirements:
 - the default sub-router is imported by both assemblers and mounted with
   `.route("/admin", admin)`;
 - a default sub-router owns its complete mount namespace, so
-  `app/routes/admin.ts` cannot coexist with files under
-  `app/routes/admin/**`;
+  `src/routes/admin.ts` cannot coexist with files under
+  `src/routes/admin/**`;
 - named HTTP exports are the primary convention;
 - filename companion types do not describe paths declared inside the
   sub-router because Hono already types those inline paths.
@@ -742,7 +742,7 @@ part of the Hono RPC contract.
 `_middleware.ts` applies to every route in its directory and descendants:
 
 ```ts
-// app/routes/api/_middleware.ts
+// src/routes/api/_middleware.ts
 import { defineMiddleware } from "daroyan/app";
 
 export default defineMiddleware(
@@ -793,6 +793,24 @@ export default defineMiddleware<Route.Middleware>(requestId(), authenticate(), a
 });
 ```
 
+To author a **named** middleware handler with the same env typing, reach for Hono's
+`createMiddleware` from `hono/factory` — `Route.Middleware["env"]` is the project env, so
+`c.var` / `c.set` are typed inside the callback. Compose the named handlers with
+`defineMiddleware()` for the default export:
+
+```ts
+import { defineMiddleware } from "daroyan/app";
+import { createMiddleware } from "hono/factory";
+import type { Route } from "./+types/_middleware.ts";
+
+const requestId = createMiddleware<Route.Middleware["env"]>(async (c, next) => {
+  c.set("requestId", crypto.randomUUID());
+  await next();
+});
+
+export default defineMiddleware(requestId);
+```
+
 The middleware companion is conceptually:
 
 ```ts
@@ -807,9 +825,9 @@ export namespace Route {
 Middleware stacks root-to-leaf:
 
 ```text
-app/routes/_middleware.ts
-app/routes/api/_middleware.ts
-app/routes/api/admin/_middleware.ts
+src/routes/_middleware.ts
+src/routes/api/_middleware.ts
+src/routes/api/admin/_middleware.ts
 ```
 
 A request under `/api/admin` runs them in that order. Child middleware
@@ -859,7 +877,7 @@ Consequently, a typed early response from directory middleware, such as a
 response union.
 
 ```ts
-// app/routes/api/_middleware.ts
+// src/routes/api/_middleware.ts
 export default defineMiddleware(async (c, next) => {
   const user = await authenticate(c.req.raw);
 
@@ -898,7 +916,7 @@ client. Daroyan does not introduce a required global response generic.
 An explicit app environment is declared once:
 
 ```ts
-// app/app.ts
+// src/app.ts
 import { defineApp } from "daroyan/app";
 
 export type AppEnv = {
@@ -958,7 +976,7 @@ Type generation writes this project-specific merge:
 
 ```ts
 // .daroyan/daroyan.d.ts
-import type app from "../app/app.ts";
+import type app from "../src/app.ts";
 
 declare module "daroyan/app" {
   interface DaroyanProject {
@@ -993,7 +1011,7 @@ import app from "daroyan/entry";
 
 Conceptually, it:
 
-1. imports the default Hono instance from `app/app.ts`;
+1. imports the default Hono instance from `src/app.ts`;
 2. imports directory middleware and route modules;
 3. registers them in deterministic order;
 4. exports the same app instance.
@@ -1031,7 +1049,7 @@ actionable error instead of returning an unassembled app.
 ### 19.1 Node.js
 
 ```ts
-// app/server.ts
+// src/server.ts
 import { serve } from "@hono/node-server";
 import type { ServerType } from "@hono/node-server";
 
@@ -1087,7 +1105,7 @@ This is application code. Daroyan neither supplies nor calls `shutdown()`.
 ### 19.2 Bun
 
 ```ts
-// app/server.ts
+// src/server.ts
 import app from "daroyan/entry";
 
 import { closeDatabase, initDatabase } from "./lib/db.ts";
@@ -1128,7 +1146,7 @@ configuration:
 
 ```ts
 daroyan({
-  entry: "app/server.node.ts",
+  entry: "src/server.node.ts",
   build: {
     fileName: "server.mjs",
   },
@@ -1236,21 +1254,21 @@ Example:
   "routes": [
     {
       "kind": "methods",
-      "file": "app/routes/api/users/index.ts",
+      "file": "src/routes/api/users/index.ts",
       "path": "/api/users",
       "methods": ["GET", "POST"],
-      "middleware": ["app/routes/api/_middleware.ts"]
+      "middleware": ["src/routes/api/_middleware.ts"]
     },
     {
       "kind": "methods",
-      "file": "app/routes/api/users/$id.ts",
+      "file": "src/routes/api/users/$id.ts",
       "path": "/api/users/:id",
       "methods": ["GET"],
-      "middleware": ["app/routes/api/_middleware.ts"]
+      "middleware": ["src/routes/api/_middleware.ts"]
     },
     {
       "kind": "sub-router",
-      "file": "app/routes/admin.ts",
+      "file": "src/routes/admin.ts",
       "mountPath": "/admin",
       "middleware": []
     }
@@ -1281,11 +1299,11 @@ The generator creates a chained Hono application in `.daroyan/rpc.ts`:
 import { Hono } from "hono";
 import type { ProjectEnv } from "daroyan/app";
 
-import configuredApp from "../app/app.ts";
-import admin from "../app/routes/admin.ts";
-import apiMiddleware from "../app/routes/api/_middleware.ts";
-import { GET as usersGet, POST as usersPost } from "../app/routes/api/users.ts";
-import { GET as userGet } from "../app/routes/api/users/$id.ts";
+import configuredApp from "../src/app.ts";
+import admin from "../src/routes/admin.ts";
+import apiMiddleware from "../src/routes/api/_middleware.ts";
+import { GET as usersGet, POST as usersPost } from "../src/routes/api/users.ts";
+import { GET as userGet } from "../src/routes/api/users/$id.ts";
 
 const routes = new Hono<ProjectEnv>()
   .route("/", configuredApp)
@@ -1575,7 +1593,7 @@ Low-level testing remains available:
 const response = await app.request("/api/users/usr_123");
 ```
 
-Importing the assembled app does not execute `app/server.ts`, create a
+Importing the assembled app does not execute `src/server.ts`, create a
 listener, initialize production resources, or register signals.
 
 Integration tests that exercise startup or graceful shutdown import or
@@ -1592,7 +1610,7 @@ spawn the user's server entry explicitly.
 └── types/
     ├── app.d.ts
     ├── entry.d.ts
-    └── app/routes/
+    └── src/routes/
         ├── +types/
         │   ├── _middleware.d.ts
         │   └── index.d.ts
@@ -1677,8 +1695,8 @@ Example conflict:
 
 ```text
 [daroyan] Route conflict for /api/users
-  - app/routes/api/users.ts
-  - app/routes/api/users/index.ts
+  - src/routes/api/users.ts
+  - src/routes/api/users/index.ts
 
 Remove one file or choose a different URL.
 ```
@@ -1687,8 +1705,8 @@ Example sub-router namespace conflict:
 
 ```text
 [daroyan] Route namespace conflict at /admin
-  - app/routes/admin.ts default-exports a Hono sub-router
-  - app/routes/admin/stats.ts maps beneath the same mount
+  - src/routes/admin.ts default-exports a Hono sub-router
+  - src/routes/admin/stats.ts maps beneath the same mount
 
 A default sub-router owns its complete mount namespace.
 Move the nested route into the sub-router or use named method files.
@@ -1753,7 +1771,7 @@ export default defineConfig({
 ### 28.2 App
 
 ```ts
-// app/app.ts
+// src/app.ts
 import { logger } from "hono/logger";
 import { defineApp } from "daroyan/app";
 
@@ -1785,7 +1803,7 @@ export default app;
 ### 28.3 Root middleware
 
 ```ts
-// app/routes/_middleware.ts
+// src/routes/_middleware.ts
 import { defineMiddleware } from "daroyan/app";
 
 import { authenticate } from "../lib/auth.ts";
@@ -1812,7 +1830,7 @@ export default defineMiddleware(
 ### 28.4 Collection route
 
 ```ts
-// app/routes/api/users/index.ts
+// src/routes/api/users/index.ts
 import { zValidator } from "@hono/zod-validator";
 import { defineHandler } from "daroyan/app";
 import { z } from "zod";
@@ -1836,7 +1854,7 @@ export const POST = defineHandler(zValidator("json", createUser), async (c) => {
 ### 28.5 Resource route using parameter validation
 
 ```ts
-// app/routes/api/users/$id.ts
+// src/routes/api/users/$id.ts
 import { zValidator } from "@hono/zod-validator";
 import { defineHandler } from "daroyan/app";
 import { z } from "zod";
@@ -1873,7 +1891,7 @@ export const GET = defineHandler<Route.Handler>(zValidator("param", params), asy
 ### 28.7 Node server
 
 ```ts
-// app/server.ts
+// src/server.ts
 import { serve } from "@hono/node-server";
 
 import app from "daroyan/entry";

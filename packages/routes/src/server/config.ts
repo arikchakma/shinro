@@ -83,7 +83,7 @@ export async function validateTypeScriptConfig(options: {
             noEmit: true,
             rootDirs: [".", `./${generatedDirectory}/types`],
           },
-          include: ["app", `${generatedDirectory}/**/*.d.ts`],
+          include: ["src", `${generatedDirectory}/**/*.d.ts`],
         },
         undefined,
         2,

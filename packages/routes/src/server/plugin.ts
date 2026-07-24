@@ -58,7 +58,7 @@ export function daroyan(options: DaroyanOptions = {}): Plugin {
       }
 
       const root = resolve(userConfig.root ?? process.cwd());
-      const entry = resolve(root, options.entry ?? "app/server.ts");
+      const entry = resolve(root, options.entry ?? "src/server.ts");
       const build = options.build ?? {};
 
       return {
@@ -90,7 +90,7 @@ export function daroyan(options: DaroyanOptions = {}): Plugin {
       outputDirectory = resolve(config.root, options.rpc?.outDir ?? ".daroyan");
       assertGeneratedDirectory(config.root, outputDirectory);
       if (config.command === "build") {
-        await assertServerEntry(resolve(config.root, options.entry ?? "app/server.ts"));
+        await assertServerEntry(resolve(config.root, options.entry ?? "src/server.ts"));
       }
       await validateTypeScriptConfig({
         logger: config.logger,
@@ -108,9 +108,9 @@ export function daroyan(options: DaroyanOptions = {}): Plugin {
     },
 
     async configureServer(server) {
-      const routesDirectory = resolve(server.config.root, options.routes ?? "app/routes");
-      const appFile = resolve(server.config.root, options.app ?? "app/app.ts");
-      const entryFile = resolve(server.config.root, options.entry ?? "app/server.ts");
+      const routesDirectory = resolve(server.config.root, options.routes ?? "src/routes");
+      const appFile = resolve(server.config.root, options.app ?? "src/app.ts");
+      const entryFile = resolve(server.config.root, options.entry ?? "src/server.ts");
       const sourceDirectories = [dirname(appFile), dirname(entryFile)];
       const runsUserEntry =
         !server.config.server.middlewareMode && process.env.DAROYAN_DEV_CHILD !== "1";

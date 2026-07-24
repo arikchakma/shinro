@@ -10,7 +10,7 @@ test("development reloads the isolated user entry and terminates each process no
   const appHelper = fileURLToPath(new URL("../src/app.ts", import.meta.url));
   const lifecycleFile = `${root}/lifecycle.log`;
 
-  await mkdir(`${root}/app/routes`, { recursive: true });
+  await mkdir(`${root}/src/routes`, { recursive: true });
   await writeFile(
     `${root}/vite.config.ts`,
     [
@@ -21,15 +21,15 @@ test("development reloads the isolated user entry and terminates each process no
     ].join("\n"),
   );
   await writeFile(
-    `${root}/app/app.ts`,
+    `${root}/src/app.ts`,
     `import { defineApp } from ${JSON.stringify(appHelper)};\nexport default defineApp();\n`,
   );
   await writeFile(
-    `${root}/app/routes/health.ts`,
+    `${root}/src/routes/health.ts`,
     "export const GET = [(c: any) => c.json({ ok: true })] as const;\n",
   );
   await writeFile(
-    `${root}/app/server.ts`,
+    `${root}/src/server.ts`,
     [
       'import { appendFileSync } from "node:fs";',
       'import app from "daroyan/entry";',
@@ -58,7 +58,7 @@ test("development reloads the isolated user entry and terminates each process no
       .toContain("STARTED");
 
     await writeFile(
-      `${root}/app/routes/notes.ts`,
+      `${root}/src/routes/notes.ts`,
       'export const GET = [(c: any) => c.json({ resource: "notes" })] as const;\n',
     );
     await expect
@@ -86,7 +86,7 @@ test("editing route code reloads its behavior without rewriting the route manife
   const manifestFile = `${root}/.daroyan/manifest.json`;
   const unchangedTime = new Date("2020-01-02T03:04:05.000Z");
 
-  await mkdir(`${root}/app/routes`, { recursive: true });
+  await mkdir(`${root}/src/routes`, { recursive: true });
   await writeFile(
     `${root}/vite.config.ts`,
     [
@@ -97,15 +97,15 @@ test("editing route code reloads its behavior without rewriting the route manife
     ].join("\n"),
   );
   await writeFile(
-    `${root}/app/app.ts`,
+    `${root}/src/app.ts`,
     `import { defineApp } from ${JSON.stringify(appHelper)};\nexport default defineApp();\n`,
   );
   await writeFile(
-    `${root}/app/routes/health.ts`,
+    `${root}/src/routes/health.ts`,
     "export const GET = [(c: any) => c.json({ version: 1 })] as const;\n",
   );
   await writeFile(
-    `${root}/app/server.ts`,
+    `${root}/src/server.ts`,
     [
       'import { appendFileSync } from "node:fs";',
       'import app from "daroyan/entry";',
@@ -133,7 +133,7 @@ test("editing route code reloads its behavior without rewriting the route manife
 
     await utimes(manifestFile, unchangedTime, unchangedTime);
     await writeFile(
-      `${root}/app/routes/health.ts`,
+      `${root}/src/routes/health.ts`,
       "export const GET = [(c: any) => c.json({ version: 2 })] as const;\n",
     );
 
@@ -154,7 +154,7 @@ test("an invalid structural route change keeps the last-known-good server runnin
   const appHelper = fileURLToPath(new URL("../src/app.ts", import.meta.url));
   const lifecycleFile = `${root}/lifecycle.log`;
 
-  await mkdir(`${root}/app/routes`, { recursive: true });
+  await mkdir(`${root}/src/routes`, { recursive: true });
   await writeFile(
     `${root}/vite.config.ts`,
     [
@@ -165,15 +165,15 @@ test("an invalid structural route change keeps the last-known-good server runnin
     ].join("\n"),
   );
   await writeFile(
-    `${root}/app/app.ts`,
+    `${root}/src/app.ts`,
     `import { defineApp } from ${JSON.stringify(appHelper)};\nexport default defineApp();\n`,
   );
   await writeFile(
-    `${root}/app/routes/users.ts`,
+    `${root}/src/routes/users.ts`,
     'export const GET = [(c: any) => c.json({ source: "file" })] as const;\n',
   );
   await writeFile(
-    `${root}/app/server.ts`,
+    `${root}/src/server.ts`,
     [
       'import { appendFileSync } from "node:fs";',
       'import app from "daroyan/entry";',
@@ -201,9 +201,9 @@ test("an invalid structural route change keeps the last-known-good server runnin
       .poll(async () => readFile(lifecycleFile, "utf8"), { timeout: 5_000 })
       .toBe("STARTED\n");
 
-    await mkdir(`${root}/app/routes/users`, { recursive: true });
+    await mkdir(`${root}/src/routes/users`, { recursive: true });
     await writeFile(
-      `${root}/app/routes/users/index.ts`,
+      `${root}/src/routes/users/index.ts`,
       'export const GET = [(c: any) => c.json({ source: "index" })] as const;\n',
     );
     await new Promise((resolve) => setTimeout(resolve, 500));
@@ -228,7 +228,7 @@ test("development fails immediately with guidance when the server entry is missi
   const plugin = fileURLToPath(new URL("../src/index.ts", import.meta.url));
   const appHelper = fileURLToPath(new URL("../src/app.ts", import.meta.url));
 
-  await mkdir(`${root}/app/routes`, { recursive: true });
+  await mkdir(`${root}/src/routes`, { recursive: true });
   await writeFile(
     `${root}/vite.config.ts`,
     [
@@ -239,7 +239,7 @@ test("development fails immediately with guidance when the server entry is missi
     ].join("\n"),
   );
   await writeFile(
-    `${root}/app/app.ts`,
+    `${root}/src/app.ts`,
     `import { defineApp } from ${JSON.stringify(appHelper)};\nexport default defineApp();\n`,
   );
 
@@ -250,7 +250,7 @@ test("development fails immediately with guidance when the server entry is missi
         root,
         server: { port: 0 },
       }),
-    ).rejects.toThrow(/\[daroyan\][\s\S]*server entry[\s\S]*app\/server\.ts[\s\S]*entry:/i);
+    ).rejects.toThrow(/\[daroyan\][\s\S]*server entry[\s\S]*src\/server\.ts[\s\S]*entry:/i);
   } finally {
     await rm(root, { recursive: true });
   }

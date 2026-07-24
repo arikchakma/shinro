@@ -6,13 +6,13 @@ export default defineConfig({
   plugins: [
     daroyan({
       app: fileURLToPath(
-        new URL("./packages/routes/tests/fixtures/basic/app/app.ts", import.meta.url),
+        new URL("./packages/routes/tests/fixtures/basic/src/app.ts", import.meta.url),
       ),
       entry: fileURLToPath(
-        new URL("./packages/routes/tests/fixtures/basic/app/server.ts", import.meta.url),
+        new URL("./packages/routes/tests/fixtures/basic/src/server.ts", import.meta.url),
       ),
       routes: fileURLToPath(
-        new URL("./packages/routes/tests/fixtures/basic/app/routes", import.meta.url),
+        new URL("./packages/routes/tests/fixtures/basic/src/routes", import.meta.url),
       ),
     }),
   ],

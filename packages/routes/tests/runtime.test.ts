@@ -11,17 +11,17 @@ test("a Node entry owns its listener and graceful shutdown after a one-file buil
   const appHelper = fileURLToPath(new URL("../src/app.ts", import.meta.url));
   let child: ChildProcess | undefined;
 
-  await mkdir(`${root}/app/routes`, { recursive: true });
+  await mkdir(`${root}/src/routes`, { recursive: true });
   await writeFile(
-    `${root}/app/app.ts`,
+    `${root}/src/app.ts`,
     `import { defineApp } from ${JSON.stringify(appHelper)};\nexport default defineApp();\n`,
   );
   await writeFile(
-    `${root}/app/routes/health.ts`,
+    `${root}/src/routes/health.ts`,
     'export const GET = [(c: any) => c.json({ runtime: "node" })] as const;\n',
   );
   await writeFile(
-    `${root}/app/server.ts`,
+    `${root}/src/server.ts`,
     [
       'import { serve } from "@hono/node-server";',
       'import app from "daroyan/entry";',
@@ -81,17 +81,17 @@ test("a Bun entry owns its listener and graceful shutdown after a one-file build
   const appHelper = fileURLToPath(new URL("../src/app.ts", import.meta.url));
   let child: ChildProcess | undefined;
 
-  await mkdir(`${root}/app/routes`, { recursive: true });
+  await mkdir(`${root}/src/routes`, { recursive: true });
   await writeFile(
-    `${root}/app/app.ts`,
+    `${root}/src/app.ts`,
     `import { defineApp } from ${JSON.stringify(appHelper)};\nexport default defineApp();\n`,
   );
   await writeFile(
-    `${root}/app/routes/health.ts`,
+    `${root}/src/routes/health.ts`,
     'export const GET = [(c: any) => c.json({ runtime: "bun" })] as const;\n',
   );
   await writeFile(
-    `${root}/app/server.ts`,
+    `${root}/src/server.ts`,
     [
       'import app from "daroyan/entry";',
       "",

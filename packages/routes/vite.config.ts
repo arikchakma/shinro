@@ -9,9 +9,9 @@ export default defineConfig({
   root: packageRoot,
   plugins: [
     daroyan({
-      app: `${fixture}/app/app.ts`,
-      entry: `${fixture}/app/server.ts`,
-      routes: `${fixture}/app/routes`,
+      app: `${fixture}/src/app.ts`,
+      entry: `${fixture}/src/server.ts`,
+      routes: `${fixture}/src/routes`,
     }),
   ],
   resolve: {

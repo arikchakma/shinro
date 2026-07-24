@@ -29,8 +29,8 @@ export async function createSources(
   options: DaroyanOptions,
   outputDirectory: string,
 ): Promise<GeneratedSources> {
-  const appFile = resolve(config.root, options.app ?? "app/app.ts");
-  const routesDirectory = resolve(config.root, options.routes ?? "app/routes");
+  const appFile = resolve(config.root, options.app ?? "src/app.ts");
+  const routesDirectory = resolve(config.root, options.routes ?? "src/routes");
   const basePath = normalizeBasePath(options.basePath ?? "/");
   try {
     await access(appFile);
