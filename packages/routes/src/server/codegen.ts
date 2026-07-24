@@ -1,8 +1,10 @@
-import { access } from "node:fs/promises";
-import { resolve } from "node:path";
-import type { ResolvedConfig } from "vite-plus";
-import { GENERATED_NOTICE } from "../constants.ts";
-import { validateAppModule } from "./app.ts";
+import { access } from 'node:fs/promises';
+import { resolve } from 'node:path';
+
+import type { ResolvedConfig } from 'vite-plus';
+
+import { GENERATED_NOTICE } from '../constants.ts';
+import { validateAppModule } from './app.ts';
 import {
   companionFile,
   generatedImport,
@@ -10,15 +12,17 @@ import {
   toProjectPath,
   toVitePath,
   withBasePath,
-} from "./path.ts";
-import { discoverRoutes, type Route, validateRoutes } from "./scanner.ts";
-import type { DaroyanOptions } from "./plugin.ts";
+} from './path.ts';
+import type { DaroyanOptions } from './plugin.ts';
+import { discoverRoutes, validateRoutes } from './scanner.ts';
+import type { Route } from './scanner.ts';
 
 export type GeneratedSources = {
   app: string;
   client: string;
   companions: Array<{ file: string; source: string }>;
   entry: string;
+  entryTypes: string;
   manifest: string;
   project: string;
   rpc: string;
@@ -27,18 +31,18 @@ export type GeneratedSources = {
 export async function createSources(
   config: ResolvedConfig,
   options: DaroyanOptions,
-  outputDirectory: string,
+  outputDirectory: string
 ): Promise<GeneratedSources> {
-  const appFile = resolve(config.root, options.app ?? "src/app.ts");
-  const routesDirectory = resolve(config.root, options.routes ?? "src/routes");
-  const basePath = normalizeBasePath(options.basePath ?? "/");
+  const appFile = resolve(config.root, options.app ?? 'src/app.ts');
+  const routesDirectory = resolve(config.root, options.routes ?? 'src/routes');
+  const basePath = normalizeBasePath(options.basePath ?? '/');
   try {
     await access(appFile);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       throw new Error(
         `[daroyan] App module not found: ${appFile}\nCreate it with a default defineApp() export or configure daroyan({ app: "path/to/app.ts" }).`,
-        { cause: error },
+        { cause: error }
       );
     }
     throw error;
@@ -62,50 +66,52 @@ export async function createSources(
     config.logger.warn(
       `[daroyan] ${toProjectPath(
         config.root,
-        appFile,
-      )} contains base-app middleware with an early response. It runs at runtime, but every file-route RPC contract is missing that response.`,
+        appFile
+      )} contains base-app middleware with an early response. It runs at runtime, but every file-route RPC contract is missing that response.`
     );
   }
 
   for (const route of routes) {
-    if (route.kind === "sub-router" && route.middleware.length > 0) {
+    if (route.kind === 'sub-router' && route.middleware.length > 0) {
       config.logger.warn(
         `[daroyan] ${toProjectPath(
           config.root,
-          route.file,
-        )} is a default sub-router surrounded by directory middleware. The middleware runs at runtime, but its early responses cannot be added to every internal RPC response contract.`,
+          route.file
+        )} is a default sub-router surrounded by directory middleware. The middleware runs at runtime, but its early responses cannot be added to every internal RPC response contract.`
       );
     }
   }
 
   const imports = [
-    ...(routes.some((route) => route.kind === "sub-router" && route.middleware.length > 0)
+    ...(routes.some(
+      (route) => route.kind === 'sub-router' && route.middleware.length > 0
+    )
       ? ['import { Hono } from "hono";']
       : []),
     `import app from ${JSON.stringify(toVitePath(appFile))};`,
     ...routes.map((route, index) =>
-      route.kind === "sub-router"
+      route.kind === 'sub-router'
         ? `import route${index}Default from ${JSON.stringify(toVitePath(route.file))};`
-        : `import * as route${index} from ${JSON.stringify(toVitePath(route.file))};`,
+        : `import * as route${index} from ${JSON.stringify(toVitePath(route.file))};`
     ),
     ...routes.flatMap((route, routeIndex) =>
       route.middleware.map(
         (file, middlewareIndex) =>
           `import route${routeIndex}Middleware${middlewareIndex} from ${JSON.stringify(
-            toVitePath(file),
-          )};`,
-      ),
+            toVitePath(file)
+          )};`
+      )
     ),
   ];
 
   const registrations = routes.flatMap((route, index) => {
-    if (route.kind === "sub-router") {
+    if (route.kind === 'sub-router') {
       if (route.middleware.length === 0) {
         return `app.route(${JSON.stringify(route.path)}, route${index}Default);`;
       }
 
       return [
-        `const route${index}Mounted = new Hono().use("*", ${middlewareSpreads(route, index).replace(/, $/, "")}).route("/", route${index}Default);`,
+        `const route${index}Mounted = new Hono().use("*", ${middlewareSpreads(route, index).replace(/, $/, '')}).route("/", route${index}Default);`,
         `app.route(${JSON.stringify(route.path)}, route${index}Mounted);`,
       ];
     }
@@ -114,8 +120,8 @@ export async function createSources(
       (method) =>
         `app.on(${JSON.stringify(method)}, ${JSON.stringify(route.path)}, ${middlewareSpreads(
           route,
-          index,
-        )}...route${index}.${method});`,
+          index
+        )}...route${index}.${method});`
     );
   });
 
@@ -124,31 +130,31 @@ export async function createSources(
     'import type { ProjectEnv } from "daroyan/app";',
     `import configuredApp from ${JSON.stringify(generatedImport(outputDirectory, appFile))};`,
     ...routes.flatMap((route, index) => [
-      ...(route.kind === "sub-router"
+      ...(route.kind === 'sub-router'
         ? [
             `import route${index}Default from ${JSON.stringify(
-              generatedImport(outputDirectory, route.file),
+              generatedImport(outputDirectory, route.file)
             )};`,
           ]
         : []),
       ...route.methods.map(
         (method) =>
           `import { ${method} as route${index}${method} } from ${JSON.stringify(
-            generatedImport(outputDirectory, route.file),
-          )};`,
+            generatedImport(outputDirectory, route.file)
+          )};`
       ),
-      ...(route.kind === "methods"
+      ...(route.kind === 'methods'
         ? route.middleware.map(
             (file, middlewareIndex) =>
               `import route${index}Middleware${middlewareIndex} from ${JSON.stringify(
-                generatedImport(outputDirectory, file),
-              )};`,
+                generatedImport(outputDirectory, file)
+              )};`
           )
         : []),
     ]),
   ];
   const rpcRegistrations = routes.flatMap((route, index) => {
-    if (route.kind === "sub-router") {
+    if (route.kind === 'sub-router') {
       return `  .route(${JSON.stringify(route.path)}, route${index}Default)`;
     }
 
@@ -156,10 +162,10 @@ export async function createSources(
       (method) =>
         `  .${method.toLowerCase()}(${JSON.stringify(route.path)}, ${rpcMiddlewareSpreads(
           route,
-          index,
+          index
         )}...(route${index}${method} as RouteHandlers<typeof route${index}${method}, ${JSON.stringify(
-          route.path,
-        )}>))`,
+          route.path
+        )}>))`
     );
   });
 
@@ -167,126 +173,143 @@ export async function createSources(
     app: [
       GENERATED_NOTICE,
       `import type configuredApp from ${JSON.stringify(
-        generatedImport(resolve(outputDirectory, "types"), appFile),
+        generatedImport(resolve(outputDirectory, 'types'), appFile)
       )};`,
       'import type { Hono } from "hono";',
-      "",
-      "export type App = typeof configuredApp;",
-      "export type AppEnv = App extends Hono<infer Env, any, any> ? Env : never;",
-      "",
-    ].join("\n"),
+      '',
+      'export type App = typeof configuredApp;',
+      'export type AppEnv = App extends Hono<infer Env, any, any> ? Env : never;',
+      '',
+    ].join('\n'),
     client: [
       GENERATED_NOTICE,
       'import type { AppType } from "./rpc.ts";',
       'import { hc } from "hono/client";',
-      "",
+      '',
       'const typedClient = hc<AppType>("");',
-      "",
-      "export type Client = typeof typedClient;",
-      "export type { AppType };",
-      "",
-      "export const createClient = (...args: Parameters<typeof hc>): Client =>",
-      "  hc<AppType>(...args);",
-      "",
+      '',
+      'export type Client = typeof typedClient;',
+      'export type { AppType };',
+      '',
+      'export const createClient = (...args: Parameters<typeof hc>): Client =>',
+      '  hc<AppType>(...args);',
+      '',
       'export type { InferRequestType, InferResponseType } from "hono/client";',
-      "",
-    ].join("\n"),
+      '',
+    ].join('\n'),
     companions: [
       ...routes.map((route) => ({
         file: companionFile(config.root, outputDirectory, route.file),
         source: [
           GENERATED_NOTICE,
           'import type { DaroyanRoute, ProjectEnv } from "daroyan/app";',
-          "",
-          "export namespace Route {",
-          "  export type Handler = DaroyanRoute<{",
+          '',
+          'export namespace Route {',
+          '  export type Handler = DaroyanRoute<{',
           `    path: ${JSON.stringify(route.path)};`,
           `    params: ${routeParamsSource(route.path)};`,
-          "    env: ProjectEnv;",
-          "  }>;",
-          "}",
-          "",
-        ].join("\n"),
+          '    env: ProjectEnv;',
+          '  }>;',
+          '}',
+          '',
+        ].join('\n'),
       })),
       ...directoryMiddleware.map((middleware) => ({
         file: companionFile(config.root, outputDirectory, middleware.file),
         source: [
           GENERATED_NOTICE,
           'import type { DaroyanMiddleware, ProjectEnv } from "daroyan/app";',
-          "",
-          "export namespace Route {",
-          "  export type Middleware = DaroyanMiddleware<{",
+          '',
+          'export namespace Route {',
+          '  export type Middleware = DaroyanMiddleware<{',
           `    path: ${JSON.stringify(middleware.path)};`,
-          "    env: ProjectEnv;",
-          "  }>;",
-          "}",
-          "",
-        ].join("\n"),
+          '    env: ProjectEnv;',
+          '  }>;',
+          '}',
+          '',
+        ].join('\n'),
       })),
     ],
     entry: [
       GENERATED_NOTICE,
       ...imports,
       ...registrations,
-      "export default app;",
-      "export { app };",
-      "export const fetch = app.fetch;",
-    ].join("\n"),
+      'export default app;',
+      'export { app };',
+      'export const fetch = app.fetch;',
+    ].join('\n'),
+    entryTypes: [
+      GENERATED_NOTICE,
+      'declare module "daroyan/entry" {',
+      '  const app: import("./rpc.ts").AppType;',
+      '',
+      '  export default app;',
+      '  export { app };',
+      '  export const fetch: typeof app.fetch;',
+      '  export type AppType = import("./rpc.ts").AppType;',
+      '}',
+      '',
+    ].join('\n'),
     manifest: `${JSON.stringify(
       {
-        _notice: "Generated by Daroyan (format 1). Do not edit.",
+        _notice: 'Generated by Daroyan (format 1). Do not edit.',
         version: 1,
         basePath,
         routes: routes.map((route) => ({
           kind: route.kind,
           file: toProjectPath(config.root, route.file),
-          ...(route.kind === "methods"
+          ...(route.kind === 'methods'
             ? { path: route.path, methods: route.methods }
             : { mountPath: route.path }),
-          middleware: route.middleware.map((file) => toProjectPath(config.root, file)),
+          middleware: route.middleware.map((file) =>
+            toProjectPath(config.root, file)
+          ),
         })),
       },
       undefined,
-      2,
+      2
     )}\n`,
     rpc: [
       GENERATED_NOTICE,
       ...rpcImports,
-      "",
-      "type WithRoutePath<Value, Path extends string> =",
-      "  Value extends (context: Context<infer Env, any, infer Input>, next: infer Next) => infer Result",
-      "    ? (context: Context<Env, Path, Input>, next: Next) => Result",
-      "    : never;",
-      "",
-      "type RouteHandlers<Handlers, Path extends string> = {",
-      "  [Index in keyof Handlers]: WithRoutePath<Handlers[Index], Path>;",
-      "};",
-      "",
+      '',
+      'type WithRoutePath<Value, Path extends string> =',
+      '  Value extends (context: Context<infer Env, any, infer Input>, next: infer Next) => infer Result',
+      '    ? (context: Context<Env, Path, Input>, next: Next) => Result',
+      '    : never;',
+      '',
+      'type RouteHandlers<Handlers, Path extends string> = {',
+      '  [Index in keyof Handlers]: WithRoutePath<Handlers[Index], Path>;',
+      '};',
+      '',
       `const routes = new Hono<ProjectEnv>()`,
-      `  .route("/", configuredApp)${rpcRegistrations.length ? "\n" : ";"}${rpcRegistrations.join("\n")}${rpcRegistrations.length ? ";" : ""}`,
-      "",
-      "export type AppType = typeof routes;",
-      "export default routes;",
-      "",
-    ].join("\n"),
+      `  .route("/", configuredApp)${rpcRegistrations.length ? '\n' : ';'}${rpcRegistrations.join('\n')}${rpcRegistrations.length ? ';' : ''}`,
+      '',
+      'export type AppType = typeof routes;',
+      'export default routes;',
+      '',
+    ].join('\n'),
     project: [
       GENERATED_NOTICE,
       `import type app from ${JSON.stringify(generatedImport(outputDirectory, appFile))};`,
-      "",
+      '',
       'declare module "daroyan/app" {',
-      "  interface DaroyanProject {",
-      "    readonly app: typeof app;",
-      "  }",
-      "}",
-      "",
-    ].join("\n"),
+      '  interface DaroyanProject {',
+      '    readonly app: typeof app;',
+      '  }',
+      '}',
+      '',
+    ].join('\n'),
   };
 }
 
 function middlewareSpreads(route: Route, routeIndex: number): string {
   return route.middleware
-    .map((_, middlewareIndex) => `...route${routeIndex}Middleware${middlewareIndex}, `)
-    .join("");
+    .map(
+      (_, middlewareIndex) =>
+        `...route${routeIndex}Middleware${middlewareIndex}, `
+    )
+    .join('');
 }
 
 function rpcMiddlewareSpreads(route: Route, routeIndex: number): string {
@@ -295,15 +318,17 @@ function rpcMiddlewareSpreads(route: Route, routeIndex: number): string {
       const name = `route${routeIndex}Middleware${middlewareIndex}`;
       return `...(${name} as RouteHandlers<typeof ${name}, ${JSON.stringify(route.path)}>), `;
     })
-    .join("");
+    .join('');
 }
 
 function routeParamsSource(path: string): string {
-  const params = [...path.matchAll(/:([^/{}]+)(?:\{\.\+\})?/g)].map((match) => match[1]);
+  const params = [...path.matchAll(/:([^/{}]+)(?:\{\.\+\})?/g)].map(
+    (match) => match[1]
+  );
 
   if (params.length === 0) {
-    return "Record<never, never>";
+    return 'Record<never, never>';
   }
 
-  return `{ ${params.map((param) => `${JSON.stringify(param)}: string`).join("; ")} }`;
+  return `{ ${params.map((param) => `${JSON.stringify(param)}: string`).join('; ')} }`;
 }

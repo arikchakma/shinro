@@ -1,7 +1,8 @@
-import { readFile } from "node:fs/promises";
-import { createRequire } from "node:module";
-import { dirname, extname, relative, resolve, sep } from "node:path";
-import type { Logger } from "vite-plus";
+import { readFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
+import { dirname, extname, relative, resolve, sep } from 'node:path';
+
+import type { Logger } from 'vite-plus';
 
 type TypeScriptConfig = {
   compilerOptions?: {
@@ -23,14 +24,14 @@ export async function validateTypeScriptConfig(options: {
   outputDirectory: string;
   root: string;
 }): Promise<void> {
-  const file = resolve(options.root, "tsconfig.json");
+  const file = resolve(options.root, 'tsconfig.json');
   let config: TypeScriptConfig | undefined;
   let missing = false;
 
   try {
     config = await readTypeScriptConfig(file, new Set());
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       config = {};
       missing = true;
     } else {
@@ -41,9 +42,12 @@ export async function validateTypeScriptConfig(options: {
     return;
   }
 
-  const generatedDirectory = relative(options.root, options.outputDirectory).split(sep).join("/");
+  const generatedDirectory = relative(options.root, options.outputDirectory)
+    .split(sep)
+    .join('/');
   const generatedTypes = normalizeConfigPath(`./${generatedDirectory}/types`);
-  const rootDirs = config.compilerOptions?.rootDirs?.map(normalizeConfigPath) ?? [];
+  const rootDirs =
+    config.compilerOptions?.rootDirs?.map(normalizeConfigPath) ?? [];
   const includes = config.include?.map(normalizeConfigPath) ?? [];
   const supportsTypeScriptImportExtensions =
     config.compilerOptions?.allowImportingTsExtensions === true &&
@@ -52,15 +56,15 @@ export async function validateTypeScriptConfig(options: {
       config.compilerOptions.rewriteRelativeImportExtensions === true);
   const valid =
     config.compilerOptions?.strict === true &&
-    config.compilerOptions.module?.toLowerCase() === "esnext" &&
-    config.compilerOptions.moduleResolution?.toLowerCase() === "bundler" &&
+    config.compilerOptions.module?.toLowerCase() === 'esnext' &&
+    config.compilerOptions.moduleResolution?.toLowerCase() === 'bundler' &&
     supportsTypeScriptImportExtensions &&
-    rootDirs.includes(".") &&
+    rootDirs.includes('.') &&
     rootDirs.includes(generatedTypes) &&
     includes.some(
       (include) =>
         include === `${normalizeConfigPath(generatedDirectory)}/**/*.d.ts` ||
-        include === `${normalizeConfigPath(generatedDirectory)}/**/*`,
+        include === `${normalizeConfigPath(generatedDirectory)}/**/*`
     );
 
   if (valid) {
@@ -72,45 +76,55 @@ export async function validateTypeScriptConfig(options: {
       missing
         ? `[daroyan] ${file} is missing. Daroyan needs TypeScript configuration for generated route types.`
         : `[daroyan] ${file} is missing settings required for generated route types.`,
-      "Merge this configuration:",
+      'Extend the shipped base configuration:',
+      JSON.stringify(
+        {
+          extends: 'daroyan/tsconfig',
+        },
+        undefined,
+        2
+      ),
+      'Or merge this configuration manually:',
       JSON.stringify(
         {
           compilerOptions: {
             allowImportingTsExtensions: true,
             strict: true,
-            module: "ESNext",
-            moduleResolution: "Bundler",
+            module: 'ESNext',
+            moduleResolution: 'Bundler',
             noEmit: true,
-            rootDirs: [".", `./${generatedDirectory}/types`],
+            rootDirs: ['.', `./${generatedDirectory}/types`],
           },
-          include: ["src", `${generatedDirectory}/**/*.d.ts`],
+          include: ['src', `${generatedDirectory}/**/*.d.ts`],
         },
         undefined,
-        2,
+        2
       ),
-    ].join("\n"),
+    ].join('\n')
   );
 }
 
 async function readTypeScriptConfig(
   file: string,
-  seen: Set<string>,
+  seen: Set<string>
 ): Promise<TypeScriptConfig | undefined> {
   if (seen.has(file)) {
     return undefined;
   }
   seen.add(file);
 
-  const source = await readFile(file, "utf8");
+  const source = await readFile(file, 'utf8');
   const config = JSON.parse(stripJsonComments(source)) as TypeScriptConfig;
   if (!config.extends) {
     return config;
   }
 
   let baseFile: string;
-  if (config.extends.startsWith(".") || config.extends.startsWith("/")) {
+  if (config.extends.startsWith('.') || config.extends.startsWith('/')) {
     const unresolvedBase = resolve(dirname(file), config.extends);
-    baseFile = extname(unresolvedBase) ? unresolvedBase : `${unresolvedBase}.json`;
+    baseFile = extname(unresolvedBase)
+      ? unresolvedBase
+      : `${unresolvedBase}.json`;
   } else {
     try {
       baseFile = createRequire(file).resolve(config.extends);
@@ -134,11 +148,17 @@ async function readTypeScriptConfig(
 }
 
 function normalizeConfigPath(path: string): string {
-  return path.replace(/\\/g, "/").replace(/^\.\//, "").replace(/\/+$/, "") || ".";
+  return (
+    path
+      .replace(/\\/g, '/')
+      .replace(/^\$\{configDir\}\/?/, '')
+      .replace(/^\.\//, '')
+      .replace(/\/+$/, '') || '.'
+  );
 }
 
 function stripJsonComments(source: string): string {
-  let output = "";
+  let output = '';
   let inString = false;
   let escaped = false;
 
@@ -150,7 +170,7 @@ function stripJsonComments(source: string): string {
       output += character;
       if (escaped) {
         escaped = false;
-      } else if (character === "\\") {
+      } else if (character === '\\') {
         escaped = true;
       } else if (character === '"') {
         inString = false;
@@ -163,18 +183,21 @@ function stripJsonComments(source: string): string {
       output += character;
       continue;
     }
-    if (character === "/" && next === "/") {
-      while (index < source.length && source[index] !== "\n") {
+    if (character === '/' && next === '/') {
+      while (index < source.length && source[index] !== '\n') {
         index += 1;
       }
-      output += "\n";
+      output += '\n';
       continue;
     }
-    if (character === "/" && next === "*") {
+    if (character === '/' && next === '*') {
       index += 2;
-      while (index < source.length && !(source[index] === "*" && source[index + 1] === "/")) {
-        if (source[index] === "\n") {
-          output += "\n";
+      while (
+        index < source.length &&
+        !(source[index] === '*' && source[index + 1] === '/')
+      ) {
+        if (source[index] === '\n') {
+          output += '\n';
         }
         index += 1;
       }
@@ -185,5 +208,5 @@ function stripJsonComments(source: string): string {
     output += character;
   }
 
-  return output.replace(/,\s*([}\]])/g, "$1");
+  return output.replace(/,\s*([}\]])/g, '$1');
 }

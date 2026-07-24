@@ -7,7 +7,8 @@
     "daroyan": "./dist/cli.mjs"
   },
   "files": [
-    "dist"
+    "dist",
+    "tsconfig.base.json"
   ],
   "type": "module",
   "exports": {
@@ -23,21 +24,18 @@
       "types": "./dist/cli.d.mts",
       "import": "./dist/cli.mjs"
     },
-    "./entry": {
-      "types": "./dist/entry.d.mts",
-      "import": "./dist/entry.mjs"
-    },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./tsconfig": "./tsconfig.base.json"
   },
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
     "build": "vp pack",
-    "dev": "vp pack --watch",
-    "test": "vp test",
     "check": "vp check",
-    "prepublishOnly": "vp run build"
+    "dev": "vp pack --watch",
+    "prepublishOnly": "vp run build",
+    "test": "vp test"
   },
   "dependencies": {
     "minimatch": "catalog:"
