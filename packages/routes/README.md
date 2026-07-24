@@ -167,8 +167,11 @@ export const POST = defineHandler(zValidator('json', input), async (c) => {
 });
 ```
 
-Supported named exports are `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, and
-`OPTIONS`. A matching `GET` also handles `HEAD` through Hono.
+Supported named exports are `GET`, `POST`, `PUT`, `PATCH`, `DELETE`,
+`OPTIONS`, and `ALL`. A matching `GET` also handles `HEAD` through Hono.
+
+`ALL` registers after the explicit methods, so a file exporting both `GET` and
+`ALL` serves GET requests from `GET` and every other verb from `ALL`.
 
 ### File-to-URL mapping
 
@@ -245,6 +248,28 @@ app/routes/api/users.ts
 Daroyan flattens this chain onto named routes. Typed early responses from
 directory middleware, such as a `401`, therefore enter that route's RPC
 response union.
+
+### What flattening means for unmatched requests
+
+Because the chain is attached to each named route rather than to a path
+prefix, directory middleware runs **only when a route matches**. A request to
+`/api/does-not-exist` goes straight to the not-found handler without running
+`app/routes/api/_middleware.ts`, and so does an `OPTIONS` preflight to a path
+that has no route.
+
+This is the trade for RPC accuracy: a response the client can receive is one
+the type contract knows about. It also means cross-cutting concerns that must
+cover _every_ request — CORS, request IDs, access logging, tracing — belong on
+the base app, where plain Hono middleware still applies to everything:
+
+```ts
+// app/app.ts
+app.use('*', cors());
+app.use('*', requestId());
+```
+
+Keep `_middleware.ts` for route-scoped concerns such as authenticating a
+section of the API, where running only on real routes is what you want.
 
 Route-local middleware and validators go directly in `defineHandler()`:
 
@@ -355,7 +380,9 @@ export default routes;
 
 Registration happens on the app you exported, so `routes` and your `app` are
 the same Hono instance; the chain exists to give Hono the schema it needs for
-RPC.
+RPC. That also means importing `app/app.ts` directly gives you the instance
+Daroyan registers onto — import `daroyan/entry` when you want the fully routed
+application and its type.
 
 ## RPC client
 

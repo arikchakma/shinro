@@ -629,6 +629,49 @@ test('a partially generated directory is still recognised as Daroyan output', as
   }
 });
 
+test('ALL serves every verb and yields to an explicit method export', async () => {
+  const root = await mkdtemp(`${tmpdir()}/daroyan-all-method-`);
+
+  await mkdir(`${root}/src/routes`, { recursive: true });
+  await writeFile(`${root}/src/app.ts`, temporaryAppSource);
+  await writeFile(
+    `${root}/src/routes/thing.ts`,
+    [
+      'export const GET = [(c: any) => c.json({ handler: "get" })] as const;',
+      'export const ALL = [(c: any) => c.json({ handler: "all" })] as const;',
+      '',
+    ].join('\n')
+  );
+
+  const server = await createServer({
+    configFile: false,
+    plugins: [daroyan()],
+    root,
+    server: { middlewareMode: true },
+  });
+
+  try {
+    const runner = createServerModuleRunner(server.environments.ssr);
+    const entry = (await runner.import('daroyan/entry')) as {
+      default: { request: (path: string, init?: RequestInit) => Response };
+    };
+    const app = entry.default;
+
+    await expect(
+      (await app.request('/thing', { method: 'GET' })).json()
+    ).resolves.toEqual({ handler: 'get' });
+    await expect(
+      (await app.request('/thing', { method: 'POST' })).json()
+    ).resolves.toEqual({ handler: 'all' });
+    await expect(
+      (await app.request('/thing', { method: 'DELETE' })).json()
+    ).resolves.toEqual({ handler: 'all' });
+  } finally {
+    await server.close();
+    await rm(root, { recursive: true });
+  }
+}, 15_000);
+
 test('output from an earlier version is adopted and cleaned up', async () => {
   const root = await mkdtemp(`${tmpdir()}/daroyan-legacy-output-`);
 
