@@ -1715,11 +1715,11 @@ spawn the user's server entry explicitly.
 .daroyan/
 ├── client.ts
 ├── daroyan.d.ts
-├── entry.d.ts
+├── entry.ts
 ├── manifest.json
+├── modules.d.ts
 ├── rpc.ts
 └── types/
-    ├── app.d.ts
     └── src/routes/
         ├── +types/
         │   ├── _middleware.d.ts
@@ -1735,8 +1735,14 @@ Requirements:
 - every generated file begins with a “do not edit” notice;
 - `.daroyan/daroyan.d.ts` contains the project marker augmentation needed
   to bind `daroyan/app` helpers to the configured app environment;
-- `.daroyan/entry.d.ts` declares the `daroyan/entry` ambient module and is
-  written only when RPC generation is enabled;
+- `.daroyan/entry.ts` is the assembled route table, and `daroyan/entry`
+  resolves to it;
+- `.daroyan/modules.d.ts` declares the `daroyan/entry` ambient module and is
+  written only when RPC generation is enabled. It stays separate from
+  `daroyan.d.ts` because it must remain a global script: `daroyan.d.ts` has a
+  top-level import so its `declare module` augments the real `daroyan/app`
+  package, while an ambient declaration for `daroyan/entry` only works in a
+  file with no top-level imports;
 - writes are atomic;
 - unchanged files keep their modification time;
 - removed and renamed routes delete stale companions;

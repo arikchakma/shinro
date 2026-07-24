@@ -134,7 +134,6 @@ test('typegen prepares every generated type artifact in a clean checkout', async
       '.daroyan/manifest.json',
       '.daroyan/rpc.ts',
       '.daroyan/entry.ts',
-      '.daroyan/types/app.d.ts',
       '.daroyan/modules.d.ts',
       '.daroyan/types/src/routes/users/+types/_middleware.d.ts',
       '.daroyan/types/src/routes/users/+types/$id.d.ts',
@@ -156,9 +155,6 @@ test('typegen prepares every generated type artifact in a clean checkout', async
     await expect(
       readFile(`${root}/.daroyan/daroyan.d.ts`, 'utf8')
     ).resolves.toContain('from "../src/app.ts";');
-    await expect(
-      readFile(`${root}/.daroyan/types/app.d.ts`, 'utf8')
-    ).resolves.toContain('from "../../src/app.ts";');
 
     const typecheck = await run(
       `${packageRoot}/node_modules/.bin/tsc`,

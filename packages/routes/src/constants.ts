@@ -32,13 +32,3 @@ export const GENERATED_ENTRIES = [
   'rpc.ts',
   'types',
 ] as const;
-/**
- * Names Daroyan generated in earlier versions. They are still recognised as
- * Daroyan's own output so an upgrade is not mistaken for a foreign directory,
- * and they are deleted on the next generation.
- *
- * `entry.d.ts` held the ambient `daroyan/entry` declaration before the runtime
- * entry became a real `entry.ts`; TypeScript drops a `.d.ts` shadowed by a
- * same-named `.ts`, so the declaration moved to `modules.d.ts`.
- */
-export const LEGACY_GENERATED_ENTRIES = ['entry.d.ts'] as const;

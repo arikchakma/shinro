@@ -3,12 +3,7 @@ import { basename, dirname, extname, relative, resolve, sep } from 'node:path';
 
 import type { Plugin, ResolvedConfig, ViteDevServer } from 'vite-plus';
 
-import {
-  ENTRY_FILE,
-  ENTRY_ID,
-  GENERATED_ENTRIES,
-  LEGACY_GENERATED_ENTRIES,
-} from '../constants.ts';
+import { ENTRY_FILE, ENTRY_ID, GENERATED_ENTRIES } from '../constants.ts';
 import { createSources } from './codegen.ts';
 import { validateTypeScriptConfig } from './config.ts';
 import { DevelopmentProcess } from './dev.ts';
@@ -369,10 +364,7 @@ async function assertGeneratedDirectory(
   // Match against every name Daroyan may own rather than a single marker file:
   // a concurrent process can observe this directory mid-generation, when only
   // some of the generated files exist yet.
-  const owned = new Set<string>([
-    ...GENERATED_ENTRIES,
-    ...LEGACY_GENERATED_ENTRIES,
-  ]);
+  const owned = new Set<string>(GENERATED_ENTRIES);
   const foreign = entries.filter(
     (entry) => !owned.has(entry) && !entry.endsWith('.tmp')
   );

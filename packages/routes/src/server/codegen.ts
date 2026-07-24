@@ -18,7 +18,6 @@ import { discoverRoutes, validateRoutes } from './scanner.ts';
 import type { Route } from './scanner.ts';
 
 export type GeneratedSources = {
-  app: string;
   client: string;
   companions: Array<{ file: string; source: string }>;
   entry: string;
@@ -148,17 +147,6 @@ export async function createSources(
   });
 
   return {
-    app: [
-      GENERATED_NOTICE,
-      `import type configuredApp from ${JSON.stringify(
-        generatedImport(resolve(outputDirectory, 'types'), appFile)
-      )};`,
-      'import type { Hono } from "hono";',
-      '',
-      'export type App = typeof configuredApp;',
-      'export type AppEnv = App extends Hono<infer Env, any, any> ? Env : never;',
-      '',
-    ].join('\n'),
     client: [
       GENERATED_NOTICE,
       'import type { AppType } from "./rpc.ts";',

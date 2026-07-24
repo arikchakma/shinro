@@ -10,11 +10,7 @@ import {
 } from 'node:fs/promises';
 import { dirname, relative, resolve, sep } from 'node:path';
 
-import {
-  ENTRY_FILE,
-  GENERATED_NOTICE,
-  LEGACY_GENERATED_ENTRIES,
-} from '../constants.ts';
+import { ENTRY_FILE, GENERATED_NOTICE } from '../constants.ts';
 import type { GeneratedSources } from './codegen.ts';
 
 let temporaryFileCounter = 0;
@@ -53,7 +49,6 @@ async function writeGeneratedFiles(
   const files = new Map<string, string>([
     [resolve(outputDirectory, 'daroyan.d.ts'), sources.project],
     [resolve(outputDirectory, ENTRY_FILE), sources.entry],
-    [resolve(outputDirectory, 'types/app.d.ts'), sources.app],
     ...companions.map(
       (companion) => [companion.file, companion.source] as const
     ),
@@ -71,14 +66,6 @@ async function writeGeneratedFiles(
   await removeStaleCompanions(
     resolve(outputDirectory, 'types'),
     new Set(companions.map((companion) => companion.file))
-  );
-
-  // Output written by an earlier Daroyan version is cleaned up on the first
-  // generation after an upgrade.
-  await Promise.all(
-    LEGACY_GENERATED_ENTRIES.map((name) =>
-      removeGeneratedFile(resolve(outputDirectory, name))
-    )
   );
 
   if (!options.rpcEnabled) {
