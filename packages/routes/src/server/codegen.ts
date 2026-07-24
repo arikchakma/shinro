@@ -9,6 +9,7 @@ import {
   companionFile,
   generatedImport,
   normalizeBasePath,
+  routeParameterNames,
   toProjectPath,
   withBasePath,
 } from './path.ts';
@@ -288,9 +289,7 @@ function middlewareSpreads(route: Route, routeIndex: number): string[] {
 }
 
 function routeParamsSource(path: string): string {
-  const params = [...path.matchAll(/:([^/{}]+)(?:\{\.\+\})?/g)].map(
-    (match) => match[1]
-  );
+  const params = routeParameterNames(path);
 
   if (params.length === 0) {
     return 'Record<never, never>';

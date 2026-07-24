@@ -13,6 +13,7 @@ import { createSources } from './codegen.ts';
 import { validateTypeScriptConfig } from './config.ts';
 import { DevelopmentProcess } from './dev.ts';
 import { warnForMissingClientExport } from './package.ts';
+import { isAtOrWithin } from './path.ts';
 import { affectsRouteTree } from './scanner.ts';
 import { writeGeneratedTypes } from './typegen.ts';
 
@@ -35,6 +36,15 @@ export type DaroyanOptions = {
   routes?: string;
 };
 
+/**
+ * What `daroyan()` exposes on `plugin.api`, so tools such as `daroyan typegen`
+ * can drive generation explicitly instead of relying on it happening as a side
+ * effect of resolving the config.
+ */
+export type DaroyanApi = {
+  generate: () => Promise<{ outputDirectory: string } | undefined>;
+};
+
 export function daroyan(options: DaroyanOptions = {}): Plugin {
   let resolvedConfig: ResolvedConfig | undefined;
   let outputDirectory: string | undefined;
@@ -42,7 +52,7 @@ export function daroyan(options: DaroyanOptions = {}): Plugin {
 
   const generate = async () => {
     if (!resolvedConfig || !outputDirectory) {
-      return;
+      return undefined;
     }
 
     const sources = await createSources(
@@ -53,14 +63,19 @@ export function daroyan(options: DaroyanOptions = {}): Plugin {
     await writeGeneratedTypes(outputDirectory, sources, {
       rpcEnabled: options.rpc?.enabled !== false,
     });
+
+    return { outputDirectory };
   };
+
+  const api: DaroyanApi = { generate };
 
   return {
     name: 'daroyan',
     enforce: 'pre',
+    api,
 
-    config(userConfig, environment) {
-      if (environment.command !== 'build') {
+    config(userConfig, env) {
+      if (env.command !== 'build') {
         return {
           ssr: {
             noExternal: ['daroyan'],
@@ -97,8 +112,8 @@ export function daroyan(options: DaroyanOptions = {}): Plugin {
               // Unbundle mode keeps every dependency external so `dist` mirrors
               // only the user's source tree. `daroyan` is a linked workspace
               // package, so it must be forced external to stay out of `dist`;
-              // its virtual `daroyan/entry` module is resolved by this plugin
-              // before externalization, so it remains inlined regardless.
+              // `daroyan/entry` is resolved to the generated file by this
+              // plugin before externalization, so it is still emitted.
               external: ['daroyan'],
               noExternal: [],
             }
@@ -169,7 +184,7 @@ export function daroyan(options: DaroyanOptions = {}): Plugin {
         // Route directories hold more than routes — fixtures, snapshots,
         // READMEs — and none of those change what gets generated.
         if (
-          !isWithin(routesDirectory, file) ||
+          !isAtOrWithin(routesDirectory, file) ||
           !affectsRouteTree(routesDirectory, file, options.ignoredRouteFiles)
         ) {
           return;
@@ -218,8 +233,8 @@ export function daroyan(options: DaroyanOptions = {}): Plugin {
         const restart = (file: string) => {
           if (
             isSourceModule(file) &&
-            !isWithin(routesDirectory, file) &&
-            !isWithin(
+            !isAtOrWithin(routesDirectory, file) &&
+            !isAtOrWithin(
               outputDirectory ?? resolve(server.config.root, '.daroyan'),
               file
             )
@@ -285,7 +300,9 @@ export function daroyan(options: DaroyanOptions = {}): Plugin {
       }
 
       if (assets.length > 0) {
-        resolvedConfig?.logger.warn(
+        // `this.warn` attributes the message to this plugin and routes it
+        // through the bundler's own reporting.
+        this.warn(
           `[daroyan] Production output contains an external runtime asset (${assets
             .map((asset) => asset.fileName)
             .join(', ')}), which weakens the one-entry deployment model.`
@@ -384,11 +401,6 @@ async function assertServerEntry(entry: string): Promise<void> {
     }
     throw error;
   }
-}
-
-function isWithin(directory: string, file: string): boolean {
-  const path = relative(directory, file);
-  return path !== '..' && !path.startsWith(`..${sep}`);
 }
 
 function invalidateEntry(server: ViteDevServer, entryFile: string): void {

@@ -2,10 +2,21 @@ import { readFile, readdir } from 'node:fs/promises';
 import { basename, dirname, relative, resolve, sep } from 'node:path';
 
 import { minimatch } from 'minimatch';
-import { parseSync } from 'vite-plus';
 
 import { HTTP_METHODS } from '../constants.ts';
-import { toProjectPath } from './path.ts';
+import type { NodeView } from './ast.ts';
+import {
+  asNode,
+  isHonoExpression,
+  isTransparentExpression,
+  parseModule,
+  specifierNames,
+} from './ast.ts';
+import {
+  isStrictlyWithin,
+  routeParameterNames,
+  toProjectPath,
+} from './path.ts';
 
 export type Route = {
   file: string;
@@ -140,9 +151,17 @@ export async function discoverRoutes(
       file,
       kind: routeExports.hasDefault ? 'sub-router' : 'methods',
       methods: routeExports.methods,
+      // Every applicable middleware directory is an ancestor of this file, so
+      // sorting by depth orders the chain from the route root down to the leaf.
       middleware: middleware
-        .filter((middlewareFile) => isWithin(dirname(middlewareFile), file))
-        .sort((left, right) => left.length - right.length),
+        .filter((middlewareFile) =>
+          isStrictlyWithin(dirname(middlewareFile), file)
+        )
+        .sort(
+          (left, right) =>
+            left.split(sep).length - right.split(sep).length ||
+            left.localeCompare(right)
+        ),
       path,
     });
   }
@@ -174,7 +193,7 @@ async function settleInOrder<T>(work: Promise<T>[]): Promise<T[]> {
 
 async function validateMiddlewareModule(file: string): Promise<void> {
   const source = await readFile(file, 'utf8');
-  const ast = parseModule(file, source);
+  const ast = parseModule(file, source, 'route module');
   const middlewareBundles = new Set<string>();
   const middlewareFactories = new Set<string>();
   let hasValidDefault = false;
@@ -236,16 +255,8 @@ async function validateMiddlewareModule(file: string): Promise<void> {
     }
 
     for (const specifier of statement.specifiers) {
-      const exportedName =
-        specifier.exported.type === 'Identifier'
-          ? specifier.exported.name
-          : String(specifier.exported.value);
-      const localName =
-        specifier.local.type === 'Identifier'
-          ? specifier.local.name
-          : String(specifier.local.value);
-
-      if (exportedName === 'default' && middlewareBundles.has(localName)) {
+      const names = specifierNames(specifier);
+      if (names.exported === 'default' && middlewareBundles.has(names.local)) {
         hasValidDefault = true;
       }
     }
@@ -373,11 +384,6 @@ function isInIgnoredDirectory(routesDirectory: string, file: string): boolean {
   );
 }
 
-function isWithin(directory: string, file: string): boolean {
-  const path = relative(directory, file);
-  return path !== '' && path !== '..' && !path.startsWith(`..${sep}`);
-}
-
 async function readRouteExports(file: string): Promise<{
   defaultIsHono: boolean;
   defaultHasUnchainedRoutes: boolean;
@@ -387,7 +393,7 @@ async function readRouteExports(file: string): Promise<{
   parameterSchemas: string[][];
 }> {
   const source = await readFile(file, 'utf8');
-  const ast = parseModule(file, source);
+  const ast = parseModule(file, source, 'route module');
   const exports = new Set<string>();
   const handlerBundles = new Set<string>();
   const handlerFactories = new Set<string>();
@@ -495,37 +501,32 @@ async function readRouteExports(file: string): Promise<{
         continue;
       }
 
-      const name =
-        specifier.exported.type === 'Identifier'
-          ? specifier.exported.name
-          : String(specifier.exported.value);
+      const { exported: name, local: localName } = specifierNames(specifier);
       if (name === 'default') {
         hasDefault = true;
-        const localName =
-          specifier.local.type === 'Identifier'
-            ? specifier.local.name
-            : String(specifier.local.value);
         if (statement.source === null && honoValues.has(localName)) {
           defaultIsHono = true;
           defaultHonoName = localName;
         }
-      } else {
-        exports.add(name);
-        if (
-          HTTP_METHODS.includes(name as Route['methods'][number]) &&
-          statement.source !== null
-        ) {
-          invalidMethods.add(name as Route['methods'][number]);
-        } else if (HTTP_METHODS.includes(name as Route['methods'][number])) {
-          const localName =
-            specifier.local.type === 'Identifier'
-              ? specifier.local.name
-              : String(specifier.local.value);
-          methodBundleNames.set(name as Route['methods'][number], localName);
-          if (!handlerBundles.has(localName)) {
-            invalidMethods.add(name as Route['methods'][number]);
-          }
-        }
+        continue;
+      }
+
+      exports.add(name);
+      if (!HTTP_METHODS.includes(name as Route['methods'][number])) {
+        continue;
+      }
+
+      const method = name as Route['methods'][number];
+      // A re-export cannot be inspected here, so it is rejected rather than
+      // allowed to fail later as a spread of something unknown.
+      if (statement.source !== null) {
+        invalidMethods.add(method);
+        continue;
+      }
+
+      methodBundleNames.set(method, localName);
+      if (!handlerBundles.has(localName)) {
+        invalidMethods.add(method);
       }
     }
 
@@ -637,54 +638,6 @@ function isUnchainedRouteMutation(value: unknown, honoName: string): boolean {
   );
 }
 
-type NodeView = {
-  callee?: unknown;
-  expression?: unknown;
-  name?: string;
-  object?: unknown;
-  property?: unknown;
-  type: string;
-};
-
-function isHonoExpression(
-  value: unknown,
-  constructors: Set<string>,
-  instances: Set<string>
-): boolean {
-  const node = asNode(value);
-  if (!node) {
-    return false;
-  }
-
-  if (node.type === 'Identifier') {
-    return node.name !== undefined && instances.has(node.name);
-  }
-  if (node.type === 'NewExpression') {
-    const callee = asNode(node.callee);
-    return (
-      callee?.type === 'Identifier' &&
-      callee.name !== undefined &&
-      constructors.has(callee.name)
-    );
-  }
-  if (node.type === 'CallExpression') {
-    const callee = asNode(node.callee);
-    return callee?.type === 'MemberExpression'
-      ? isHonoExpression(callee.object, constructors, instances)
-      : false;
-  }
-  if (
-    node.type === 'ChainExpression' ||
-    node.type === 'TSAsExpression' ||
-    node.type === 'TSSatisfiesExpression' ||
-    node.type === 'TSNonNullExpression'
-  ) {
-    return isHonoExpression(node.expression, constructors, instances);
-  }
-
-  return false;
-}
-
 function isHandlerBundleExpression(
   value: unknown,
   factories: Set<string>,
@@ -715,11 +668,7 @@ function isHandlerBundleExpression(
       arguments_.every(isHandlerValue)
     );
   }
-  if (
-    node.type === 'TSAsExpression' ||
-    node.type === 'TSSatisfiesExpression' ||
-    node.type === 'TSNonNullExpression'
-  ) {
+  if (isTransparentExpression(node)) {
     return isHandlerBundleExpression(node.expression, factories, bundles);
   }
 
@@ -740,11 +689,7 @@ function isRejectedHandlerBundle(
     return true;
   }
 
-  if (
-    node.type === 'TSAsExpression' ||
-    node.type === 'TSSatisfiesExpression' ||
-    node.type === 'TSNonNullExpression'
-  ) {
+  if (isTransparentExpression(node)) {
     return isRejectedHandlerBundle(node.expression, factories);
   }
 
@@ -797,38 +742,11 @@ function isHandlerValue(value: unknown): boolean {
   if (node.type === 'SpreadElement') {
     return isHandlerValue((node as NodeView & { argument?: unknown }).argument);
   }
-  if (
-    node.type === 'TSAsExpression' ||
-    node.type === 'TSSatisfiesExpression' ||
-    node.type === 'TSNonNullExpression'
-  ) {
+  if (isTransparentExpression(node)) {
     return isHandlerValue(node.expression);
   }
 
   return false;
-}
-
-function asNode(value: unknown): NodeView | undefined {
-  if (typeof value !== 'object' || value === null || !('type' in value)) {
-    return undefined;
-  }
-
-  return value as NodeView;
-}
-
-function parseModule(
-  file: string,
-  source: string
-): ReturnType<typeof parseSync>['program'] {
-  const result = parseSync(file, source, { lang: 'ts' });
-  if (result.errors.length > 0) {
-    throw new Error(
-      `[daroyan] Failed to parse route module ${file}:\n${result.errors
-        .map((error) => error.codeframe ?? error.message)
-        .join('\n')}`
-    );
-  }
-  return result.program;
 }
 
 function parameterSchemasInExpression(
@@ -938,12 +856,6 @@ function visitNode(value: unknown, visitor: (node: NodeView) => void): void {
       visitNode(child, visitor);
     }
   }
-}
-
-function routeParameterNames(path: string): string[] {
-  return [...path.matchAll(/:([^/{}]+)(?:\{\.\+\})?/g)].map(
-    (match) => match[1]
-  );
 }
 
 function sameStringSet(left: string[], right: string[]): boolean {

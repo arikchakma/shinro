@@ -21,6 +21,34 @@ export function withBasePath(basePath: string, routePath: string): string {
   return routePath === '/' ? basePath : `${basePath}${routePath}`;
 }
 
+/**
+ * Whether `file` sits at or below `directory`. The directory itself counts,
+ * which is what path-prefix checks such as "is this inside the generated
+ * output" want.
+ */
+export function isAtOrWithin(directory: string, file: string): boolean {
+  const path = relative(directory, file);
+  return path !== '..' && !path.startsWith(`..${sep}`);
+}
+
+/**
+ * Whether `file` sits strictly below `directory`. Used where a directory must
+ * not match itself, such as deciding which `_middleware.ts` files wrap a route.
+ */
+export function isStrictlyWithin(directory: string, file: string): boolean {
+  return isAtOrWithin(directory, file) && relative(directory, file) !== '';
+}
+
+/**
+ * The parameter names a Hono path declares, in order. Matches both `:id` and
+ * the catch-all `:path{.+}` form.
+ */
+export function routeParameterNames(path: string): string[] {
+  return [...path.matchAll(/:([^/{}]+)(?:\{\.\+\})?/g)].map(
+    (match) => match[1]
+  );
+}
+
 export function toProjectPath(root: string, file: string): string {
   return relative(root, file).split(sep).join('/');
 }

@@ -1,6 +1,14 @@
 import { readFile } from 'node:fs/promises';
 
-import { parseSync } from 'vite-plus';
+import type { NodeView } from './ast.ts';
+import {
+  asNode,
+  importedAs,
+  isHonoExpression,
+  isTransparentExpression,
+  parseModule,
+  specifierNames,
+} from './ast.ts';
 
 export type AppModuleAnalysis = {
   hasEarlyResponseMiddleware: boolean;
@@ -10,41 +18,12 @@ export async function validateAppModule(
   file: string
 ): Promise<AppModuleAnalysis> {
   const source = await readFile(file, 'utf8');
-  const result = parseSync(file, source, { lang: 'ts' });
-  if (result.errors.length > 0) {
-    throw new Error(
-      `[daroyan] Failed to parse app module ${file}:\n${result.errors
-        .map((error) => error.codeframe ?? error.message)
-        .join('\n')}`
-    );
-  }
-  const ast = result.program;
-  const factories = new Set<string>();
-  const constructors = new Set<string>();
+  const ast = parseModule(file, source, 'app module');
+  const factories = importedAs(ast, 'defineApp');
+  // `defineApp()` only calls `new Hono()`, so an app module that reaches for
+  // Hono directly is just as valid an application root.
+  const constructors = importedAs(ast, 'Hono');
   const apps = new Set<string>();
-
-  for (const statement of ast.body) {
-    if (statement.type === 'ImportDeclaration') {
-      for (const specifier of statement.specifiers) {
-        if (
-          specifier.type !== 'ImportSpecifier' ||
-          specifier.imported.type !== 'Identifier'
-        ) {
-          continue;
-        }
-
-        if (specifier.imported.name === 'defineApp') {
-          factories.add(specifier.local.name);
-        }
-        // `defineApp()` only calls `new Hono()`, so an app module that reaches
-        // for Hono directly is just as valid an application root.
-        if (specifier.imported.name === 'Hono') {
-          constructors.add(specifier.local.name);
-        }
-      }
-    }
-  }
-
   const scope: AppScope = { apps, constructors, factories };
 
   for (const statement of ast.body) {
@@ -83,16 +62,8 @@ export async function validateAppModule(
         return false;
       }
 
-      const exportedName =
-        specifier.exported.type === 'Identifier'
-          ? specifier.exported.name
-          : String(specifier.exported.value);
-      const localName =
-        specifier.local.type === 'Identifier'
-          ? specifier.local.name
-          : String(specifier.local.value);
-
-      return exportedName === 'default' && apps.has(localName);
+      const names = specifierNames(specifier);
+      return names.exported === 'default' && apps.has(names.local);
     });
   });
 
@@ -109,40 +80,21 @@ export async function validateAppModule(
   };
 }
 
-type NodeView = {
-  arguments?: unknown[];
-  body?: unknown;
-  callee?: unknown;
-  expression?: unknown;
-  name?: string;
-  object?: unknown;
-  property?: unknown;
-  type: string;
-};
-
 type AppScope = {
   apps: Set<string>;
   constructors: Set<string>;
   factories: Set<string>;
 };
 
+// Like `isHonoExpression`, but a bare `defineApp()` call also counts as an app
+// root. The chained case must recurse through here rather than delegating, so
+// `defineApp().get(...).onError(...)` still resolves to the factory at its base.
 function isAppExpression(value: unknown, scope: AppScope): boolean {
   const node = asNode(value);
   if (!node) {
     return false;
   }
 
-  if (node.type === 'Identifier') {
-    return node.name !== undefined && scope.apps.has(node.name);
-  }
-  if (node.type === 'NewExpression') {
-    const callee = asNode(node.callee);
-    return (
-      callee?.type === 'Identifier' &&
-      callee.name !== undefined &&
-      scope.constructors.has(callee.name)
-    );
-  }
   if (node.type === 'CallExpression') {
     const callee = asNode(node.callee);
     if (callee?.type === 'Identifier') {
@@ -152,24 +104,11 @@ function isAppExpression(value: unknown, scope: AppScope): boolean {
       ? isAppExpression(callee.object, scope)
       : false;
   }
-  if (
-    node.type === 'ChainExpression' ||
-    node.type === 'TSAsExpression' ||
-    node.type === 'TSSatisfiesExpression' ||
-    node.type === 'TSNonNullExpression'
-  ) {
+  if (isTransparentExpression(node)) {
     return isAppExpression(node.expression, scope);
   }
 
-  return false;
-}
-
-function asNode(value: unknown): NodeView | undefined {
-  if (typeof value !== 'object' || value === null || !('type' in value)) {
-    return undefined;
-  }
-
-  return value as NodeView;
+  return isHonoExpression(value, scope.constructors, scope.apps);
 }
 
 function isEarlyResponseUseStatement(
@@ -225,9 +164,7 @@ function containsResponseReturn(value: unknown): boolean {
     return isContextResponseCall(node);
   }
   if (node.type === 'ReturnStatement') {
-    return containsResponseReturn(
-      (node as NodeView & { argument?: unknown }).argument
-    );
+    return containsResponseReturn(node.argument);
   }
   if (
     node.type === 'ArrowFunctionExpression' ||
@@ -246,6 +183,15 @@ function containsResponseReturn(value: unknown): boolean {
   );
 }
 
+const CONTEXT_RESPONSE_METHODS = new Set([
+  'body',
+  'html',
+  'json',
+  'notFound',
+  'redirect',
+  'text',
+]);
+
 function isContextResponseCall(value: NodeView): boolean {
   const callee = asNode(value.callee);
   const property = asNode(callee?.property);
@@ -254,8 +200,6 @@ function isContextResponseCall(value: NodeView): boolean {
     callee?.type === 'MemberExpression' &&
     property?.type === 'Identifier' &&
     property.name !== undefined &&
-    new Set(['body', 'html', 'json', 'notFound', 'redirect', 'text']).has(
-      property.name
-    )
+    CONTEXT_RESPONSE_METHODS.has(property.name)
   );
 }

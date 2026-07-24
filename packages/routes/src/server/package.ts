@@ -16,8 +16,14 @@ export async function warnForMissingClientExport(options: {
       exports?: unknown;
     };
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return;
+    // A missing package.json is normal. Anything else — unreadable or invalid
+    // JSON — is worth saying out loud rather than silently skipping the check.
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      options.logger.warn(
+        `[daroyan] Could not read ${packageFile}, so its generated client export was not checked: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
     }
     return;
   }
