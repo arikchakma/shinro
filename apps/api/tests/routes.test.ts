@@ -1,6 +1,7 @@
-import app from 'daroyan/entry';
 import { testClient } from 'hono/testing';
 import { expect, expectTypeOf, test } from 'vite-plus/test';
+
+import app from '../src/app.ts';
 
 const client = testClient(app);
 

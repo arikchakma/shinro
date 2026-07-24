@@ -31,7 +31,12 @@ test('development reloads the isolated user entry and terminates each process no
   );
   await writeFile(
     `${root}/src/app.ts`,
-    `import { defineApp } from ${JSON.stringify(appHelper)};\nexport default defineApp();\n`
+    [
+      `import { defineApp } from ${JSON.stringify(appHelper)};`,
+      'import { routes } from "daroyan/routes";',
+      'export default defineApp().route("/", routes());',
+      '',
+    ].join('\n')
   );
   await writeFile(
     `${root}/src/routes/health.ts`,
@@ -41,7 +46,7 @@ test('development reloads the isolated user entry and terminates each process no
     `${root}/src/server.ts`,
     [
       'import { appendFileSync } from "node:fs";',
-      'import app from "daroyan/entry";',
+      'import app from "./app.ts";',
       `const lifecycleFile = ${JSON.stringify(lifecycleFile)};`,
       'appendFileSync(lifecycleFile, "STARTED\\n");',
       'process.once("SIGTERM", () => {',
@@ -107,7 +112,12 @@ test('editing route code reloads its behavior without rewriting the route manife
   );
   await writeFile(
     `${root}/src/app.ts`,
-    `import { defineApp } from ${JSON.stringify(appHelper)};\nexport default defineApp();\n`
+    [
+      `import { defineApp } from ${JSON.stringify(appHelper)};`,
+      'import { routes } from "daroyan/routes";',
+      'export default defineApp().route("/", routes());',
+      '',
+    ].join('\n')
   );
   await writeFile(
     `${root}/src/routes/health.ts`,
@@ -117,7 +127,7 @@ test('editing route code reloads its behavior without rewriting the route manife
     `${root}/src/server.ts`,
     [
       'import { appendFileSync } from "node:fs";',
-      'import app from "daroyan/entry";',
+      'import app from "./app.ts";',
       `const observationsFile = ${JSON.stringify(observationsFile)};`,
       'const response = await app.request("/health");',
       'const body = await response.json();',
@@ -175,7 +185,12 @@ test('an invalid structural route change keeps the last-known-good server runnin
   );
   await writeFile(
     `${root}/src/app.ts`,
-    `import { defineApp } from ${JSON.stringify(appHelper)};\nexport default defineApp();\n`
+    [
+      `import { defineApp } from ${JSON.stringify(appHelper)};`,
+      'import { routes } from "daroyan/routes";',
+      'export default defineApp().route("/", routes());',
+      '',
+    ].join('\n')
   );
   await writeFile(
     `${root}/src/routes/users.ts`,
@@ -185,7 +200,7 @@ test('an invalid structural route change keeps the last-known-good server runnin
     `${root}/src/server.ts`,
     [
       'import { appendFileSync } from "node:fs";',
-      'import app from "daroyan/entry";',
+      'import app from "./app.ts";',
       `const lifecycleFile = ${JSON.stringify(lifecycleFile)};`,
       'appendFileSync(lifecycleFile, "STARTED\\n");',
       'process.once("SIGTERM", () => {',
@@ -251,7 +266,12 @@ test('development fails immediately with guidance when the server entry is missi
   );
   await writeFile(
     `${root}/src/app.ts`,
-    `import { defineApp } from ${JSON.stringify(appHelper)};\nexport default defineApp();\n`
+    [
+      `import { defineApp } from ${JSON.stringify(appHelper)};`,
+      'import { routes } from "daroyan/routes";',
+      'export default defineApp().route("/", routes());',
+      '',
+    ].join('\n')
   );
 
   try {

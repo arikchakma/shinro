@@ -10,12 +10,19 @@ import {
 } from 'node:fs/promises';
 import { dirname, relative, resolve, sep } from 'node:path';
 
-import { ENTRY_FILE, GENERATED_NOTICE } from '../constants.ts';
+import {
+  CLIENT_FILE,
+  GENERATED_NOTICE_PATTERN,
+  LEGACY_FILES,
+  MODULES_FILE,
+  ROUTES_FILE,
+  RPC_FILE,
+} from '../constants.ts';
 import type { GeneratedSources } from './codegen.ts';
 
 let temporaryFileCounter = 0;
 
-const RPC_FILES = ['rpc.ts', 'client.ts', 'modules.d.ts'];
+const RPC_FILES = [RPC_FILE, CLIENT_FILE];
 
 export async function writeGeneratedTypes(
   outputDirectory: string,
@@ -47,16 +54,17 @@ async function writeGeneratedFiles(
   // already on disk. Writing it first would let readers see a manifest that
   // advertises routes the entry does not register yet.
   const files = new Map<string, string>([
-    [resolve(outputDirectory, 'daroyan.d.ts'), sources.project],
-    [resolve(outputDirectory, ENTRY_FILE), sources.entry],
+    // Routing is not an RPC feature: the router and the declaration that types
+    // its specifier are written whether or not the client is.
+    [resolve(outputDirectory, MODULES_FILE), sources.modules],
+    [resolve(outputDirectory, ROUTES_FILE), sources.routes],
     ...companions.map(
       (companion) => [companion.file, companion.source] as const
     ),
     ...(options.rpcEnabled
       ? ([
-          [resolve(outputDirectory, 'rpc.ts'), sources.rpc],
-          [resolve(outputDirectory, 'client.ts'), sources.client],
-          [resolve(outputDirectory, 'modules.d.ts'), sources.entryTypes],
+          [resolve(outputDirectory, RPC_FILE), sources.rpc],
+          [resolve(outputDirectory, CLIENT_FILE), sources.client],
         ] as const)
       : []),
     [resolve(outputDirectory, 'manifest.json'), sources.manifest],
@@ -66,6 +74,15 @@ async function writeGeneratedFiles(
   await removeStaleCompanions(
     resolve(outputDirectory, 'types'),
     new Set(companions.map((companion) => companion.file))
+  );
+
+  // `.daroyan` is not checked in, so an upgraded project starts here with the
+  // previous format's output still on disk. A leftover `modules.d.ts` is not
+  // inert: it declares a specifier against an entry module nothing maintains.
+  await Promise.all(
+    LEGACY_FILES.map((name) =>
+      removeGeneratedFile(resolve(outputDirectory, name))
+    )
   );
 
   if (!options.rpcEnabled) {
@@ -211,7 +228,7 @@ async function removeStaleCompanions(
         return;
       }
 
-      if ((await readFile(file, 'utf8')).startsWith(GENERATED_NOTICE)) {
+      if (GENERATED_NOTICE_PATTERN.test(await readFile(file, 'utf8'))) {
         await rm(file);
       }
     })
@@ -236,9 +253,11 @@ async function writeGeneratedFile(file: string, source: string): Promise<void> {
   await rename(temporaryFile, file);
 }
 
+// Matches the notice of any format, so output an earlier version generated is
+// still recognised as Daroyan's. A file without one belongs to the user.
 async function removeGeneratedFile(file: string): Promise<void> {
   try {
-    if ((await readFile(file, 'utf8')).startsWith(GENERATED_NOTICE)) {
+    if (GENERATED_NOTICE_PATTERN.test(await readFile(file, 'utf8'))) {
       await rm(file);
     }
   } catch (error) {

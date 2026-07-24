@@ -1,3 +1,3 @@
-import app from 'daroyan/entry';
+import app from './app.ts';
 
 export default app;

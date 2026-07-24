@@ -1,6 +1,6 @@
 import { serve } from '@hono/node-server';
-import app from 'daroyan/entry';
 
+import app from './app.ts';
 import { shutdown } from './shutdown.ts';
 
 const server = serve(

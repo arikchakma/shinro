@@ -1,12 +1,15 @@
 import { defineApp } from 'daroyan/app';
+import { routes } from 'daroyan/routes';
 
-export type AppEnv = {
-  Variables: {
-    requestId: string;
-  };
-};
+declare module 'daroyan/app' {
+  interface DaroyanEnv {
+    Variables: {
+      requestId: string;
+    };
+  }
+}
 
-const app = defineApp<AppEnv>()
+const app = defineApp()
   .use('*', async (c, next) => {
     const requestId = crypto.randomUUID();
     c.set('requestId', requestId);
@@ -22,6 +25,10 @@ const app = defineApp<AppEnv>()
       200
     );
   })
+  // File routes mount after the global middleware, so it wraps them. Hono
+  // composes handlers in registration order, and `route()` copies the generated
+  // router's routes onto this instance rather than nesting a second router.
+  .route('/', routes())
   .onError((error, c) => {
     console.error(error);
     return c.json({ error: 'INTERNAL_ERROR' as const }, 500);

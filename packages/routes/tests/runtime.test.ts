@@ -17,7 +17,12 @@ test('a Node entry owns its listener and graceful shutdown after a one-file buil
   await mkdir(`${root}/src/routes`, { recursive: true });
   await writeFile(
     `${root}/src/app.ts`,
-    `import { defineApp } from ${JSON.stringify(appHelper)};\nexport default defineApp();\n`
+    [
+      `import { defineApp } from ${JSON.stringify(appHelper)};`,
+      'import { routes } from "daroyan/routes";',
+      'export default defineApp().route("/", routes());',
+      '',
+    ].join('\n')
   );
   await writeFile(
     `${root}/src/routes/health.ts`,
@@ -27,7 +32,7 @@ test('a Node entry owns its listener and graceful shutdown after a one-file buil
     `${root}/src/server.ts`,
     [
       'import { serve } from "@hono/node-server";',
-      'import app from "daroyan/entry";',
+      'import app from "./app.ts";',
       '',
       'const server = serve({ fetch: app.fetch, port: 0 }, (info) => {',
       '  console.log(`READY:${info.port}`);',
@@ -87,7 +92,12 @@ test('a Bun entry owns its listener and graceful shutdown after a one-file build
   await mkdir(`${root}/src/routes`, { recursive: true });
   await writeFile(
     `${root}/src/app.ts`,
-    `import { defineApp } from ${JSON.stringify(appHelper)};\nexport default defineApp();\n`
+    [
+      `import { defineApp } from ${JSON.stringify(appHelper)};`,
+      'import { routes } from "daroyan/routes";',
+      'export default defineApp().route("/", routes());',
+      '',
+    ].join('\n')
   );
   await writeFile(
     `${root}/src/routes/health.ts`,
@@ -96,7 +106,7 @@ test('a Bun entry owns its listener and graceful shutdown after a one-file build
   await writeFile(
     `${root}/src/server.ts`,
     [
-      'import app from "daroyan/entry";',
+      'import app from "./app.ts";',
       '',
       'const server = Bun.serve({ fetch: app.fetch, port: 0 });',
       'console.log(`READY:${server.port}`);',

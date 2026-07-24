@@ -17,25 +17,29 @@ The central API is intentionally small:
 // src/app.ts
 import { logger } from 'hono/logger';
 import { defineApp } from 'daroyan/app';
+import { routes } from 'daroyan/routes';
 
-const app = defineApp();
-
-app.use('*', logger());
-
-app.onError((error, c) => {
-  console.error(error);
-  return c.json({ error: 'INTERNAL_ERROR' as const }, 500);
-});
-
-app.notFound((c) => {
-  return c.json({ error: 'NOT_FOUND' as const }, 404);
-});
+const app = defineApp()
+  .use('*', logger())
+  .route('/', routes())
+  .onError((error, c) => {
+    console.error(error);
+    return c.json({ error: 'INTERNAL_ERROR' as const }, 500);
+  })
+  .notFound((c) => {
+    return c.json({ error: 'NOT_FOUND' as const }, 404);
+  });
 
 export default app;
 ```
 
 `defineApp()` returns a real Hono instance. The user may call any Hono API
 on it and exports that instance as the default export.
+
+`daroyan/routes` is the file routes as a mountable Hono sub-router, and the
+application mounts it. Nothing generated imports the application, so the
+application is free to import the generated router — and `src/app.ts` is the
+whole app, with no second module that is secretly the real one.
 
 Daroyan does not define application startup or shutdown APIs. It does not
 register signal handlers, close databases, drain queues, call
@@ -46,7 +50,7 @@ belong to the user's server entry:
 // src/server.ts
 import { serve } from '@hono/node-server';
 
-import app from 'daroyan/entry';
+import app from './app.ts';
 import { shutdown } from './shutdown.ts';
 import { initDatabase } from './lib/db.ts';
 import { initRedis } from './lib/redis.ts';
@@ -124,7 +128,7 @@ application or its process.
 | Hono app factory               | `defineApp()`        |
 | Route handler helper           | `defineHandler()`    |
 | Directory middleware helper    | `defineMiddleware()` |
-| Generated assembled app        | `daroyan/entry`      |
+| Generated file router          | `daroyan/routes`     |
 | Generated RPC application type | `AppType`            |
 | Generated client factory       | `createClient()`     |
 | Generated working directory    | `.daroyan/`          |
@@ -289,7 +293,7 @@ Projects extend the base configuration shipped by the package:
 import-extension options, the `rootDirs` used by generated companions
 (`["${configDir}", "${configDir}/.daroyan/types"]`), and the `include` that
 pulls in the generated declaration tree (`${configDir}/.daroyan/**/*.d.ts`).
-Consumers add only their own `paths`; no `daroyan/app` or `daroyan/entry`
+Consumers add only their own `paths`; no `daroyan/app` or `daroyan/routes`
 mapping is required.
 
 Daroyan emits explicit `.ts` import specifiers. TypeScript requires
@@ -305,12 +309,11 @@ import type { Route } from './+types/$id.ts';
 without writing generated files into `src/routes`.
 
 The `paths` mapping is intentionally minimal. `daroyan/app` resolves through
-the package `exports` map, and `daroyan/entry` resolves through a generated
-ambient module declaration in `.daroyan/entry.d.ts` — neither needs a hand
-written `paths` entry. The base config's `.daroyan/**/*.d.ts` include
-guarantees that editors and standalone `tsc` load both the project-specific
-`daroyan/app` augmentation (`.daroyan/daroyan.d.ts`) and the assembled entry
-declaration without requiring an import in every route.
+the package `exports` map, and `daroyan/routes`, `daroyan/client`, and
+`daroyan/rpc` resolve through generated ambient module declarations in
+`.daroyan/daroyan.d.ts` — none needs a hand written `paths` entry. The base
+config's `.daroyan/**/*.d.ts` include guarantees that editors and standalone
+`tsc` load those declarations without requiring an import in every route.
 
 Projects should ignore:
 
@@ -341,8 +344,8 @@ copy-pasteable correction when they are missing.
 ├── .daroyan/
 │   ├── client.ts
 │   ├── daroyan.d.ts
-│   ├── entry.d.ts
 │   ├── manifest.json
+│   ├── routes.ts
 │   ├── rpc.ts
 │   └── types/
 ├── dist/
@@ -368,28 +371,25 @@ Conceptual signature:
 import type { Env, HonoOptions } from 'hono';
 import { Hono } from 'hono';
 
-export function defineApp<E extends Env = Env>(
+export function defineApp<E extends Env = ProjectEnv>(
   options?: HonoOptions<E>
 ): Hono<E>;
 ```
 
-It is effectively a correctly configured Hono constructor:
+It is effectively a correctly configured Hono constructor, defaulting to the
+project environment so the app and its route files agree without a repeated
+generic:
 
 ```ts
 const app = defineApp();
 ```
 
-or, when the application has an explicit Hono environment:
+An explicit environment is still accepted, but it types this app only — route
+files follow `ProjectEnv`, which comes from the `DaroyanEnv` augmentation
+described in section 17:
 
 ```ts
-type AppEnv = {
-  Variables: {
-    requestId: string;
-    user: User;
-  };
-};
-
-const app = defineApp<AppEnv>();
+const app = defineApp<{ Variables: { tenant: string } }>();
 ```
 
 The return value is a normal Hono instance:
@@ -409,7 +409,7 @@ There is no callback, descriptor, or second generic:
 ```ts
 // Not part of the API
 defineApp((app) => {});
-defineApp<AppEnv, RpcResponses>((app) => {});
+defineApp<ProjectEnv, RpcResponses>((app) => {});
 defineServer({ app });
 ```
 
@@ -420,20 +420,28 @@ The configured app module must default-export the Hono instance:
 ```ts
 // src/app.ts
 import { defineApp } from 'daroyan/app';
+import { routes } from 'daroyan/routes';
 
-const app = defineApp();
-
-// Any normal Hono configuration can go here.
+const app = defineApp()
+  // Any normal Hono configuration can go here.
+  .route('/', routes());
 
 export default app;
 ```
 
-Daroyan's generated application wrapper imports this instance, registers
-directory middleware and routes, and exports the assembled instance through
-`daroyan/entry`.
+The app module mounts the generated router itself. `route()` copies the
+sub-router's routes onto this instance and returns it, so there is one Hono
+instance at runtime, and the merged schema makes `typeof app` the application's
+complete RPC contract.
 
-The user's app module contains no generated imports and does not manually
-mount file routes.
+Two consequences of the application owning the mount, both diagnosed in
+section 26:
+
+- The mount must come after global middleware. Hono composes handlers in
+  registration order, so middleware registered after the mount never wraps a
+  file route.
+- An app that never mounts serves no file routes. It is valid Hono, so only a
+  diagnostic can catch it.
 
 ### 11.3 Manual routes
 
@@ -638,7 +646,7 @@ export namespace Route {
     params: {
       id: string;
     };
-    env: AppEnv;
+    env: ProjectEnv;
   }>;
 }
 ```
@@ -847,7 +855,7 @@ The middleware companion is conceptually:
 export namespace Route {
   export type Middleware = DaroyanMiddleware<{
     path: '/api';
-    env: AppEnv;
+    env: ProjectEnv;
   }>;
 }
 ```
@@ -946,37 +954,39 @@ client. Daroyan does not introduce a required global response generic.
 Daroyan supports both of Hono's context-variable typing styles, and they
 compose. A project can use either or both.
 
-### 17.1 App environment generic
+### 17.1 The project environment
 
-An explicit app environment is declared once on `defineApp`:
+The project environment is declared once, by augmenting the interface
+`daroyan/app` exports:
 
 ```ts
 // src/app.ts
-import { defineApp } from 'daroyan/app';
-
-export type AppEnv = {
-  Variables: {
-    requestId: string;
-    user: User;
-  };
-};
-
-const app = defineApp<AppEnv>();
-
-export default app;
+declare module 'daroyan/app' {
+  interface DaroyanEnv {
+    Variables: {
+      requestId: string;
+      user: User;
+    };
+    Bindings: HttpBindings;
+  }
+}
 ```
 
-Daroyan infers the environment from the default app export and generates
-one project-level declaration that binds `defineHandler` and
-`defineMiddleware` to it. This path also carries `Bindings` for handlers
-that need typed `c.env`.
+`ProjectEnv` is that interface, so `defineApp`, `defineHandler`, and
+`defineMiddleware` all agree without a repeated generic. `Bindings` belongs here
+too: `@hono/node-server` passes `{ incoming, outgoing }` as `c.env` on every
+request, so typed bindings are not a Workers-only concern.
+
+The augmentation is written by the application rather than derived from it. That
+is what makes it acyclic: if Daroyan inferred the environment from
+`typeof app`, and `app.ts` imports the generated router, and the generated
+router is built on `ProjectEnv`, the type would depend on itself.
 
 ### 17.2 Global `ContextVariableMap`
 
 The Hono-native alternative: the module that sets a variable also declares
-it by augmenting `hono`'s `ContextVariableMap`. No central `AppEnv` is
-required, and the variable is typed on every Hono context program-wide,
-including the generated RPC application.
+it by augmenting `hono`'s `ContextVariableMap`. No central environment is
+required, and the variable is typed on every Hono context program-wide.
 
 ```ts
 // src/middlewares/request-id.ts
@@ -988,10 +998,10 @@ declare module 'hono' {
 ```
 
 Because Hono types `c.var` as `ContextVariableMap & Env["Variables"]`, a
-variable declared this way and a variable declared on `AppEnv` are both in
+variable declared this way and a variable declared on `DaroyanEnv` are both in
 scope simultaneously; the two mechanisms do not conflict.
 
-Route files do not repeat `AppEnv`:
+Route files do not repeat the environment:
 
 ```ts
 import { defineHandler } from 'daroyan/app';
@@ -1007,121 +1017,105 @@ export const GET = defineHandler((c) => {
 This project-level binding is independent of optional `+types`. A route
 without a `Route` import still receives the configured environment.
 
-The package declarations use a mergeable project marker rather than trying
-to replace a generic default through module augmentation:
+The package declarations use a mergeable interface rather than trying to replace
+a generic default through module augmentation:
 
 ```ts
 // Conceptual declarations shipped by daroyan/app
-import type { Env, Hono } from 'hono';
+import type { Env } from 'hono';
 
-export interface DaroyanProject {}
+export interface DaroyanEnv extends Env {}
 
-type ProjectApp = DaroyanProject extends {
-  readonly app: infer App;
-}
-  ? App
-  : Hono;
+export type ProjectEnv = DaroyanEnv;
 
-export type ProjectEnv = ProjectApp extends Hono<infer E, any, any> ? E : Env;
-
+export function defineApp<E extends Env = ProjectEnv>(): Hono<E>;
 export const defineHandler: DefineHandler<ProjectEnv>;
 export const defineMiddleware: DefineMiddleware<ProjectEnv>;
 ```
 
-Type generation writes this project-specific merge:
+`Bindings` and `Variables` are both `object` in Hono, so no conditional type is
+needed: un-augmented, `DaroyanEnv` is structurally `Env`, which is exactly the
+fallback behaviour. Augmented, the declared members narrow the inherited
+optional ones.
 
-```ts
-// .daroyan/daroyan.d.ts
-import type app from '../src/app.ts';
+Nothing is generated for the environment. There is no inference step to fail,
+and renaming or restructuring the application's own types cannot silently
+degrade route typing.
 
-declare module 'daroyan/app' {
-  interface DaroyanProject {
-    readonly app: typeof app;
-  }
-}
-```
-
-The generated declaration is loaded through the project's
-`.daroyan/**/*.d.ts` TypeScript include. It is generated automatically by
-the plugin and by `daroyan typegen`; users do not import or edit it.
-
-The fallback before type generation is the ordinary Hono `Env`. After type
-generation, failing to infer the environment from the configured app is a
-type-generation error rather than silently requiring
-`defineHandler<AppEnv>(...)`.
-
-v0.1 supports one Daroyan application per TypeScript project. Separate
-applications in a monorepo use separate `tsconfig.json` programs so their
-`DaroyanProject` declarations cannot collide.
+v0.1 supports one Daroyan application per TypeScript project. `DaroyanEnv` is
+program-wide, so separate applications in a monorepo use separate
+`tsconfig.json` programs to keep their environments distinct.
 
 Daroyan does not normalize `process.env`, `Bun.env`, or runtime-specific
 raw server bindings. Those remain application and adapter concerns.
 
-## 18. Assembled application
+## 18. Mountable generated router
 
-`daroyan/entry` is the generated application entry:
+`daroyan/routes` is the generated file router:
 
 ```ts
-import app from 'daroyan/entry';
+import { routes } from 'daroyan/routes';
 ```
 
 Conceptually, it:
 
-1. imports the default Hono instance from `src/app.ts`;
-2. imports directory middleware and route modules;
-3. registers them in deterministic order;
-4. exports the same app instance.
+1. imports directory middleware and route modules;
+2. registers them onto a fresh `Hono<ProjectEnv>` in deterministic order;
+3. returns that sub-router from an exported `routes()` function.
 
 Conceptual exports:
 
 ```ts
-declare const app: Hono;
-
-export default app;
-export { app };
-export const fetch: typeof app.fetch;
-export type AppType = /* generated RPC type */;
+export function routes(): Hono<ProjectEnv /* generated schema */>;
+export type Routes = ReturnType<typeof routes>;
 ```
 
-The entry module has no listener and performs no initialization or shutdown
-behavior.
+It notably does **not** import `src/app.ts`. The dependency runs one way — the
+application imports the router — which is what allows `src/app.ts` to be the
+application, with no generated module standing in for it.
 
-The user's server imports the assembled entry. Tests import the same module,
-ensuring runtime and test route assembly cannot drift.
+The router carries no `onError`. Hono's `route()` wraps every copied handler in
+a compose closure when the sub-app has its own error handler, so error handling
+belongs on the application.
 
-The public name follows Kumoh's `kumoh/entry` convention. Vite internally
-resolves it to the private ID `\0daroyan/entry`; the private ID must never
-appear in user code, generated source imports, errors, or documentation.
-
-Type generation writes a standalone ambient module declaration to
-`.daroyan/entry.d.ts` that declares `daroyan/entry` and types its default
-export as the current project's assembled `AppType`:
+Mounting is a normal Hono call:
 
 ```ts
-// .daroyan/entry.d.ts
-declare module 'daroyan/entry' {
-  const app: import('./rpc.ts').AppType;
+const app = defineApp().route('/', routes());
+```
 
-  export default app;
-  export { app };
-  export const fetch: typeof app.fetch;
-  export type AppType = import('./rpc.ts').AppType;
+`route()` copies each sub-router route into the parent router and returns the
+parent, so there is one Hono instance and no nested dispatch at request time —
+the sub-router is a construction-time carrier. Its schema is merged into the
+parent's under the mount path, so `typeof app` is the complete RPC contract.
+`route()` leaves the sub-environment unconstrained relative to the parent's, so
+a concrete `Hono<ProjectEnv>` router mounts onto any app without threading
+generics.
+
+Type generation writes ambient module declarations to `.daroyan/daroyan.d.ts`
+for every specifier the plugin resolves:
+
+```ts
+// .daroyan/daroyan.d.ts
+declare module 'daroyan/routes' {
+  export const routes: typeof import('./routes.ts').routes;
+  export type Routes = import('./routes.ts').Routes;
 }
 ```
 
-This ambient declaration is loaded through the project's
-`.daroyan/**/*.d.ts` include, so `daroyan/entry` resolves without a
-`paths` mapping and without a subpath in the package `exports`. The
-declaration exists only after generation; a clean checkout runs
-`daroyan typegen` (or any Vite command) before type checking, which the
-`typecheck` script wires up. It is written only when RPC generation is
-enabled.
+Each declaration indirects through the real file via `import(...)`, which keeps
+the chained route schema intact. They are loaded through the project's
+`.daroyan/**/*.d.ts` include, so the specifiers resolve without a `paths`
+mapping and without a subpath in the package `exports`. The declarations exist
+only after generation; a clean checkout runs `daroyan typegen` (or any Vite
+command) before type checking. The `daroyan/routes` block is always written; the
+`daroyan/client` and `daroyan/rpc` blocks only when RPC generation is enabled,
+matching the files that exist.
 
-The Vite plugin resolves the runtime import before normal package
-resolution, mapping `daroyan/entry` to the assembled module. Because the
-package no longer ships a runtime placeholder, importing `daroyan/entry`
-without the plugin is an unresolved-module error rather than a returned
-unassembled app.
+The Vite plugin resolves these imports before normal package resolution. Because
+the package ships no runtime placeholder for them, importing `daroyan/routes`
+without the plugin is an unresolved-module error rather than a silently empty
+router.
 
 ## 19. User-owned server entry
 
@@ -1132,7 +1126,7 @@ unassembled app.
 import { serve } from '@hono/node-server';
 import type { ServerType } from '@hono/node-server';
 
-import app from 'daroyan/entry';
+import app from './app.ts';
 import { closeDatabase, initDatabase } from './lib/db.ts';
 import { closeRedis, initRedis } from './lib/redis.ts';
 
@@ -1185,7 +1179,7 @@ This is application code. Daroyan neither supplies nor calls `shutdown()`.
 
 ```ts
 // src/server.ts
-import app from 'daroyan/entry';
+import app from './app.ts';
 
 import { closeDatabase, initDatabase } from './lib/db.ts';
 
@@ -1246,7 +1240,7 @@ listener creation, and cleanup.
 
 Development requirements:
 
-- Daroyan transforms and serves the same assembled app used for build.
+- Daroyan transforms and serves the same application module used for build.
 - Editing route code updates request handling without regenerating the
   route manifest.
 - Adding, deleting, or renaming a route rescans the manifest, regenerates
@@ -1268,7 +1262,7 @@ but it must preserve user ownership of the server lifecycle.
 
 1. scans and validates routes;
 2. refreshes generated type artifacts;
-3. creates the assembled application module;
+3. regenerates the mountable route module;
 4. builds the configured user server entry;
 5. emits `dist/server.mjs` as the single entry point.
 
@@ -1436,7 +1430,7 @@ therefore reaches `AppType` and the generated client.
 The configured app is mounted first with `.route("/", configuredApp)`.
 Consequently, manual routes added through a retained chain such as
 `defineApp().get(...)` are included in `AppType`. Unassigned mutations
-still run in the assembled server but cannot appear in Hono's compile-time
+still run in the served application but cannot appear in Hono's compile-time
 schema and are therefore absent from the generated client.
 
 Invariants:
@@ -1633,7 +1627,7 @@ refactor while green.
 Tests exercise public authoring and consumption interfaces:
 
 - `plugins: [daroyan()]`;
-- imports from `daroyan/app` and `daroyan/entry`;
+- imports from `daroyan/app` and `daroyan/routes`;
 - route and `_middleware.ts` files;
 - `app.request()` and Hono's `testClient()`;
 - the generated public `Client` and `AppType`;
@@ -1650,7 +1644,7 @@ time, or randomness. Daroyan's scanner, manifest, assembler, generator, and
 Vite plugin should be exercised together through small fixture projects
 where practical.
 
-Runtime behavior uses real assembled Hono applications. Type behavior uses
+Runtime behavior uses real mounted Hono applications. Type behavior uses
 compile fixtures and `expectTypeOf` assertions through public exports.
 Negative type fixtures must prove that an invalid call fails while the
 corresponding valid call succeeds.
@@ -1660,10 +1654,10 @@ corresponding valid call succeeds.
 Implementation should grow in small end-to-end slices. The expected order
 is:
 
-1. one named `GET` file is discovered, assembled, requestable, and present
+1. one named `GET` file is discovered, mounted, requestable, and present
    on the generated client;
-2. `defineApp<AppEnv>()` types a route's `c.var` without repeating
-   `AppEnv`;
+2. a `DaroyanEnv` augmentation types a route's `c.var` without repeating an
+   environment generic;
 3. multiple directory middleware handlers run once in order for both the
    directory URL and a descendant route;
 4. a typed directory-middleware `401` appears in the named route's client
@@ -1680,12 +1674,13 @@ next.
 
 ### 24.4 Application tests
 
-Vite-powered tests import the same assembled app as the server:
+Vite-powered tests import the same application module as the server:
 
 ```ts
 import { testClient } from 'hono/testing';
 import { expect, test } from 'vite-plus/test';
-import app from 'daroyan/entry';
+
+import app from '../src/app.ts';
 
 const client = testClient(app);
 
@@ -1703,7 +1698,7 @@ Low-level testing remains available:
 const response = await app.request('/api/users/usr_123');
 ```
 
-Importing the assembled app does not execute `src/server.ts`, create a
+Importing the application module does not execute `src/server.ts`, create a
 listener, initialize production resources, or register signals.
 
 Integration tests that exercise startup or graceful shutdown import or
@@ -1715,9 +1710,8 @@ spawn the user's server entry explicitly.
 .daroyan/
 ├── client.ts
 ├── daroyan.d.ts
-├── entry.ts
 ├── manifest.json
-├── modules.d.ts
+├── routes.ts
 ├── rpc.ts
 └── types/
     └── src/routes/
@@ -1733,16 +1727,17 @@ spawn the user's server entry explicitly.
 Requirements:
 
 - every generated file begins with a “do not edit” notice;
-- `.daroyan/daroyan.d.ts` contains the project marker augmentation needed
-  to bind `daroyan/app` helpers to the configured app environment;
-- `.daroyan/entry.ts` is the assembled route table, and `daroyan/entry`
-  resolves to it;
-- `.daroyan/modules.d.ts` declares the `daroyan/entry` ambient module and is
-  written only when RPC generation is enabled. It stays separate from
-  `daroyan.d.ts` because it must remain a global script: `daroyan.d.ts` has a
-  top-level import so its `declare module` augments the real `daroyan/app`
-  package, while an ambient declaration for `daroyan/entry` only works in a
-  file with no top-level imports;
+- `.daroyan/routes.ts` is the mountable route table, and `daroyan/routes`
+  resolves to it. It is written whether or not RPC is enabled, because mounting
+  it is how the application serves anything;
+- `.daroyan/daroyan.d.ts` declares the ambient modules for every specifier the
+  plugin resolves. It has no top-level imports, which is what an ambient
+  `declare module` requires; the `daroyan/client` and `daroyan/rpc` blocks are
+  written only when RPC generation is enabled, matching the files that exist;
+- nothing generated imports the application at runtime. `.daroyan/client.ts` is
+  the only generated module that references it, and only as a type;
+- output an earlier format generated is removed, recognised by its notice
+  regardless of the format number it names;
 - writes are atomic;
 - unchanged files keep their modification time;
 - removed and renamed routes delete stale companions;
@@ -1790,7 +1785,7 @@ Build errors:
 - unsupported method export values;
 - external method re-exports whose handler tuple cannot be proven;
 - default export that is not a Hono sub-router;
-- unresolved `daroyan/entry`, which means the Vite plugin did not run;
+- unresolved `daroyan/routes`, which means the Vite plugin did not run;
 - production output unexpectedly split into multiple JavaScript chunks.
 
 Warnings:
@@ -1800,6 +1795,10 @@ Warnings:
 - generated client package export is missing;
 - a parameter schema does not correspond to the filename parameters when
   Daroyan can prove the mismatch;
+- the app module never mounts `daroyan/routes` while file routes exist, so
+  none of them are served;
+- middleware is registered after the mount, where Hono's registration-order
+  composition means it never wraps a file route;
 - base-app middleware returns responses absent from file-route RPC
   contracts;
 - directory middleware surrounding a default sub-router returns responses
@@ -1866,10 +1865,12 @@ implementation and Node built-ins must not enter route or browser graphs.
 `extends: "daroyan/tsconfig"`; `tsconfig.base.json` is included in the
 published package files.
 
-`daroyan/entry` is a Vite-resolved project module with no packaged
-JavaScript or declaration target. Its runtime is supplied by the plugin and
-its type by the generated `.daroyan/entry.d.ts` ambient declaration;
-importing it without the plugin is an unresolved-module error.
+`daroyan/routes`, `daroyan/client`, and `daroyan/rpc` are Vite-resolved project
+modules with no packaged JavaScript or declaration target. Their runtime is
+supplied by the plugin and their types by the generated `.daroyan/daroyan.d.ts`
+ambient declarations; importing one without the plugin is an unresolved-module
+error. Every specifier the declarations name must also resolve in the plugin, or
+the types promise a module the bundler cannot find.
 
 The package manifest declares the tested v0.1 peer ranges. Publication
 must keep those ranges aligned with the compatibility suite.
@@ -1894,28 +1895,30 @@ export default defineConfig({
 // src/app.ts
 import { logger } from 'hono/logger';
 import { defineApp } from 'daroyan/app';
+import { routes } from 'daroyan/routes';
 
 import type { User } from './types.ts';
 
-export type AppEnv = {
-  Variables: {
-    requestId: string;
-    user: User;
-  };
-};
+declare module 'daroyan/app' {
+  interface DaroyanEnv {
+    Variables: {
+      requestId: string;
+      user: User;
+    };
+  }
+}
 
-const app = defineApp<AppEnv>();
-
-app.use('*', logger());
-
-app.onError((error, c) => {
-  console.error(error);
-  return c.json({ error: 'INTERNAL_ERROR' as const }, 500);
-});
-
-app.notFound((c) => {
-  return c.json({ error: 'NOT_FOUND' as const }, 404);
-});
+const app = defineApp()
+  .use('*', logger())
+  // After the global middleware, so it wraps every file route.
+  .route('/', routes())
+  .onError((error, c) => {
+    console.error(error);
+    return c.json({ error: 'INTERNAL_ERROR' as const }, 500);
+  })
+  .notFound((c) => {
+    return c.json({ error: 'NOT_FOUND' as const }, 404);
+  });
 
 export default app;
 ```
@@ -2017,7 +2020,7 @@ export const GET = defineHandler<Route.Handler>(
 // src/server.ts
 import { serve } from '@hono/node-server';
 
-import app from 'daroyan/entry';
+import app from './app.ts';
 import { shutdown } from './shutdown.ts';
 import { initDatabase } from './lib/db.ts';
 import { initRedis } from './lib/redis.ts';
@@ -2076,35 +2079,34 @@ This section describes and constrains the v0.1 implementation.
 - Validate conflicts before runtime or RPC generation.
 - Produce one serializable normalized manifest.
 
-### 29.2 Runtime assembler
+### 29.2 Route module generator
 
-- Import the configured default Hono app.
-- Import all directory middleware and route modules.
-- Register global app middleware first because it already exists on the
-  instance.
+- Import all directory middleware and route modules, and nothing of the
+  application's.
 - For every named method route, flatten its root-to-leaf directory
-  middleware and exported handler tuple into one runtime registration.
+  middleware and exported handler tuple into one registration.
 - Mount every default sub-router through `.route()` and ensure its
   root-to-leaf directory middleware still runs once at runtime.
-- Register all routes deterministically.
-- Export the same assembled instance through `daroyan/entry`.
+- Register all routes deterministically onto one `Hono<ProjectEnv>` returned
+  from an exported `routes()` function.
+- Carry no `onError`, so `route()` does not wrap copied handlers in a compose
+  closure.
 - Never start or stop a listener.
 
 ### 29.3 Type generator
 
-- Infer the Hono environment from the configured app export.
-- Generate `.daroyan/daroyan.d.ts`, merging the configured app type into
-  `DaroyanProject`.
-- Derive `ProjectEnv` from that marker and bind project-level
-  `defineHandler` and `defineMiddleware` types without route-level
-  `AppEnv` generics.
-- Generate optional route and middleware companions.
+- Generate optional route and middleware companions bound to `ProjectEnv`,
+  which the application declares by augmenting `DaroyanEnv` — there is no
+  environment inference step.
 - Generate named RPC registrations with the same flattened middleware and
   handler tuples used at runtime.
 - Generate chained `.route()` registrations for default sub-routers.
-- Generate a precomputed client module.
-- Generate the `.daroyan/entry.d.ts` ambient declaration binding
-  `daroyan/entry` to the assembled `AppType` when RPC is enabled.
+- Generate a precomputed client module whose `AppType` is `typeof app`, taken
+  from the configured app module as a type-only import.
+- Generate the `.daroyan/daroyan.d.ts` ambient declarations for every specifier
+  the plugin resolves, always including `daroyan/routes` and adding the RPC pair
+  when RPC is enabled.
+- Remove output an earlier format generated.
 - Use atomic content-aware writes.
 
 ### 29.4 Vite integration
@@ -2115,12 +2117,12 @@ This section describes and constrains the v0.1 implementation.
 - `configResolved`: scan, validate, and generate.
 - development hooks: execute the configured user entry in an isolated,
   reloadable environment without taking over its lifecycle.
-- `resolveId` and `load`: resolve `daroyan/entry` internally as
-  `\0daroyan/entry`.
+- `resolveId`: resolve `daroyan/routes` to the generated router, and
+  `daroyan/client` / `daroyan/rpc` to their files when RPC is enabled.
 - build hooks: assert the expected entry filename; reject unexpected extra
   chunks only in the single-artifact (`build.unbundle: false`) mode.
-- test integration: expose the assembled app without executing the server
-  entry.
+- test integration: the application module is directly importable, so tests
+  reach the routed app without executing the server entry.
 
 The implementation should use Vite's current environment/module-runner
 APIs rather than deprecated SSR-loading behavior.
@@ -2154,18 +2156,18 @@ v0.1 is complete when:
 - `plugins: [daroyan()]` is the only required Vite integration.
 - `defineApp()` returns a normal Hono instance.
 - the app module uses ordinary Hono APIs and default-exports the instance.
-- `daroyan/entry` exposes the assembled app without a user-facing
-  `virtual:` import.
+- `daroyan/routes` exposes the file routes as a mountable sub-router without a
+  user-facing `virtual:` import, and `typeof app` retains the mounted schema.
+- the server entry imports the app module directly, not a generated one.
 - Daroyan exposes no application lifecycle or shutdown API.
 - the user's Node or Bun entry controls the native server handle and
   signals.
 - route files work without generated imports.
-- an environment declared once through `defineApp<AppEnv>()` types
-  `c.var` in every `defineHandler()` and `defineMiddleware()` call without
-  repeating `AppEnv`;
+- an environment declared once by augmenting `DaroyanEnv` types `c.var` in
+  every `defineHandler()` and `defineMiddleware()` call without repeating a
+  generic;
 - a variable declared through a `hono` `ContextVariableMap` augmentation is
-  typed on `c.var` alongside the `AppEnv` generic, with no central env
-  required;
+  typed on `c.var` alongside `DaroyanEnv`, with no central env required;
 - optional `defineHandler<Route.Handler>()` provides exact filename
   parameters.
 - `zValidator("param", ...)` provides typed, runtime-validated parameters

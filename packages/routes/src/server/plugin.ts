@@ -3,7 +3,15 @@ import { basename, dirname, extname, relative, resolve, sep } from 'node:path';
 
 import type { Plugin, ResolvedConfig, ViteDevServer } from 'vite-plus';
 
-import { ENTRY_FILE, ENTRY_ID, GENERATED_ENTRIES } from '../constants.ts';
+import {
+  CLIENT_FILE,
+  CLIENT_ID,
+  GENERATED_ENTRIES,
+  ROUTES_FILE,
+  ROUTES_ID,
+  RPC_FILE,
+  RPC_ID,
+} from '../constants.ts';
 import { createSources } from './codegen.ts';
 import { validateTypeScriptConfig } from './config.ts';
 import { DevelopmentProcess } from './dev.ts';
@@ -107,7 +115,7 @@ export function daroyan(options: DaroyanOptions = {}): Plugin {
               // Unbundle mode keeps every dependency external so `dist` mirrors
               // only the user's source tree. `daroyan` is a linked workspace
               // package, so it must be forced external to stay out of `dist`;
-              // `daroyan/entry` is resolved to the generated file by this
+              // `daroyan/routes` is resolved to the generated file by this
               // plugin before externalization, so it is still emitted.
               external: ['daroyan'],
               noExternal: [],
@@ -188,11 +196,11 @@ export function daroyan(options: DaroyanOptions = {}): Plugin {
         generation = generation
           .then(generate)
           .then(() => {
-            invalidateEntry(
+            invalidateGeneratedRouter(
               server,
               resolve(
                 outputDirectory ?? resolve(server.config.root, '.daroyan'),
-                ENTRY_FILE
+                ROUTES_FILE
               )
             );
             developmentProcess?.restart();
@@ -248,13 +256,24 @@ export function daroyan(options: DaroyanOptions = {}): Plugin {
       }
     },
 
+    // Every specifier the generated declarations name has to resolve here too,
+    // or the types promise a module the bundler cannot find. The RPC pair is
+    // only offered when RPC is on, since those files are not written otherwise.
     resolveId(id) {
-      if (id === ENTRY_ID) {
-        if (!outputDirectory) {
-          return;
-        }
-
-        return resolve(outputDirectory, ENTRY_FILE);
+      if (!outputDirectory) {
+        return;
+      }
+      if (id === ROUTES_ID) {
+        return resolve(outputDirectory, ROUTES_FILE);
+      }
+      if (options.rpc?.enabled === false) {
+        return;
+      }
+      if (id === CLIENT_ID) {
+        return resolve(outputDirectory, CLIENT_FILE);
+      }
+      if (id === RPC_ID) {
+        return resolve(outputDirectory, RPC_FILE);
       }
     },
 
@@ -395,9 +414,12 @@ async function assertServerEntry(entry: string): Promise<void> {
   }
 }
 
-function invalidateEntry(server: ViteDevServer, entryFile: string): void {
+function invalidateGeneratedRouter(
+  server: ViteDevServer,
+  routesFile: string
+): void {
   for (const environment of Object.values(server.environments)) {
-    const module = environment.moduleGraph.getModuleById(entryFile);
+    const module = environment.moduleGraph.getModuleById(routesFile);
     if (module) {
       environment.moduleGraph.invalidateModule(module);
     }

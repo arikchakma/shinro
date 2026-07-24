@@ -38,7 +38,7 @@ plugin, RPC plugin, or lifecycle plugin.
 
 Extend the shipped base config. It sets `moduleResolution`, the TypeScript
 import-extension options, `rootDirs`, and the `include` that pulls in the
-generated declaration tree, so `daroyan/app` and `daroyan/entry` resolve
+generated declaration tree, so `daroyan/app` and `daroyan/routes` resolve
 without any hand-written `paths`:
 
 ```jsonc
@@ -53,12 +53,13 @@ without any hand-written `paths`:
 }
 ```
 
-`daroyan/entry` resolves through a generated `.daroyan/modules.d.ts` (an
-ambient module declaration), and `daroyan/app` resolves through the package
-`exports` — neither needs a `paths` entry.
+`daroyan/routes`, `daroyan/client`, and `daroyan/rpc` resolve through a
+generated `.daroyan/daroyan.d.ts` (ambient module declarations), and
+`daroyan/app` resolves through the package `exports` — none needs a `paths`
+entry.
 
 The base config's `include` covers both `.daroyan/**/*.d.ts` and
-`.daroyan/**/*.ts`, so the ambient declarations load and the generated entry is
+`.daroyan/**/*.ts`, so the ambient declarations load and the generated router is
 type checked with the rest of your project rather than only where it happens to
 be imported. Both patterns are needed: TypeScript's `*.ts` glob does not match
 `.d.ts` files.
@@ -81,24 +82,40 @@ dist/
 // app/app.ts
 import { logger } from 'hono/logger';
 import { defineApp } from 'daroyan/app';
+import { routes } from 'daroyan/routes';
 
-export type AppEnv = {
-  Variables: {
-    requestId: string;
-  };
-};
-
-const app = defineApp<AppEnv>();
+declare module 'daroyan/app' {
+  interface DaroyanEnv {
+    Variables: {
+      requestId: string;
+    };
+  }
+}
 
 // This is a normal Hono instance.
-app.use('*', logger());
-app.onError((error, c) => {
-  console.error(error);
-  return c.json({ error: 'INTERNAL_ERROR' as const }, 500);
-});
+const app = defineApp()
+  .use('*', logger())
+  .route('/', routes())
+  .onError((error, c) => {
+    console.error(error);
+    return c.json({ error: 'INTERNAL_ERROR' as const }, 500);
+  });
 
 export default app;
 ```
+
+`daroyan/routes` is your file routes as a plain Hono sub-router, and you mount
+it. `route()` copies the sub-router's routes onto your instance and returns the
+same app, so there is still exactly one Hono instance at runtime and no nested
+dispatch — and because the schema merges too, `typeof app` is your complete RPC
+contract, manual routes included.
+
+Two things follow from owning the mount, both of which Daroyan warns about:
+
+- **Mount after your global middleware.** Hono composes handlers in registration
+  order, so middleware registered after the mount never wraps a file route.
+- **Mount at all.** An app that never calls `routes()` is valid Hono; it just
+  serves none of your route files.
 
 `defineApp()` only calls `new Hono()`, so reaching for Hono directly works
 just as well — use whichever reads better:
@@ -106,18 +123,19 @@ just as well — use whichever reads better:
 ```ts
 import { Hono } from 'hono';
 
-export default new Hono<AppEnv>();
+export default new Hono<ProjectEnv>().route('/', routes());
 ```
 
-`defineApp()` earns its keep by binding the app env to `defineHandler()` and
-`defineMiddleware()` project-wide; a plain `new Hono()` app is otherwise
-identical.
+`defineApp()` earns its keep by defaulting its environment to the project's, so
+`defineApp()` and `defineHandler()` agree without a repeated generic; a plain
+`new Hono()` app is otherwise identical.
 
 You can type context variables two ways, and they compose:
 
-- **On the app env**, as above — declare them once on `defineApp<AppEnv>()`.
-  Generated `.daroyan/daroyan.d.ts` binds `defineHandler()` and
-  `defineMiddleware()` to that env throughout the project.
+- **On the project env**, as above — augment `DaroyanEnv` once and every route
+  file's `defineHandler()` and `defineMiddleware()` sees it. Nothing reads your
+  app's source to work this out, which is what lets `app.ts` import the
+  generated router without a type cycle.
 - **Per file**, the Hono-native way — the module that sets a variable also
   declares it, so no central env is required:
 
@@ -129,7 +147,20 @@ You can type context variables two ways, and they compose:
   }
   ```
 
-Use `Bindings` on `defineApp<AppEnv>()` when a handler needs typed `c.env`.
+Use `Bindings` on `DaroyanEnv` when a handler needs typed `c.env` — on Node,
+`@hono/node-server` passes `{ incoming, outgoing }` there on every request:
+
+```ts
+declare module 'daroyan/app' {
+  interface DaroyanEnv {
+    Bindings: HttpBindings;
+  }
+}
+```
+
+`DaroyanEnv` is program-wide, so one TypeScript project has one project
+environment. That matches the v0.1 scope of one Daroyan application per
+TypeScript project.
 
 Daroyan deliberately exposes no `onStart`, `onShutdown`, or server wrapper
 API.
@@ -362,32 +393,35 @@ retain that schema in `typeof app`, so it cannot enter the client type.
 
 ## Generated route table
 
-`.daroyan/entry.ts` is the assembled application: a real file you can open and
-read, holding one chained Hono registration per route. It is what
-`daroyan/entry` resolves to, what runs in development and production, and what
-`AppType` is inferred from — the running application and its client type are
-the same artifact, so they cannot drift.
+`.daroyan/routes.ts` is a real file you can open and read, holding one chained
+Hono registration per route inside a single exported function. It is what
+`daroyan/routes` resolves to, and it imports nothing of yours but the route
+modules themselves:
 
 ```ts
-// .daroyan/entry.ts
-const routes = app
-  .get('/health', ...route0GET)
-  .post('/api/users', ...route1Middleware0, ...route1POST);
-
-export type AppType = typeof routes;
-export default routes;
+// .daroyan/routes.ts
+export function routes() {
+  return new Hono<ProjectEnv>()
+    .get('/health', ...route0GET)
+    .post('/api/users', ...route1Middleware0, ...route1POST);
+}
 ```
 
-Registration happens on the app you exported, so `routes` and your `app` are
-the same Hono instance; the chain exists to give Hono the schema it needs for
-RPC. That also means importing `app/app.ts` directly gives you the instance
-Daroyan registers onto — import `daroyan/entry` when you want the fully routed
-application and its type.
+Because it never imports your app, your app can import it. The chain exists to
+give Hono the schema it needs for RPC, and `route()` merges that schema into
+yours at the mount — so `typeof app` is the whole contract and the running
+application and its client type are the same artifact. There is no generated
+module that is secretly your application: `app/app.ts` is the app, and importing
+it gives you the routed instance.
+
+Error handling stays on your app. The generated router deliberately has no
+`onError`, because Hono's `route()` wraps every copied handler in a compose
+closure when the sub-app carries its own error handler.
 
 ## RPC client
 
 Daroyan generates `.daroyan/client.ts`, and `.daroyan/rpc.ts` re-exports
-`AppType` from the entry for workspaces that publish their types:
+`AppType` from it for workspaces that publish their types:
 
 ```ts
 import { createClient } from './.daroyan/client.ts';
@@ -426,8 +460,9 @@ An API workspace can publish its generated types:
 }
 ```
 
-Set `rpc.enabled` to `false` when the project does not need generated RPC
-or entry declarations.
+Set `rpc.enabled` to `false` when the project does not need a generated client.
+Routing is unaffected: `.daroyan/routes.ts` and its declaration are always
+generated, since mounting them is how the application serves anything.
 
 ## Own the server lifecycle
 
@@ -436,7 +471,8 @@ Node example:
 ```ts
 // app/server.ts
 import { serve } from '@hono/node-server';
-import app from 'daroyan/entry';
+
+import app from './app.ts';
 
 const server = serve({
   fetch: app.fetch,
@@ -452,7 +488,7 @@ Bun example:
 
 ```ts
 // app/server.ts
-import app from 'daroyan/entry';
+import app from './app.ts';
 
 const server = Bun.serve({
   fetch: app.fetch,
@@ -489,7 +525,7 @@ dist/
 ├── server.mjs
 ├── app.mjs
 ├── .daroyan/
-│   └── entry.mjs
+│   └── routes.mjs
 └── routes/
     └── health.mjs
 ```

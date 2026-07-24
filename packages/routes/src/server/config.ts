@@ -67,7 +67,7 @@ export async function validateTypeScriptConfig(options: {
     supportsTypeScriptImportExtensions &&
     rootDirs.includes('.') &&
     rootDirs.includes(generatedTypes) &&
-    // The ambient `modules.d.ts` only takes effect when it is part of the
+    // The ambient `daroyan.d.ts` only takes effect when it is part of the
     // program, and TypeScript's `**/*.ts` glob does not match `.d.ts`, so a
     // declaration-matching pattern is the load-bearing one here.
     includes.some((include) =>

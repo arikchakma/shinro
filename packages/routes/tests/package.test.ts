@@ -42,7 +42,14 @@ test('the package build does not leak the fixture application environment', asyn
     new URL('../dist/app.d.mts', import.meta.url),
     'utf8'
   );
-  expect(declaration).not.toContain('tests/fixtures');
-  expect(declaration).not.toContain('requestId');
-  expect(declaration).toContain('Factory<ProjectEnv');
+  // Doc comments are stripped first: they legitimately show an example env, and
+  // the leak this guards against would be in the declarations themselves.
+  const declared = declaration.replace(/\/\*[\s\S]*?\*\//g, '');
+
+  expect(declared).not.toContain('tests/fixtures');
+  expect(declared).not.toContain('requestId');
+  expect(declared).toContain('Factory<ProjectEnv');
+  // `DaroyanEnv` ships empty and the project fills it in by augmentation, so a
+  // member here would mean a local environment had been baked into the package.
+  expect(declared).toMatch(/interface DaroyanEnv extends Env \{\s*\}/);
 });

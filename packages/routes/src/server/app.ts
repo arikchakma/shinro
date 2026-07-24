@@ -1,9 +1,12 @@
 import { readFile } from 'node:fs/promises';
 
+import { ROUTES_ID } from '../constants.ts';
 import type { NodeView } from './ast.ts';
 import {
   asNode,
+  containsCallTo,
   importedAs,
+  importedFrom,
   isHonoExpression,
   isTransparentExpression,
   parseModule,
@@ -12,6 +15,8 @@ import {
 
 export type AppModuleAnalysis = {
   hasEarlyResponseMiddleware: boolean;
+  mountsRoutes: boolean;
+  registersMiddlewareAfterMount: boolean;
 };
 
 export async function validateAppModule(
@@ -19,6 +24,7 @@ export async function validateAppModule(
 ): Promise<AppModuleAnalysis> {
   const source = await readFile(file, 'utf8');
   const ast = parseModule(file, source, 'app module');
+  const routers = importedFrom(ast, ROUTES_ID, 'routes');
   const factories = importedAs(ast, 'defineApp');
   // `defineApp()` only calls `new Hono()`, so an app module that reaches for
   // Hono directly is just as valid an application root.
@@ -77,7 +83,144 @@ export async function validateAppModule(
     hasEarlyResponseMiddleware: ast.body.some((statement) =>
       isEarlyResponseUseStatement(statement, apps)
     ),
+    mountsRoutes: ast.body.some((statement) =>
+      containsCallTo(statement, routers)
+    ),
+    registersMiddlewareAfterMount: registersMiddlewareAfterMount(
+      ast,
+      apps,
+      routers
+    ),
   };
+}
+
+/**
+ * Hono composes handlers in registration order, so middleware registered after
+ * the mount never wraps a route the mount brought in. Both spellings are
+ * checked: a `use` later in the same chain as the mounting `route`, and a
+ * `app.use(...)` statement after the statement that mounted.
+ */
+function registersMiddlewareAfterMount(
+  ast: ReturnType<typeof parseModule>,
+  apps: Set<string>,
+  routers: Set<string>
+): boolean {
+  if (routers.size === 0) {
+    return false;
+  }
+
+  let mounted = false;
+
+  for (const statement of ast.body) {
+    const declaration =
+      statement.type === 'ExportNamedDeclaration'
+        ? statement.declaration
+        : statement;
+
+    for (const chain of appChains(declaration ?? statement, routers)) {
+      const mount = chain.findIndex((call) => call.mountsRoutes);
+      if (
+        mount !== -1 &&
+        chain.slice(mount + 1).some((call) => call.name === 'use')
+      ) {
+        return true;
+      }
+    }
+
+    if (mounted && isUseStatement(statement, apps)) {
+      return true;
+    }
+    if (containsCallTo(statement, routers)) {
+      mounted = true;
+    }
+  }
+
+  return false;
+}
+
+type ChainCall = { mountsRoutes: boolean; name: string };
+
+/** Every chained call on an expression, ordered base-first. */
+function appChains(value: unknown, routers: Set<string>): ChainCall[][] {
+  const node = asNode(value);
+  if (!node) {
+    return [];
+  }
+
+  if (node.type === 'VariableDeclaration') {
+    const { declarations } = value as {
+      declarations: Array<{ init?: unknown }>;
+    };
+    return declarations.flatMap((variable) =>
+      appChains(variable.init, routers)
+    );
+  }
+  if (
+    node.type === 'ExportDefaultDeclaration' ||
+    node.type === 'ExpressionStatement'
+  ) {
+    return appChains(node.expression ?? node.declaration, routers);
+  }
+  if (isTransparentExpression(node)) {
+    return appChains(node.expression, routers);
+  }
+
+  return node.type === 'CallExpression' ? [chainCalls(node, routers)] : [];
+}
+
+function chainCalls(value: unknown, routers: Set<string>): ChainCall[] {
+  const node = asNode(value);
+  if (!node) {
+    return [];
+  }
+  if (isTransparentExpression(node)) {
+    return chainCalls(node.expression, routers);
+  }
+  if (node.type !== 'CallExpression') {
+    return [];
+  }
+
+  const callee = asNode(node.callee);
+  if (callee?.type !== 'MemberExpression') {
+    return [];
+  }
+
+  const property = asNode(callee.property);
+
+  return [
+    ...chainCalls(callee.object, routers),
+    {
+      // Decided by the argument tree rather than by the method name: only a call
+      // that receives the generated router mounts it, and only its own arguments
+      // can say so.
+      mountsRoutes: (node.arguments ?? []).some((argument) =>
+        containsCallTo(argument, routers)
+      ),
+      name: property?.type === 'Identifier' ? (property.name ?? '') : '',
+    },
+  ];
+}
+
+function isUseStatement(value: unknown, apps: Set<string>): boolean {
+  const statement = asNode(value);
+  if (statement?.type !== 'ExpressionStatement') {
+    return false;
+  }
+
+  const expression = asNode(statement.expression);
+  const callee = asNode(expression?.callee);
+  const object = asNode(callee?.object);
+  const property = asNode(callee?.property);
+
+  return (
+    expression?.type === 'CallExpression' &&
+    callee?.type === 'MemberExpression' &&
+    object?.type === 'Identifier' &&
+    object.name !== undefined &&
+    apps.has(object.name) &&
+    property?.type === 'Identifier' &&
+    property.name === 'use'
+  );
 }
 
 type AppScope = {

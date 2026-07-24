@@ -10,6 +10,7 @@ export type NodeView = {
   arguments?: unknown[];
   body?: unknown;
   callee?: unknown;
+  declaration?: unknown;
   elements?: unknown[];
   expression?: unknown;
   name?: string;
@@ -74,6 +75,67 @@ export function isHonoExpression(
   }
 
   return false;
+}
+
+/**
+ * Collects the local names bound to a named import from one specific module.
+ * Unlike `importedAs`, the source is part of the match, so an unrelated local
+ * that happens to share a name cannot be mistaken for the real binding.
+ */
+export function importedFrom(
+  ast: ReturnType<typeof parseModule>,
+  source: string,
+  importedName: string
+): Set<string> {
+  const locals = new Set<string>();
+
+  for (const statement of ast.body) {
+    if (
+      statement.type !== 'ImportDeclaration' ||
+      statement.source.value !== source
+    ) {
+      continue;
+    }
+
+    for (const specifier of statement.specifiers) {
+      if (
+        specifier.type === 'ImportSpecifier' &&
+        specifier.imported.type === 'Identifier' &&
+        specifier.imported.name === importedName
+      ) {
+        locals.add(specifier.local.name);
+      }
+    }
+  }
+
+  return locals;
+}
+
+/** Whether an expression tree calls any of the given bound names. */
+export function containsCallTo(value: unknown, names: Set<string>): boolean {
+  const node = asNode(value);
+  if (!node || names.size === 0) {
+    return false;
+  }
+
+  if (node.type === 'CallExpression') {
+    const callee = asNode(node.callee);
+    if (
+      callee?.type === 'Identifier' &&
+      callee.name !== undefined &&
+      names.has(callee.name)
+    ) {
+      return true;
+    }
+  }
+
+  return Object.entries(node).some(
+    ([key, child]) =>
+      key !== 'span' &&
+      (Array.isArray(child)
+        ? child.some((item) => containsCallTo(item, names))
+        : containsCallTo(child, names))
+  );
 }
 
 /** Collects the local names bound to a named import from any module. */
