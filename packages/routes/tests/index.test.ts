@@ -2243,8 +2243,90 @@ test('an incompatible TypeScript config receives a copy-pasteable correction', a
     );
 
     expect(warnings.join('\n')).toMatch(
-      /\[daroyan\][\s\S]*tsconfig\.json[\s\S]*"allowImportingTsExtensions": true[\s\S]*"strict": true[\s\S]*"module": "ESNext"[\s\S]*"moduleResolution": "Bundler"[\s\S]*"noEmit": true[\s\S]*"rootDirs"[\s\S]*\.daroyan\/types[\s\S]*\.daroyan\/\*\*\/\*\.d\.ts/i
+      /\[daroyan\][\s\S]*tsconfig\.json[\s\S]*"allowImportingTsExtensions": true[\s\S]*"strict": true[\s\S]*"module": "ESNext"[\s\S]*"moduleResolution": "Bundler"[\s\S]*"noEmit": true[\s\S]*"rootDirs"[\s\S]*\.daroyan\/types[\s\S]*\.daroyan\/\*\*\/\*\.ts/i
     );
+  } finally {
+    await rm(root, { recursive: true });
+  }
+});
+
+test('a custom rpc.outDir is not told to extend the shipped base config', async () => {
+  const root = await mkdtemp(`${tmpdir()}/daroyan-custom-outdir-tsconfig-`);
+  const warnings: string[] = [];
+  const logger = createLogger('silent');
+  logger.warn = (message) => {
+    warnings.push(message);
+  };
+
+  await mkdir(`${root}/src/routes`, { recursive: true });
+  await writeFile(`${root}/src/app.ts`, temporaryAppSource);
+  await writeFile(
+    `${root}/tsconfig.json`,
+    JSON.stringify({ compilerOptions: { strict: false }, include: ['src'] })
+  );
+
+  try {
+    await resolveConfig(
+      {
+        configFile: false,
+        customLogger: logger,
+        plugins: [daroyan({ rpc: { outDir: 'generated' } })],
+        root,
+      },
+      'serve'
+    );
+
+    const warning = warnings.join('\n');
+    expect(warning).toContain('generated/**/*.ts');
+    expect(warning).not.toContain('"extends": "daroyan/tsconfig"');
+  } finally {
+    await rm(root, { recursive: true });
+  }
+});
+
+test('a TypeScript config extending a list of bases is understood', async () => {
+  const root = await mkdtemp(`${tmpdir()}/daroyan-extends-list-`);
+  const warnings: string[] = [];
+  const logger = createLogger('silent');
+  logger.warn = (message) => {
+    warnings.push(message);
+  };
+
+  await mkdir(`${root}/src/routes`, { recursive: true });
+  await writeFile(`${root}/src/app.ts`, temporaryAppSource);
+  await writeFile(
+    `${root}/base.strict.json`,
+    JSON.stringify({
+      compilerOptions: {
+        allowImportingTsExtensions: true,
+        noEmit: true,
+        strict: true,
+      },
+    })
+  );
+  await writeFile(
+    `${root}/base.modules.json`,
+    JSON.stringify({
+      compilerOptions: {
+        module: 'Preserve',
+        moduleResolution: 'Bundler',
+        rootDirs: ['.', './.daroyan/types'],
+      },
+      include: ['src', '.daroyan/**/*.ts'],
+    })
+  );
+  await writeFile(
+    `${root}/tsconfig.json`,
+    JSON.stringify({ extends: ['./base.strict.json', './base.modules.json'] })
+  );
+
+  try {
+    await resolveConfig(
+      { configFile: false, customLogger: logger, plugins: [daroyan()], root },
+      'serve'
+    );
+
+    expect(warnings.join('\n')).not.toContain('tsconfig.json');
   } finally {
     await rm(root, { recursive: true });
   }

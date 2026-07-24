@@ -15,9 +15,11 @@ type TypeScriptConfig = {
     rootDirs?: string[];
     strict?: boolean;
   };
-  extends?: string;
+  extends?: string | string[];
   include?: string[];
 };
+
+const DEFAULT_OUTPUT_DIRECTORY = '.daroyan';
 
 export async function validateTypeScriptConfig(options: {
   logger: Logger;
@@ -54,37 +56,51 @@ export async function validateTypeScriptConfig(options: {
     (config.compilerOptions.noEmit === true ||
       config.compilerOptions.emitDeclarationOnly === true ||
       config.compilerOptions.rewriteRelativeImportExtensions === true);
+  // `preserve` is the modern companion to `moduleResolution: bundler` and
+  // behaves identically for Daroyan's purposes, so accept it alongside
+  // `esnext` rather than warning about a perfectly good configuration.
+  const moduleSetting = config.compilerOptions?.module?.toLowerCase();
   const valid =
     config.compilerOptions?.strict === true &&
-    config.compilerOptions.module?.toLowerCase() === 'esnext' &&
+    (moduleSetting === 'esnext' || moduleSetting === 'preserve') &&
     config.compilerOptions.moduleResolution?.toLowerCase() === 'bundler' &&
     supportsTypeScriptImportExtensions &&
     rootDirs.includes('.') &&
     rootDirs.includes(generatedTypes) &&
-    includes.some(
-      (include) =>
-        include === `${normalizeConfigPath(generatedDirectory)}/**/*.d.ts` ||
-        include === `${normalizeConfigPath(generatedDirectory)}/**/*`
+    includes.some((include) =>
+      [
+        `${normalizeConfigPath(generatedDirectory)}/**/*.d.ts`,
+        `${normalizeConfigPath(generatedDirectory)}/**/*.ts`,
+        `${normalizeConfigPath(generatedDirectory)}/**/*`,
+      ].includes(include)
     );
 
   if (valid) {
     return;
   }
 
+  // The shipped base config hardcodes the default `.daroyan` location, so it
+  // can only be recommended when the project actually generates there.
+  const shippedBaseApplies = generatedDirectory === DEFAULT_OUTPUT_DIRECTORY;
+
   options.logger.warn(
     [
       missing
         ? `[daroyan] ${file} is missing. Daroyan needs TypeScript configuration for generated route types.`
         : `[daroyan] ${file} is missing settings required for generated route types.`,
-      'Extend the shipped base configuration:',
-      JSON.stringify(
-        {
-          extends: 'daroyan/tsconfig',
-        },
-        undefined,
-        2
-      ),
-      'Or merge this configuration manually:',
+      ...(shippedBaseApplies
+        ? [
+            'Extend the shipped base configuration:',
+            JSON.stringify({ extends: 'daroyan/tsconfig' }, undefined, 2),
+            'Or merge this configuration manually:',
+          ]
+        : [
+            `Because rpc.outDir is ${JSON.stringify(
+              generatedDirectory
+            )} rather than ${JSON.stringify(
+              DEFAULT_OUTPUT_DIRECTORY
+            )}, the shipped daroyan/tsconfig base does not match this project. Merge this configuration instead:`,
+          ]),
       JSON.stringify(
         {
           compilerOptions: {
@@ -95,7 +111,7 @@ export async function validateTypeScriptConfig(options: {
             noEmit: true,
             rootDirs: ['.', `./${generatedDirectory}/types`],
           },
-          include: ['src', `${generatedDirectory}/**/*.d.ts`],
+          include: ['src', `${generatedDirectory}/**/*.ts`],
         },
         undefined,
         2
@@ -119,32 +135,56 @@ async function readTypeScriptConfig(
     return config;
   }
 
-  let baseFile: string;
-  if (config.extends.startsWith('.') || config.extends.startsWith('/')) {
-    const unresolvedBase = resolve(dirname(file), config.extends);
-    baseFile = extname(unresolvedBase)
-      ? unresolvedBase
-      : `${unresolvedBase}.json`;
-  } else {
-    try {
-      baseFile = createRequire(file).resolve(config.extends);
-    } catch {
-      return config;
+  // TypeScript 5.0 allows `extends` to be a list, where later entries win.
+  const parents = Array.isArray(config.extends)
+    ? config.extends
+    : [config.extends];
+  let merged: TypeScriptConfig = {};
+
+  for (const parent of parents) {
+    if (typeof parent !== 'string') {
+      continue;
     }
-  }
-  const base = await readTypeScriptConfig(baseFile, seen);
-  if (!base) {
-    return config;
+
+    const baseFile = resolveExtends(file, parent);
+    const base = baseFile
+      ? await readTypeScriptConfig(baseFile, seen)
+      : undefined;
+    if (!base) {
+      continue;
+    }
+
+    merged = {
+      ...merged,
+      ...base,
+      compilerOptions: {
+        ...merged.compilerOptions,
+        ...base.compilerOptions,
+      },
+    };
   }
 
   return {
-    ...base,
+    ...merged,
     ...config,
     compilerOptions: {
-      ...base.compilerOptions,
+      ...merged.compilerOptions,
       ...config.compilerOptions,
     },
   };
+}
+
+function resolveExtends(file: string, parent: string): string | undefined {
+  if (parent.startsWith('.') || parent.startsWith('/')) {
+    const unresolvedBase = resolve(dirname(file), parent);
+    return extname(unresolvedBase) ? unresolvedBase : `${unresolvedBase}.json`;
+  }
+
+  try {
+    return createRequire(file).resolve(parent);
+  } catch {
+    return undefined;
+  }
 }
 
 function normalizeConfigPath(path: string): string {

@@ -57,6 +57,15 @@ without any hand-written `paths`:
 ambient module declaration), and `daroyan/app` resolves through the package
 `exports` — neither needs a `paths` entry.
 
+The base config's `include` covers `.daroyan/**/*.ts`, so the generated entry
+is type checked with the rest of your project rather than only where it
+happens to be imported.
+
+The shipped base hardcodes the default `.daroyan` location. A project that
+sets `rpc.outDir` elsewhere cannot extend it and should merge the equivalent
+`rootDirs` and `include` entries by hand; Daroyan's warning prints them for
+the directory you configured.
+
 Ignore generated and build output:
 
 ```gitignore

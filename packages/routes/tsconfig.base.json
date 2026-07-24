@@ -23,6 +23,6 @@
     "${configDir}/src",
     "${configDir}/tests",
     "${configDir}/vite.config.ts",
-    "${configDir}/.daroyan/**/*.d.ts"
+    "${configDir}/.daroyan/**/*.ts"
   ]
 }
