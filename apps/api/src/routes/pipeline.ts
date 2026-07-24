@@ -1,12 +1,18 @@
-import { defineHandler } from "daroyan/app";
+import { defineHandler } from 'daroyan/app';
+
+declare module 'hono' {
+  interface ContextVariableMap {
+    pipelineOrder: string[];
+  }
+}
 
 export const GET = defineHandler(
   async (c, next) => {
-    c.set("pipelineOrder", ["first"]);
+    c.set('pipelineOrder', ['first']);
     await next();
   },
   async (c, next) => {
-    c.var.pipelineOrder.push("second");
+    c.var.pipelineOrder.push('second');
     await next();
   },
   (c) => {
@@ -14,7 +20,7 @@ export const GET = defineHandler(
       {
         order: c.var.pipelineOrder,
       },
-      200,
+      200
     );
-  },
+  }
 );
