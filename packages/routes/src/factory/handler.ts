@@ -31,7 +31,7 @@ type RouteEnv<Route extends AnyRoute | undefined> = Route extends AnyRoute
 
 type RoutePath<Route extends AnyRoute | undefined> = Route extends AnyRoute
   ? Route['path']
-  : '/';
+  : string;
 
 type MiddlewarePath<Route extends AnyRoute | undefined> = Route extends AnyRoute
   ? Route['path']

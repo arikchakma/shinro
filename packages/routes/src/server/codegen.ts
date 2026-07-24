@@ -126,7 +126,7 @@ export async function createSources(
   });
 
   const rpcImports = [
-    'import { Hono, type Context } from "hono";',
+    'import { Hono } from "hono";',
     'import type { ProjectEnv } from "daroyan/app";',
     `import configuredApp from ${JSON.stringify(generatedImport(outputDirectory, appFile))};`,
     ...routes.flatMap((route, index) => [
@@ -160,12 +160,10 @@ export async function createSources(
 
     return route.methods.map(
       (method) =>
-        `  .${method.toLowerCase()}(${JSON.stringify(route.path)}, ${rpcMiddlewareSpreads(
+        `  .${method.toLowerCase()}(${JSON.stringify(route.path)}, ${middlewareSpreads(
           route,
           index
-        )}...(route${index}${method} as RouteHandlers<typeof route${index}${method}, ${JSON.stringify(
-          route.path
-        )}>))`
+        )}...route${index}${method})`
     );
   });
 
@@ -273,15 +271,6 @@ export async function createSources(
       GENERATED_NOTICE,
       ...rpcImports,
       '',
-      'type WithRoutePath<Value, Path extends string> =',
-      '  Value extends (context: Context<infer Env, any, infer Input>, next: infer Next) => infer Result',
-      '    ? (context: Context<Env, Path, Input>, next: Next) => Result',
-      '    : never;',
-      '',
-      'type RouteHandlers<Handlers, Path extends string> = {',
-      '  [Index in keyof Handlers]: WithRoutePath<Handlers[Index], Path>;',
-      '};',
-      '',
       `const routes = new Hono<ProjectEnv>()`,
       `  .route("/", configuredApp)${rpcRegistrations.length ? '\n' : ';'}${rpcRegistrations.join('\n')}${rpcRegistrations.length ? ';' : ''}`,
       '',
@@ -309,15 +298,6 @@ function middlewareSpreads(route: Route, routeIndex: number): string {
       (_, middlewareIndex) =>
         `...route${routeIndex}Middleware${middlewareIndex}, `
     )
-    .join('');
-}
-
-function rpcMiddlewareSpreads(route: Route, routeIndex: number): string {
-  return route.middleware
-    .map((_, middlewareIndex) => {
-      const name = `route${routeIndex}Middleware${middlewareIndex}`;
-      return `...(${name} as RouteHandlers<typeof ${name}, ${JSON.stringify(route.path)}>), `;
-    })
     .join('');
 }
 
