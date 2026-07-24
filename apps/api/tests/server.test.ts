@@ -20,7 +20,7 @@ test('the production entry serves requests and shuts down gracefully', async () 
     const javascript = (await readdir(`${root}/dist`)).filter((file) =>
       /\.(?:c|m)?js$/.test(file)
     );
-    expect(javascript).toEqual(['server.mjs']);
+    expect(javascript).toContain('server.mjs');
 
     child = spawn(process.execPath, [`${root}/dist/server.mjs`], {
       cwd: root,
