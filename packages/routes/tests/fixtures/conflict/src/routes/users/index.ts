@@ -1,3 +1,3 @@
-import { defineHandler } from "daroyan/app";
+import { defineHandler } from 'daroyan/app';
 
-export const GET = defineHandler((c) => c.json({ source: "index" as const }));
+export const GET = defineHandler((c) => c.json({ source: 'index' as const }));

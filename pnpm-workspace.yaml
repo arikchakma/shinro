@@ -6,23 +6,23 @@ packages:
 catalogMode: prefer
 
 catalog:
-  "@types/node": ^24
+  '@types/node': ^24
   typescript: ^5
   vite: npm:@voidzero-dev/vite-plus-core@latest
   vitest: ^4.0.0
   vite-plus: latest
-  "@typescript/native-preview": 7.0.0-dev.20260707.2
-  "@hono/zod-validator": ^0.9.0
+  '@typescript/native-preview': 7.0.0-dev.20260707.2
+  '@hono/zod-validator': ^0.9.0
   zod: ^4.4.3
-  "@hono/node-server": ^2.0.11
+  '@hono/node-server': ^2.0.11
   minimatch: ^10.2.5
 overrides:
-  vite: "catalog:"
-  vitest: "catalog:"
+  vite: 'catalog:'
+  vitest: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite
     - vitest
   allowedVersions:
-    vite: "*"
-    vitest: "*"
+    vite: '*'
+    vitest: '*'

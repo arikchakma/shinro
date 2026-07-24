@@ -1,3 +1,3 @@
-import { defineApp } from "daroyan/app";
+import { defineApp } from 'daroyan/app';
 
 export default defineApp();

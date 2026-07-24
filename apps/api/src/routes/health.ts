@@ -1,4 +1,4 @@
-import { defineHandler } from "daroyan/app";
+import { defineHandler } from 'daroyan/app';
 
 export const GET = defineHandler((c) => {
   return c.json(
@@ -6,6 +6,6 @@ export const GET = defineHandler((c) => {
       ok: true as const,
       requestId: c.var.requestId,
     },
-    200,
+    200
   );
 });

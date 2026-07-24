@@ -1,6 +1,7 @@
-import { serve } from "@hono/node-server";
-import app from "daroyan/entry";
-import { shutdown } from "./shutdown.ts";
+import { serve } from '@hono/node-server';
+import app from 'daroyan/entry';
+
+import { shutdown } from './shutdown.ts';
 
 const server = serve(
   {
@@ -9,13 +10,13 @@ const server = serve(
   },
   (info) => {
     console.info(`[api] Listening on http://localhost:${info.port}`);
-  },
+  }
 );
 
-process.once("SIGINT", () => {
-  void shutdown(server, "SIGINT");
+process.once('SIGINT', () => {
+  void shutdown(server, 'SIGINT');
 });
 
-process.once("SIGTERM", () => {
-  void shutdown(server, "SIGTERM");
+process.once('SIGTERM', () => {
+  void shutdown(server, 'SIGTERM');
 });

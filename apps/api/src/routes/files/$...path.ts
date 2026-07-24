@@ -1,11 +1,12 @@
-import { defineHandler } from "daroyan/app";
-import type { Route } from "./+types/$...path";
+import { defineHandler } from 'daroyan/app';
+
+import type { Route } from './+types/$...path';
 
 export const GET = defineHandler<Route.Handler>((c) => {
   return c.json(
     {
-      path: c.req.param("path"),
+      path: c.req.param('path'),
     },
-    200,
+    200
   );
 });

@@ -1,7 +1,15 @@
-import type { Env } from "hono";
-import { createFactory, type Factory } from "hono/factory";
-import type { BlankInput, H, Handler, HandlerResponse, Input } from "hono/types";
-import type { ProjectEnv } from "../app.ts";
+import type { Env } from 'hono';
+import { createFactory } from 'hono/factory';
+import type { Factory } from 'hono/factory';
+import type {
+  BlankInput,
+  H,
+  Handler,
+  HandlerResponse,
+  Input,
+} from 'hono/types';
+
+import type { ProjectEnv } from '../app.ts';
 
 export type DaroyanRoute<
   T extends {
@@ -18,13 +26,15 @@ type AnyRoute = DaroyanRoute<{
 }>;
 
 type RouteEnv<Route extends AnyRoute | undefined> = Route extends AnyRoute
-  ? Route["env"]
+  ? Route['env']
   : ProjectEnv;
 
-type RoutePath<Route extends AnyRoute | undefined> = Route extends AnyRoute ? Route["path"] : "/";
+type RoutePath<Route extends AnyRoute | undefined> = Route extends AnyRoute
+  ? Route['path']
+  : '/';
 
 type MiddlewarePath<Route extends AnyRoute | undefined> = Route extends AnyRoute
-  ? Route["path"]
+  ? Route['path']
   : string;
 
 type DefineHandler = {
@@ -33,7 +43,7 @@ type DefineHandler = {
     I extends Input = BlankInput,
     R extends HandlerResponse<any> = HandlerResponse<any>,
   >(
-    handler: Handler<RouteEnv<Route>, RoutePath<Route>, I, R>,
+    handler: Handler<RouteEnv<Route>, RoutePath<Route>, I, R>
   ): [Handler<RouteEnv<Route>, RoutePath<Route>, I, R>];
   <
     Route extends AnyRoute | undefined = undefined,
@@ -42,7 +52,7 @@ type DefineHandler = {
     R2 extends HandlerResponse<any> = HandlerResponse<any>,
   >(
     middleware: H<RouteEnv<Route>, MiddlewarePath<Route>, I, R1>,
-    handler: Handler<RouteEnv<Route>, MiddlewarePath<Route>, I, R2>,
+    handler: Handler<RouteEnv<Route>, MiddlewarePath<Route>, I, R2>
   ): [
     H<RouteEnv<Route>, MiddlewarePath<Route>, I, R1>,
     Handler<RouteEnv<Route>, MiddlewarePath<Route>, I, R2>,
@@ -52,7 +62,10 @@ type DefineHandler = {
     const Handlers extends [
       H<RouteEnv<Route>, MiddlewarePath<Route>>,
       ...H<RouteEnv<Route>, MiddlewarePath<Route>>[],
-    ] = [H<RouteEnv<Route>, MiddlewarePath<Route>>, ...H<RouteEnv<Route>, MiddlewarePath<Route>>[]],
+    ] = [
+      H<RouteEnv<Route>, MiddlewarePath<Route>>,
+      ...H<RouteEnv<Route>, MiddlewarePath<Route>>[],
+    ],
   >(
     ...handlers: Handlers
   ): Handlers;

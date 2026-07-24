@@ -1,8 +1,11 @@
-import type { ServerType } from "@hono/node-server";
+import type { ServerType } from '@hono/node-server';
 
 let stopping: Promise<void> | undefined;
 
-export function shutdown(server: ServerType, signal: NodeJS.Signals): Promise<void> {
+export function shutdown(
+  server: ServerType,
+  signal: NodeJS.Signals
+): Promise<void> {
   if (stopping) {
     return stopping;
   }
@@ -15,12 +18,12 @@ export function shutdown(server: ServerType, signal: NodeJS.Signals): Promise<vo
         return;
       }
 
-      console.info("[api] HTTP server closed");
+      console.info('[api] HTTP server closed');
       resolve();
     });
   }).catch((error: unknown) => {
     process.exitCode = 1;
-    console.error("[api] Graceful shutdown failed", error);
+    console.error('[api] Graceful shutdown failed', error);
   });
 
   return stopping;

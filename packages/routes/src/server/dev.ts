@@ -1,6 +1,8 @@
-import { spawn, type ChildProcess } from "node:child_process";
-import { once } from "node:events";
-import type { Logger } from "vite-plus";
+import { spawn } from 'node:child_process';
+import type { ChildProcess } from 'node:child_process';
+import { once } from 'node:events';
+
+import type { Logger } from 'vite-plus';
 
 const RUNNER_SOURCE = `
 import { createServer, createServerModuleRunner } from "vite-plus";
@@ -71,32 +73,38 @@ export class DevelopmentProcess {
       .catch((error: unknown) => {
         this.#logger.error(
           `[daroyan] Failed to restart the development server entry: ${
-            error instanceof Error ? (error.stack ?? error.message) : String(error)
-          }`,
+            error instanceof Error
+              ? (error.stack ?? error.message)
+              : String(error)
+          }`
         );
       });
   }
 
   #spawnChild(): void {
-    const child = spawn(process.execPath, ["--input-type=module", "--eval", RUNNER_SOURCE], {
-      cwd: this.#root,
-      env: {
-        ...process.env,
-        DAROYAN_DEV_CHILD: "1",
-        DAROYAN_DEV_CONFIG: this.#configFile ?? "",
-        DAROYAN_DEV_ENTRY: this.#entry,
-        DAROYAN_DEV_ROOT: this.#root,
-      },
-      stdio: "inherit",
-    });
+    const child = spawn(
+      process.execPath,
+      ['--input-type=module', '--eval', RUNNER_SOURCE],
+      {
+        cwd: this.#root,
+        env: {
+          ...process.env,
+          DAROYAN_DEV_CHILD: '1',
+          DAROYAN_DEV_CONFIG: this.#configFile ?? '',
+          DAROYAN_DEV_ENTRY: this.#entry,
+          DAROYAN_DEV_ROOT: this.#root,
+        },
+        stdio: 'inherit',
+      }
+    );
     this.#child = child;
-    child.once("exit", (code, signal) => {
+    child.once('exit', (code, signal) => {
       if (this.#child === child) {
         this.#child = undefined;
       }
       if (!this.#closed && code !== 0) {
         this.#logger.error(
-          `[daroyan] Development server entry exited unexpectedly (${signal ?? `code ${code}`}).`,
+          `[daroyan] Development server entry exited unexpectedly (${signal ?? `code ${code}`}).`
         );
       }
     });
@@ -108,14 +116,14 @@ export class DevelopmentProcess {
       return;
     }
 
-    child.kill("SIGTERM");
+    child.kill('SIGTERM');
     const forceTimer = setTimeout(() => {
       if (child.exitCode === null && child.signalCode === null) {
-        child.kill("SIGKILL");
+        child.kill('SIGKILL');
       }
     }, 10_000);
     try {
-      await once(child, "exit");
+      await once(child, 'exit');
     } finally {
       clearTimeout(forceTimer);
     }

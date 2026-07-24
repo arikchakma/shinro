@@ -1,6 +1,7 @@
-import type { Env } from "hono";
-import type { MiddlewareHandler } from "hono/types";
-import type { ProjectEnv } from "../app.ts";
+import type { Env } from 'hono';
+import type { MiddlewareHandler } from 'hono/types';
+
+import type { ProjectEnv } from '../app.ts';
 
 export type DaroyanMiddleware<
   T extends {
@@ -15,26 +16,26 @@ type AnyMiddleware = DaroyanMiddleware<{
 }>;
 
 type DirectoryMiddlewarePath<Middleware extends AnyMiddleware | undefined> =
-  Middleware extends AnyMiddleware ? Middleware["path"] : string;
+  Middleware extends AnyMiddleware ? Middleware['path'] : string;
 
 export function defineMiddleware<
   Middleware extends AnyMiddleware | undefined = undefined,
   const T extends [
     MiddlewareHandler<
-      Middleware extends AnyMiddleware ? Middleware["env"] : ProjectEnv,
+      Middleware extends AnyMiddleware ? Middleware['env'] : ProjectEnv,
       DirectoryMiddlewarePath<Middleware>
     >,
     ...MiddlewareHandler<
-      Middleware extends AnyMiddleware ? Middleware["env"] : ProjectEnv,
+      Middleware extends AnyMiddleware ? Middleware['env'] : ProjectEnv,
       DirectoryMiddlewarePath<Middleware>
     >[],
   ] = [
     MiddlewareHandler<
-      Middleware extends AnyMiddleware ? Middleware["env"] : ProjectEnv,
+      Middleware extends AnyMiddleware ? Middleware['env'] : ProjectEnv,
       DirectoryMiddlewarePath<Middleware>
     >,
     ...MiddlewareHandler<
-      Middleware extends AnyMiddleware ? Middleware["env"] : ProjectEnv,
+      Middleware extends AnyMiddleware ? Middleware['env'] : ProjectEnv,
       DirectoryMiddlewarePath<Middleware>
     >[],
   ],

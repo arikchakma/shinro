@@ -4,10 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "ready": "vp fmt && vp lint && vp run -r test && vp run -r build",
     "dev": "vp run website#dev",
     "dev:api": "vp run api#dev",
-    "prepare": "vp config"
+    "prepare": "vp config",
+    "ready": "vp fmt && vp lint && vp run -r test && vp run -r build"
   },
   "devDependencies": {
     "vite-plus": "catalog:"

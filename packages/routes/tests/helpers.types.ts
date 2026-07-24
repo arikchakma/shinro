@@ -1,12 +1,11 @@
-import {
-  type DaroyanMiddleware,
-  type DaroyanRoute,
-  defineHandler,
-  defineMiddleware,
-  type ProjectEnv,
-} from "../src/app.ts";
+import { defineHandler, defineMiddleware } from '../src/app.ts';
+import type {
+  DaroyanMiddleware,
+  DaroyanRoute,
+  ProjectEnv,
+} from '../src/app.ts';
 
-defineHandler((c) => c.text("ok"));
+defineHandler((c) => c.text('ok'));
 defineMiddleware(async (_c, next) => {
   await next();
 });
@@ -24,14 +23,14 @@ defineMiddleware();
 
 type TeamMiddleware = DaroyanMiddleware<{
   env: ProjectEnv;
-  path: "/teams/:teamId";
+  path: '/teams/:teamId';
 }>;
 
 defineMiddleware<TeamMiddleware>(async (c, next) => {
-  const teamId: string = c.req.param("teamId");
+  const teamId: string = c.req.param('teamId');
 
   // @ts-expect-error An unknown parameter is possibly undefined.
-  const memberId: string = c.req.param("memberId");
+  const memberId: string = c.req.param('memberId');
 
   void memberId;
   void teamId;
@@ -41,14 +40,14 @@ defineMiddleware<TeamMiddleware>(async (c, next) => {
 type TeamRoute = DaroyanRoute<{
   env: ProjectEnv;
   params: { teamId: string };
-  path: "/teams/:teamId";
+  path: '/teams/:teamId';
 }>;
 
 defineHandler<TeamRoute>((c) => {
-  const teamId: string = c.req.param("teamId");
+  const teamId: string = c.req.param('teamId');
 
   // @ts-expect-error An unknown parameter is possibly undefined.
-  const memberId: string = c.req.param("memberId");
+  const memberId: string = c.req.param('memberId');
 
   return c.json({ memberId, teamId });
 });

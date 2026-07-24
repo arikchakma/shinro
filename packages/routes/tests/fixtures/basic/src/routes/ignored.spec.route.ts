@@ -1,3 +1,5 @@
-import { defineHandler } from "daroyan/app";
+import { defineHandler } from 'daroyan/app';
 
-export const GET = defineHandler((c) => c.json({ shouldNotExist: true as const }));
+export const GET = defineHandler((c) =>
+  c.json({ shouldNotExist: true as const })
+);

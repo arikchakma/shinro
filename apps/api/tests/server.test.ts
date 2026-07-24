@@ -1,44 +1,50 @@
-import { spawn, type ChildProcess } from "node:child_process";
-import { readdir } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
-import { build } from "vite-plus";
-import { expect, test } from "vite-plus/test";
+import { spawn } from 'node:child_process';
+import type { ChildProcess } from 'node:child_process';
+import { readdir } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 
-test("the production entry serves requests and shuts down gracefully", async () => {
-  const root = fileURLToPath(new URL("..", import.meta.url));
+import { build } from 'vite-plus';
+import { expect, test } from 'vite-plus/test';
+
+test('the production entry serves requests and shuts down gracefully', async () => {
+  const root = fileURLToPath(new URL('..', import.meta.url));
   let child: ChildProcess | undefined;
 
   try {
     await build({
       configFile: `${root}/vite.config.ts`,
-      logLevel: "silent",
+      logLevel: 'silent',
       root,
     });
 
-    const javascript = (await readdir(`${root}/dist`)).filter((file) => /\.(?:c|m)?js$/.test(file));
-    expect(javascript).toEqual(["server.mjs"]);
+    const javascript = (await readdir(`${root}/dist`)).filter((file) =>
+      /\.(?:c|m)?js$/.test(file)
+    );
+    expect(javascript).toEqual(['server.mjs']);
 
     child = spawn(process.execPath, [`${root}/dist/server.mjs`], {
       cwd: root,
       env: {
         ...process.env,
-        PORT: "0",
+        PORT: '0',
       },
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: ['ignore', 'pipe', 'pipe'],
     });
     const output = collectOutput(child);
-    const port = Number((await output.waitFor(/Listening on http:\/\/localhost:(\d+)/))[1]);
+    const port = Number(
+      (await output.waitFor(/Listening on http:\/\/localhost:(\d+)/))[1]
+    );
     const response = await fetch(`http://127.0.0.1:${port}/v1/health`);
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ ok: true });
 
-    child.kill("SIGTERM");
+    child.kill('SIGTERM');
     await output.waitFor(/HTTP server closed/);
     await expect(exitCode(child)).resolves.toBe(0);
   } finally {
     if (child && child.exitCode === null) {
-      child.kill("SIGKILL");
+      child.kill('SIGKILL');
     }
   }
 }, 15_000);
@@ -46,7 +52,7 @@ test("the production entry serves requests and shuts down gracefully", async () 
 function collectOutput(child: ChildProcess): {
   waitFor: (pattern: RegExp) => Promise<RegExpMatchArray>;
 } {
-  let output = "";
+  let output = '';
   const waiters = new Set<() => void>();
   const onData = (chunk: Buffer) => {
     output += chunk.toString();
@@ -54,8 +60,8 @@ function collectOutput(child: ChildProcess): {
       notify();
     }
   };
-  child.stdout?.on("data", onData);
-  child.stderr?.on("data", onData);
+  child.stdout?.on('data', onData);
+  child.stderr?.on('data', onData);
 
   return {
     waitFor(pattern) {
@@ -86,7 +92,7 @@ function exitCode(child: ChildProcess): Promise<number | null> {
   }
 
   return new Promise((resolve, reject) => {
-    child.once("error", reject);
-    child.once("exit", resolve);
+    child.once('error', reject);
+    child.once('exit', resolve);
   });
 }
