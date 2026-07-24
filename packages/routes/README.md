@@ -301,6 +301,17 @@ client. The file owns the complete `/admin` namespace, so it cannot coexist
 with `app/routes/admin/**` or a dynamic file route that can match beneath
 that namespace.
 
+`basePath` prefixes **file routes only**. Routes you register on the app
+yourself are left exactly as written, so a manual route that should sit under
+the prefix has to spell it out:
+
+```ts
+daroyan({ basePath: '/v1' });
+
+// app/app.ts — file routes become /v1/*, this one does not unless you say so.
+const app = defineApp().get('/v1/manual', handler);
+```
+
 Manual routes are also valid:
 
 ```ts

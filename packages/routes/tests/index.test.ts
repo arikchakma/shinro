@@ -577,6 +577,28 @@ test('basePath prefixes normalized runtime and RPC routes', async () => {
   expect(manifest.routes[0]?.path).toBe('/v1/health');
 });
 
+test('basePath collapses repeated separators instead of emptying a segment', async () => {
+  const root = fileURLToPath(new URL('./fixtures/basepath', import.meta.url));
+
+  await resolveConfig(
+    {
+      configFile: false,
+      plugins: [daroyan({ basePath: '//v1//api//' })],
+      root,
+    },
+    'serve'
+  );
+  const manifest = JSON.parse(
+    await readFile(
+      new URL('./fixtures/basepath/.daroyan/manifest.json', import.meta.url),
+      'utf8'
+    )
+  ) as { basePath: string; routes: Array<{ path: string }> };
+
+  expect(manifest.basePath).toBe('/v1/api');
+  expect(manifest.routes[0]?.path).toBe('/v1/api/health');
+});
+
 test('an invalid basePath fails with the Daroyan option name', async () => {
   const root = fileURLToPath(new URL('./fixtures/basepath', import.meta.url));
 

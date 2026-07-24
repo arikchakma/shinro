@@ -7,7 +7,10 @@ export function normalizeBasePath(basePath: string): string {
     );
   }
 
-  return basePath === '/' ? '/' : basePath.replace(/\/+$/, '');
+  // Collapse repeated separators before trimming the trailing one, so a
+  // basePath such as "//v1/" cannot register routes under an empty segment.
+  const collapsed = basePath.replace(/\/{2,}/g, '/').replace(/\/+$/, '');
+  return collapsed === '' ? '/' : collapsed;
 }
 
 export function withBasePath(basePath: string, routePath: string): string {
