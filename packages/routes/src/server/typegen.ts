@@ -102,6 +102,13 @@ async function withGenerationLock<T>(
         throw error;
       }
 
+      // A process killed mid-generation leaves its lock behind. Without this,
+      // every later run would wait out the full timeout and then fail, so the
+      // recorded owner is checked and an abandoned lock is reclaimed.
+      if (await removeStaleLock(lockFile)) {
+        continue;
+      }
+
       if (Date.now() - startedAt >= GENERATION_LOCK_TIMEOUT_MS) {
         throw new Error(
           `[daroyan] Timed out waiting for another process to finish generating ${outputDirectory}. If no typegen process is running, remove ${lockFile} and try again.`
@@ -122,6 +129,37 @@ async function withGenerationLock<T>(
       await rm(lockFile, { force: true });
     }
   }
+}
+
+// Returns true when the lock belonged to a process that no longer exists and
+// was removed, so the caller can retry immediately.
+async function removeStaleLock(lockFile: string): Promise<boolean> {
+  let owner: number;
+
+  try {
+    owner = Number.parseInt(await readFile(lockFile, 'utf8'), 10);
+  } catch (error) {
+    // The holder released it in the meantime; retrying is enough.
+    return (error as NodeJS.ErrnoException).code === 'ENOENT';
+  }
+
+  if (!Number.isInteger(owner) || owner <= 0) {
+    return false;
+  }
+
+  try {
+    // Signal 0 performs the permission and existence check without delivering
+    // anything, so a live owner keeps its lock.
+    process.kill(owner, 0);
+    return false;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ESRCH') {
+      return false;
+    }
+  }
+
+  await rm(lockFile, { force: true });
+  return true;
 }
 
 async function assertFileTargets(files: string[]): Promise<void> {

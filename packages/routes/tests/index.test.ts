@@ -1,3 +1,5 @@
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
 import {
   mkdir,
   mkdtemp,
@@ -576,6 +578,40 @@ test('basePath prefixes normalized runtime and RPC routes', async () => {
   expect(manifest.basePath).toBe('/v1');
   expect(manifest.routes[0]?.path).toBe('/v1/health');
 });
+
+test('a lock left by a dead process is reclaimed instead of timing out', async () => {
+  const root = await mkdtemp(`${tmpdir()}/daroyan-stale-lock-`);
+
+  await mkdir(`${root}/src/routes`, { recursive: true });
+  await writeFile(`${root}/src/app.ts`, temporaryAppSource);
+  await writeFile(
+    `${root}/src/routes/health.ts`,
+    'export const GET = [(c: any) => c.json({ ok: true })] as const;\n'
+  );
+
+  // Reap a real process so its pid is genuinely gone rather than guessed.
+  const dead = spawn(process.execPath, ['--eval', '']);
+  await once(dead, 'exit');
+  await writeFile(`${root}/.daroyan.lock`, `${dead.pid}\n`);
+
+  try {
+    const startedAt = Date.now();
+    await resolveConfig(
+      { configFile: false, plugins: [daroyan()], root },
+      'serve'
+    );
+
+    expect(Date.now() - startedAt).toBeLessThan(10_000);
+    await expect(
+      readFile(`${root}/.daroyan/entry.ts`, 'utf8')
+    ).resolves.toContain('.get("/health"');
+    await expect(
+      readFile(`${root}/.daroyan.lock`, 'utf8')
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+  } finally {
+    await rm(root, { recursive: true });
+  }
+}, 40_000);
 
 test('the development child leaves generation and diagnostics to its parent', async () => {
   const root = await mkdtemp(`${tmpdir()}/daroyan-dev-child-`);
