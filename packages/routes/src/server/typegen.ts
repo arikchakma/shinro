@@ -1,5 +1,4 @@
 import {
-  cp,
   lstat,
   mkdir,
   open,
@@ -11,78 +10,70 @@ import {
 } from 'node:fs/promises';
 import { dirname, relative, resolve, sep } from 'node:path';
 
-import { GENERATED_NOTICE } from '../constants.ts';
+import { ENTRY_FILE, GENERATED_NOTICE } from '../constants.ts';
 import type { GeneratedSources } from './codegen.ts';
 
 let temporaryFileCounter = 0;
+
+const RPC_FILES = ['rpc.ts', 'client.ts', 'entry.d.ts'];
 
 export async function writeGeneratedTypes(
   outputDirectory: string,
   sources: GeneratedSources,
   options: { rpcEnabled: boolean }
 ): Promise<void> {
-  await mkdir(dirname(outputDirectory), { recursive: true });
+  await mkdir(resolve(outputDirectory, 'types'), { recursive: true });
 
   await withGenerationLock(outputDirectory, async () => {
-    await writeGeneratedTypesTransaction(outputDirectory, sources, options);
+    await writeGeneratedFiles(outputDirectory, sources, options);
   });
 }
 
-async function writeGeneratedTypesTransaction(
+// Every file is written in place through its own atomic tmp+rename, and files
+// whose contents already match are left untouched. Swapping the whole directory
+// would make the generated tree briefly disappear, which editors observe as the
+// project's types vanishing on each save.
+async function writeGeneratedFiles(
   outputDirectory: string,
   sources: GeneratedSources,
   options: { rpcEnabled: boolean }
 ): Promise<void> {
-  temporaryFileCounter += 1;
-  const transaction = `${process.pid}.${temporaryFileCounter}`;
-  const stagingDirectory = `${outputDirectory}.${transaction}.stage`;
-  const backupDirectory = `${outputDirectory}.${transaction}.backup`;
-  const desiredFiles = [
-    resolve(outputDirectory, 'manifest.json'),
-    resolve(outputDirectory, 'daroyan.d.ts'),
-    resolve(outputDirectory, 'entry.ts'),
-    resolve(outputDirectory, 'types/app.d.ts'),
-    ...sources.companions.map((companion) => companion.file),
+  const companions = sources.companions.map((companion) => ({
+    file: assertWithinOutput(outputDirectory, companion.file),
+    source: companion.source,
+  }));
+  const files = new Map<string, string>([
+    [resolve(outputDirectory, 'manifest.json'), sources.manifest],
+    [resolve(outputDirectory, 'daroyan.d.ts'), sources.project],
+    [resolve(outputDirectory, ENTRY_FILE), sources.entry],
+    [resolve(outputDirectory, 'types/app.d.ts'), sources.app],
+    ...companions.map(
+      (companion) => [companion.file, companion.source] as const
+    ),
     ...(options.rpcEnabled
-      ? [
-          resolve(outputDirectory, 'rpc.ts'),
-          resolve(outputDirectory, 'client.ts'),
-          resolve(outputDirectory, 'entry.d.ts'),
-        ]
+      ? ([
+          [resolve(outputDirectory, 'rpc.ts'), sources.rpc],
+          [resolve(outputDirectory, 'client.ts'), sources.client],
+          [resolve(outputDirectory, 'entry.d.ts'), sources.entryTypes],
+        ] as const)
       : []),
-  ];
+  ]);
 
-  await assertFileTargets(desiredFiles);
-  await rm(stagingDirectory, { recursive: true, force: true });
-  await rm(backupDirectory, { recursive: true, force: true });
+  await assertFileTargets([...files.keys()]);
+  await removeStaleCompanions(
+    resolve(outputDirectory, 'types'),
+    new Set(companions.map((companion) => companion.file))
+  );
 
-  try {
-    try {
-      await cp(outputDirectory, stagingDirectory, {
-        preserveTimestamps: true,
-        recursive: true,
-      });
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-        throw error;
-      }
-      await mkdir(stagingDirectory, { recursive: true });
-    }
+  for (const [file, source] of files) {
+    await writeGeneratedFile(file, source);
+  }
 
-    await populateStagingDirectory(
-      outputDirectory,
-      stagingDirectory,
-      sources,
-      options
-    );
-    await commitStagingDirectory(
-      outputDirectory,
-      stagingDirectory,
-      backupDirectory
-    );
-  } finally {
-    await rm(stagingDirectory, { recursive: true, force: true }).catch(
-      () => undefined
+  if (!options.rpcEnabled) {
+    await Promise.all(
+      RPC_FILES.map((name) =>
+        removeGeneratedFile(resolve(outputDirectory, name))
+      )
     );
   }
 }
@@ -129,65 +120,6 @@ async function withGenerationLock<T>(
   }
 }
 
-async function populateStagingDirectory(
-  outputDirectory: string,
-  stagingDirectory: string,
-  sources: GeneratedSources,
-  options: { rpcEnabled: boolean }
-): Promise<void> {
-  const typesDirectory = resolve(stagingDirectory, 'types');
-
-  await mkdir(typesDirectory, { recursive: true });
-  await removeStaleCompanions(
-    typesDirectory,
-    new Set(
-      sources.companions.map((companion) =>
-        toStagingFile(outputDirectory, stagingDirectory, companion.file)
-      )
-    )
-  );
-  await writeGeneratedFile(
-    resolve(stagingDirectory, 'manifest.json'),
-    sources.manifest
-  );
-  await writeGeneratedFile(
-    resolve(stagingDirectory, 'daroyan.d.ts'),
-    sources.project
-  );
-  // The runtime entry is always generated: it is the module the application
-  // imports as `daroyan/entry`, not an RPC-only artifact.
-  await writeGeneratedFile(
-    resolve(stagingDirectory, 'entry.ts'),
-    sources.entry
-  );
-  await writeGeneratedFile(resolve(typesDirectory, 'app.d.ts'), sources.app);
-  for (const companion of sources.companions) {
-    await writeGeneratedFile(
-      toStagingFile(outputDirectory, stagingDirectory, companion.file),
-      companion.source
-    );
-  }
-  if (options.rpcEnabled) {
-    await writeGeneratedFile(resolve(stagingDirectory, 'rpc.ts'), sources.rpc);
-    await writeGeneratedFile(
-      resolve(stagingDirectory, 'client.ts'),
-      sources.client
-    );
-    await writeGeneratedFile(
-      resolve(stagingDirectory, 'entry.d.ts'),
-      sources.entryTypes
-    );
-  } else {
-    await Promise.all(
-      [
-        resolve(stagingDirectory, 'rpc.ts'),
-        resolve(stagingDirectory, 'client.ts'),
-        resolve(stagingDirectory, 'entry.d.ts'),
-      ].map(removeGeneratedFile)
-    );
-  }
-}
-
 async function assertFileTargets(files: string[]): Promise<void> {
   for (const file of files) {
     try {
@@ -204,43 +136,7 @@ async function assertFileTargets(files: string[]): Promise<void> {
   }
 }
 
-async function commitStagingDirectory(
-  outputDirectory: string,
-  stagingDirectory: string,
-  backupDirectory: string
-): Promise<void> {
-  let movedExistingOutput = false;
-
-  try {
-    await rename(outputDirectory, backupDirectory);
-    movedExistingOutput = true;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-      throw error;
-    }
-  }
-
-  try {
-    await rename(stagingDirectory, outputDirectory);
-  } catch (error) {
-    if (movedExistingOutput) {
-      await rename(backupDirectory, outputDirectory);
-    }
-    throw error;
-  }
-
-  if (movedExistingOutput) {
-    await rm(backupDirectory, { recursive: true, force: true }).catch(
-      () => undefined
-    );
-  }
-}
-
-function toStagingFile(
-  outputDirectory: string,
-  stagingDirectory: string,
-  file: string
-): string {
+function assertWithinOutput(outputDirectory: string, file: string): string {
   const path = relative(outputDirectory, file);
   if (path === '..' || path.startsWith(`..${sep}`)) {
     throw new Error(
@@ -248,7 +144,7 @@ function toStagingFile(
     );
   }
 
-  return resolve(stagingDirectory, path);
+  return resolve(outputDirectory, path);
 }
 
 async function removeStaleCompanions(
