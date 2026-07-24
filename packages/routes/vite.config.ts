@@ -23,6 +23,9 @@ export default defineConfig({
       'daroyan/app': fileURLToPath(new URL('./src/app.ts', import.meta.url)),
     },
   },
+  test: {
+    include: ['tests/**/*.test.ts'],
+  },
   pack: {
     entry: ['src/index.ts', 'src/app.ts', 'src/cli.ts'],
     dts: {
