@@ -577,6 +577,38 @@ test('basePath prefixes normalized runtime and RPC routes', async () => {
   expect(manifest.routes[0]?.path).toBe('/v1/health');
 });
 
+test('the development child leaves generation and diagnostics to its parent', async () => {
+  const root = await mkdtemp(`${tmpdir()}/daroyan-dev-child-`);
+  const warnings: string[] = [];
+  const logger = createLogger('silent');
+  logger.warn = (message) => {
+    warnings.push(message);
+  };
+
+  await mkdir(`${root}/src/routes`, { recursive: true });
+  await writeFile(`${root}/src/app.ts`, temporaryAppSource);
+  await writeFile(
+    `${root}/src/routes/health.ts`,
+    'export const GET = [(c: any) => c.json({ ok: true })] as const;\n'
+  );
+
+  process.env.DAROYAN_DEV_CHILD = '1';
+  try {
+    await resolveConfig(
+      { configFile: false, customLogger: logger, plugins: [daroyan()], root },
+      'serve'
+    );
+
+    await expect(
+      readFile(`${root}/.daroyan/entry.ts`, 'utf8')
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(warnings).toEqual([]);
+  } finally {
+    delete process.env.DAROYAN_DEV_CHILD;
+    await rm(root, { recursive: true });
+  }
+});
+
 test('basePath collapses repeated separators instead of emptying a segment', async () => {
   const root = fileURLToPath(new URL('./fixtures/basepath', import.meta.url));
 

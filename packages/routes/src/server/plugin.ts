@@ -115,6 +115,15 @@ export function daroyan(options: DaroyanOptions = {}): Plugin {
       resolvedConfig = config;
       outputDirectory = resolve(config.root, options.rpc?.outDir ?? '.daroyan');
       assertGeneratedDirectory(config.root, outputDirectory);
+
+      // The development child loads this same config only so it can run the
+      // user's entry. The parent already generated `.daroyan` and reported its
+      // diagnostics before spawning it, so repeating that work here would print
+      // every warning twice and contend on the generation lock for nothing.
+      if (isDevelopmentChild()) {
+        return;
+      }
+
       if (config.command === 'build') {
         await assertServerEntry(
           resolve(config.root, options.entry ?? 'src/server.ts')
@@ -147,8 +156,7 @@ export function daroyan(options: DaroyanOptions = {}): Plugin {
       );
       const sourceDirectories = [dirname(appFile), dirname(entryFile)];
       const runsUserEntry =
-        !server.config.server.middlewareMode &&
-        process.env.DAROYAN_DEV_CHILD !== '1';
+        !server.config.server.middlewareMode && !isDevelopmentChild();
       if (runsUserEntry) {
         await assertServerEntry(entryFile);
       }
@@ -269,6 +277,10 @@ export function daroyan(options: DaroyanOptions = {}): Plugin {
       }
     },
   };
+}
+
+function isDevelopmentChild(): boolean {
+  return process.env.DAROYAN_DEV_CHILD === '1';
 }
 
 function assertGeneratedDirectory(root: string, outputDirectory: string): void {
