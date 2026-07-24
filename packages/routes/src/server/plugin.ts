@@ -3,7 +3,7 @@ import { basename, dirname, extname, relative, resolve, sep } from 'node:path';
 
 import type { Plugin, ResolvedConfig, ViteDevServer } from 'vite-plus';
 
-import { ENTRY_ID, RESOLVED_ENTRY_ID } from '../constants.ts';
+import { ENTRY_FILE, ENTRY_ID } from '../constants.ts';
 import { createSources } from './codegen.ts';
 import { validateTypeScriptConfig } from './config.ts';
 import { DevelopmentProcess } from './dev.ts';
@@ -30,7 +30,6 @@ export type DaroyanOptions = {
 };
 
 export function daroyan(options: DaroyanOptions = {}): Plugin {
-  let entrySource: string | undefined;
   let resolvedConfig: ResolvedConfig | undefined;
   let outputDirectory: string | undefined;
   let generation = Promise.resolve();
@@ -45,7 +44,6 @@ export function daroyan(options: DaroyanOptions = {}): Plugin {
       options,
       outputDirectory
     );
-    entrySource = sources.entry;
     await writeGeneratedTypes(outputDirectory, sources, {
       rpcEnabled: options.rpc?.enabled !== false,
     });
@@ -163,7 +161,13 @@ export function daroyan(options: DaroyanOptions = {}): Plugin {
         generation = generation
           .then(generate)
           .then(() => {
-            invalidateEntry(server);
+            invalidateEntry(
+              server,
+              resolve(
+                outputDirectory ?? resolve(server.config.root, '.daroyan'),
+                ENTRY_FILE
+              )
+            );
             developmentProcess?.restart();
           })
           .catch((error: unknown) => {
@@ -212,19 +216,11 @@ export function daroyan(options: DaroyanOptions = {}): Plugin {
 
     resolveId(id) {
       if (id === ENTRY_ID) {
-        return RESOLVED_ENTRY_ID;
-      }
-    },
-
-    load(id) {
-      if (id === RESOLVED_ENTRY_ID) {
-        if (!entrySource) {
-          throw new Error(
-            "Daroyan's application entry was loaded before route discovery completed."
-          );
+        if (!outputDirectory) {
+          return;
         }
 
-        return entrySource;
+        return resolve(outputDirectory, ENTRY_FILE);
       }
     },
 
@@ -308,9 +304,9 @@ function isWithin(directory: string, file: string): boolean {
   return path !== '..' && !path.startsWith(`..${sep}`);
 }
 
-function invalidateEntry(server: ViteDevServer): void {
+function invalidateEntry(server: ViteDevServer, entryFile: string): void {
   for (const environment of Object.values(server.environments)) {
-    const module = environment.moduleGraph.getModuleById(RESOLVED_ENTRY_ID);
+    const module = environment.moduleGraph.getModuleById(entryFile);
     if (module) {
       environment.moduleGraph.invalidateModule(module);
     }

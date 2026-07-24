@@ -1,5 +1,5 @@
 export const ENTRY_ID = 'daroyan/entry';
-export const RESOLVED_ENTRY_ID = `\0${ENTRY_ID}`;
+export const ENTRY_FILE = 'entry.ts';
 export const HTTP_METHODS = [
   'GET',
   'POST',

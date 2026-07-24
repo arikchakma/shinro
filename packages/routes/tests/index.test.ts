@@ -859,7 +859,7 @@ test('adding a route during development regenerates every route-derived artifact
   const routesDirectory = `${root}/src/routes`;
   const routeFile = `${routesDirectory}/notes.ts`;
   const manifestFile = `${root}/.daroyan/manifest.json`;
-  const rpcFile = `${root}/.daroyan/rpc.ts`;
+  const entryFile = `${root}/.daroyan/entry.ts`;
   const companionFile = `${root}/.daroyan/types/src/routes/+types/notes.d.ts`;
 
   await mkdir(routesDirectory, { recursive: true });
@@ -893,14 +893,16 @@ test('adding a route during development regenerates every route-derived artifact
       )
       .toContain('/notes');
 
-    await expect(readFile(rpcFile, 'utf8')).resolves.toContain('.get("/notes"');
+    await expect(readFile(entryFile, 'utf8')).resolves.toContain(
+      '.get("/notes"'
+    );
     await expect(readFile(companionFile, 'utf8')).resolves.toContain(
       'path: "/notes"'
     );
     await expect(
       server.transformRequest('daroyan/entry')
     ).resolves.toMatchObject({
-      code: expect.stringContaining('app.on("GET", "/notes"'),
+      code: expect.stringContaining('.get("/notes"'),
     });
   } finally {
     await server.close();
@@ -913,7 +915,7 @@ test('removing a route during development deletes its stale companion and regist
   const routesDirectory = `${root}/src/routes`;
   const routeFile = `${routesDirectory}/notes.ts`;
   const manifestFile = `${root}/.daroyan/manifest.json`;
-  const rpcFile = `${root}/.daroyan/rpc.ts`;
+  const entryFile = `${root}/.daroyan/entry.ts`;
   const companionFile = `${root}/.daroyan/types/src/routes/+types/notes.d.ts`;
 
   await mkdir(routesDirectory, { recursive: true });
@@ -955,7 +957,7 @@ test('removing a route during development deletes its stale companion and regist
       )
       .not.toContain('/notes');
 
-    await expect(readFile(rpcFile, 'utf8')).resolves.not.toContain(
+    await expect(readFile(entryFile, 'utf8')).resolves.not.toContain(
       '.get("/notes"'
     );
     await expect(readFile(companionFile, 'utf8')).rejects.toMatchObject({
@@ -964,7 +966,7 @@ test('removing a route during development deletes its stale companion and regist
     await expect(
       server.transformRequest('daroyan/entry')
     ).resolves.toMatchObject({
-      code: expect.not.stringContaining('app.on("GET", "/notes"'),
+      code: expect.not.stringContaining('.get("/notes"'),
     });
   } finally {
     await server.close();
@@ -2209,7 +2211,7 @@ test('_middleware.js is discovered for JavaScript route projects', async () => {
     ) as {
       routes: Array<{ middleware: string[]; path: string }>;
     };
-    const rpc = await readFile(`${root}/.daroyan/rpc.ts`, 'utf8');
+    const entry = await readFile(`${root}/.daroyan/entry.ts`, 'utf8');
 
     expect(manifest.routes).toContainEqual(
       expect.objectContaining({
@@ -2217,8 +2219,8 @@ test('_middleware.js is discovered for JavaScript route projects', async () => {
         path: '/api',
       })
     );
-    expect(rpc).toContain('from "../src/routes/api/index.js";');
-    expect(rpc).toContain('from "../src/routes/api/_middleware.js";');
+    expect(entry).toContain('from "../src/routes/api/index.js";');
+    expect(entry).toContain('from "../src/routes/api/_middleware.js";');
   } finally {
     await rm(root, { recursive: true });
   }

@@ -22,10 +22,6 @@ export function toProjectPath(root: string, file: string): string {
   return relative(root, file).split(sep).join('/');
 }
 
-export function toVitePath(path: string): string {
-  return path.split(sep).join('/');
-}
-
 export function generatedImport(outputDirectory: string, file: string): string {
   const path = relative(outputDirectory, file).split(sep).join('/');
   return path.startsWith('.') ? path : `./${path}`;

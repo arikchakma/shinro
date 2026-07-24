@@ -10,7 +10,6 @@ import {
   generatedImport,
   normalizeBasePath,
   toProjectPath,
-  toVitePath,
   withBasePath,
 } from './path.ts';
 import type { DaroyanOptions } from './plugin.ts';
@@ -82,53 +81,13 @@ export async function createSources(
     }
   }
 
-  const imports = [
-    ...(routes.some(
-      (route) => route.kind === 'sub-router' && route.middleware.length > 0
-    )
-      ? ['import { Hono } from "hono";']
-      : []),
-    `import app from ${JSON.stringify(toVitePath(appFile))};`,
-    ...routes.map((route, index) =>
-      route.kind === 'sub-router'
-        ? `import route${index}Default from ${JSON.stringify(toVitePath(route.file))};`
-        : `import * as route${index} from ${JSON.stringify(toVitePath(route.file))};`
-    ),
-    ...routes.flatMap((route, routeIndex) =>
-      route.middleware.map(
-        (file, middlewareIndex) =>
-          `import route${routeIndex}Middleware${middlewareIndex} from ${JSON.stringify(
-            toVitePath(file)
-          )};`
-      )
-    ),
-  ];
-
-  const registrations = routes.flatMap((route, index) => {
-    if (route.kind === 'sub-router') {
-      if (route.middleware.length === 0) {
-        return `app.route(${JSON.stringify(route.path)}, route${index}Default);`;
-      }
-
-      return [
-        `const route${index}Mounted = new Hono().use("*", ${middlewareSpreads(route, index).replace(/, $/, '')}).route("/", route${index}Default);`,
-        `app.route(${JSON.stringify(route.path)}, route${index}Mounted);`,
-      ];
-    }
-
-    return route.methods.map(
-      (method) =>
-        `app.on(${JSON.stringify(method)}, ${JSON.stringify(route.path)}, ${middlewareSpreads(
-          route,
-          index
-        )}...route${index}.${method});`
-    );
-  });
-
-  const rpcImports = [
-    'import { Hono } from "hono";',
+  const mountsSubRouterMiddleware = routes.some(
+    (route) => route.kind === 'sub-router' && route.middleware.length > 0
+  );
+  const entryImports = [
+    ...(mountsSubRouterMiddleware ? ['import { Hono } from "hono";'] : []),
     'import type { ProjectEnv } from "daroyan/app";',
-    `import configuredApp from ${JSON.stringify(generatedImport(outputDirectory, appFile))};`,
+    `import app from ${JSON.stringify(generatedImport(outputDirectory, appFile))};`,
     ...routes.flatMap((route, index) => [
       ...(route.kind === 'sub-router'
         ? [
@@ -143,27 +102,47 @@ export async function createSources(
             generatedImport(outputDirectory, route.file)
           )};`
       ),
-      ...(route.kind === 'methods'
-        ? route.middleware.map(
-            (file, middlewareIndex) =>
-              `import route${index}Middleware${middlewareIndex} from ${JSON.stringify(
-                generatedImport(outputDirectory, file)
-              )};`
-          )
-        : []),
+      ...route.middleware.map(
+        (file, middlewareIndex) =>
+          `import route${index}Middleware${middlewareIndex} from ${JSON.stringify(
+            generatedImport(outputDirectory, file)
+          )};`
+      ),
     ]),
   ];
-  const rpcRegistrations = routes.flatMap((route, index) => {
+
+  // Sub-routers that carry directory middleware are wrapped once, before the
+  // chain, so the chain itself stays a single expression whose type is the
+  // application's complete RPC contract.
+  const subRouterMounts = routes.flatMap((route, index) =>
+    route.kind === 'sub-router' && route.middleware.length > 0
+      ? [
+          `const route${index}Mounted = new Hono<ProjectEnv>()`,
+          `  .use("*", ${middlewareSpreads(route, index).join(', ')})`,
+          `  .route("/", route${index}Default);`,
+        ]
+      : []
+  );
+
+  const registrations = routes.flatMap((route, index) => {
     if (route.kind === 'sub-router') {
-      return `  .route(${JSON.stringify(route.path)}, route${index}Default)`;
+      const mounted =
+        route.middleware.length > 0
+          ? `route${index}Mounted`
+          : `route${index}Default`;
+      return `  .route(${JSON.stringify(route.path)}, ${mounted})`;
     }
 
-    return route.methods.map(
-      (method) =>
-        `  .${method.toLowerCase()}(${JSON.stringify(route.path)}, ${middlewareSpreads(
-          route,
-          index
-        )}...route${index}${method})`
+    return route.methods.map((method) =>
+      [
+        `  .${method.toLowerCase()}(`,
+        [
+          JSON.stringify(route.path),
+          ...middlewareSpreads(route, index),
+          `...route${index}${method}`,
+        ].join(', '),
+        ')',
+      ].join('')
     );
   });
 
@@ -230,21 +209,34 @@ export async function createSources(
     ],
     entry: [
       GENERATED_NOTICE,
-      ...imports,
-      ...registrations,
-      'export default app;',
-      'export { app };',
-      'export const fetch = app.fetch;',
+      ...entryImports,
+      '',
+      ...subRouterMounts,
+      ...(subRouterMounts.length > 0 ? [''] : []),
+      // Registering onto the configured app keeps one Hono instance at runtime
+      // while the chained result carries the schema Hono needs for RPC, so the
+      // running application and its client type are the same artifact.
+      ...(registrations.length > 0
+        ? ['const routes = app', ...registrations].map((line, index, lines) =>
+            index === lines.length - 1 ? `${line};` : line
+          )
+        : ['const routes = app;']),
+      '',
+      'export type AppType = typeof routes;',
+      'export default routes;',
+      'export { routes as app };',
+      'export const fetch = routes.fetch;',
+      '',
     ].join('\n'),
     entryTypes: [
       GENERATED_NOTICE,
       'declare module "daroyan/entry" {',
-      '  const app: import("./rpc.ts").AppType;',
+      '  const app: import("./entry.ts").AppType;',
       '',
       '  export default app;',
       '  export { app };',
       '  export const fetch: typeof app.fetch;',
-      '  export type AppType = import("./rpc.ts").AppType;',
+      '  export type AppType = import("./entry.ts").AppType;',
       '}',
       '',
     ].join('\n'),
@@ -267,15 +259,12 @@ export async function createSources(
       undefined,
       2
     )}\n`,
+    // `entry.ts` is the single generated route table. `rpc.ts` stays part of the
+    // published surface as a type-first alias of it.
     rpc: [
       GENERATED_NOTICE,
-      ...rpcImports,
-      '',
-      `const routes = new Hono<ProjectEnv>()`,
-      `  .route("/", configuredApp)${rpcRegistrations.length ? '\n' : ';'}${rpcRegistrations.join('\n')}${rpcRegistrations.length ? ';' : ''}`,
-      '',
-      'export type AppType = typeof routes;',
-      'export default routes;',
+      'export type { AppType } from "./entry.ts";',
+      'export { default } from "./entry.ts";',
       '',
     ].join('\n'),
     project: [
@@ -292,13 +281,10 @@ export async function createSources(
   };
 }
 
-function middlewareSpreads(route: Route, routeIndex: number): string {
-  return route.middleware
-    .map(
-      (_, middlewareIndex) =>
-        `...route${routeIndex}Middleware${middlewareIndex}, `
-    )
-    .join('');
+function middlewareSpreads(route: Route, routeIndex: number): string[] {
+  return route.middleware.map(
+    (_, middlewareIndex) => `...route${routeIndex}Middleware${middlewareIndex}`
+  );
 }
 
 function routeParamsSource(path: string): string {

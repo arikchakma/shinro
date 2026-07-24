@@ -133,6 +133,7 @@ test('typegen prepares every generated type artifact in a clean checkout', async
       '.daroyan/daroyan.d.ts',
       '.daroyan/manifest.json',
       '.daroyan/rpc.ts',
+      '.daroyan/entry.ts',
       '.daroyan/types/app.d.ts',
       '.daroyan/entry.d.ts',
       '.daroyan/types/src/routes/users/+types/_middleware.d.ts',
@@ -144,11 +145,14 @@ test('typegen prepares every generated type artifact in a clean checkout', async
     }
 
     await expect(
-      readFile(`${root}/.daroyan/rpc.ts`, 'utf8')
+      readFile(`${root}/.daroyan/entry.ts`, 'utf8')
     ).resolves.toContain('from "../src/routes/users/$id.ts";');
     await expect(
-      readFile(`${root}/.daroyan/rpc.ts`, 'utf8')
+      readFile(`${root}/.daroyan/entry.ts`, 'utf8')
     ).resolves.toContain('from "../src/routes/users/_middleware.ts";');
+    await expect(
+      readFile(`${root}/.daroyan/rpc.ts`, 'utf8')
+    ).resolves.toContain('from "./entry.ts";');
     await expect(
       readFile(`${root}/.daroyan/daroyan.d.ts`, 'utf8')
     ).resolves.toContain('from "../src/app.ts";');

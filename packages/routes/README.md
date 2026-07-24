@@ -287,9 +287,32 @@ Retaining the Hono chain as above includes `/manual` in RPC. An unassigned
 mutation such as `app.get("/manual", handler)` still runs, but Hono does not
 retain that schema in `typeof app`, so it cannot enter the client type.
 
+## Generated route table
+
+`.daroyan/entry.ts` is the assembled application: a real file you can open and
+read, holding one chained Hono registration per route. It is what
+`daroyan/entry` resolves to, what runs in development and production, and what
+`AppType` is inferred from — the running application and its client type are
+the same artifact, so they cannot drift.
+
+```ts
+// .daroyan/entry.ts
+const routes = app
+  .get('/health', ...route0GET)
+  .post('/api/users', ...route1Middleware0, ...route1POST);
+
+export type AppType = typeof routes;
+export default routes;
+```
+
+Registration happens on the app you exported, so `routes` and your `app` are
+the same Hono instance; the chain exists to give Hono the schema it needs for
+RPC.
+
 ## RPC client
 
-Daroyan generates `.daroyan/client.ts`:
+Daroyan generates `.daroyan/client.ts`, and `.daroyan/rpc.ts` re-exports
+`AppType` from the entry for workspaces that publish their types:
 
 ```ts
 import { createClient } from './.daroyan/client.ts';
@@ -390,6 +413,8 @@ that boots the app:
 dist/
 ├── server.mjs
 ├── app.mjs
+├── .daroyan/
+│   └── entry.mjs
 └── routes/
     └── health.mjs
 ```

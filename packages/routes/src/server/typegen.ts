@@ -40,6 +40,7 @@ async function writeGeneratedTypesTransaction(
   const desiredFiles = [
     resolve(outputDirectory, 'manifest.json'),
     resolve(outputDirectory, 'daroyan.d.ts'),
+    resolve(outputDirectory, 'entry.ts'),
     resolve(outputDirectory, 'types/app.d.ts'),
     ...sources.companions.map((companion) => companion.file),
     ...(options.rpcEnabled
@@ -152,6 +153,12 @@ async function populateStagingDirectory(
   await writeGeneratedFile(
     resolve(stagingDirectory, 'daroyan.d.ts'),
     sources.project
+  );
+  // The runtime entry is always generated: it is the module the application
+  // imports as `daroyan/entry`, not an RPC-only artifact.
+  await writeGeneratedFile(
+    resolve(stagingDirectory, 'entry.ts'),
+    sources.entry
   );
   await writeGeneratedFile(resolve(typesDirectory, 'app.d.ts'), sources.app);
   for (const companion of sources.companions) {
