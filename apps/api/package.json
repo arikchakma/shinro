@@ -1,0 +1,30 @@
+{
+  "name": "api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./client": "./.daroyan/client.ts",
+    "./rpc": "./.daroyan/rpc.ts"
+  },
+  "scripts": {
+    "build": "vp build",
+    "check": "vp run typegen && vp check",
+    "dev": "vp dev",
+    "start": "node dist/server.mjs",
+    "test": "vp test",
+    "typegen": "vp run daroyan#build && daroyan typegen"
+  },
+  "dependencies": {
+    "@hono/node-server": "catalog:",
+    "@hono/zod-validator": "catalog:",
+    "hono": "^4.10.0",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "daroyan": "workspace:*",
+    "typescript": "^7.0.2",
+    "vite-plus": "catalog:"
+  }
+}

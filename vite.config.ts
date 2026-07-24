@@ -2,7 +2,10 @@ import { defineConfig } from "vite-plus";
 import { fileURLToPath } from "node:url";
 import { daroyan } from "./packages/routes/src/index.ts";
 
+const root = fileURLToPath(new URL(".", import.meta.url));
+
 export default defineConfig({
+  root,
   plugins: [
     daroyan({
       app: fileURLToPath(
@@ -23,6 +26,9 @@ export default defineConfig({
   },
   staged: {
     "*": "vp check --fix",
+  },
+  test: {
+    include: ["packages/**/*.test.ts"],
   },
   lint: { options: { typeAware: true, typeCheck: true } },
 });
