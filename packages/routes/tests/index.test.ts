@@ -1481,6 +1481,58 @@ test('the app module may retain Hono schema through a chained defineApp instance
   }
 });
 
+test('the app module may default-export a plain new Hono() instance', async () => {
+  const root = await mkdtemp(`${tmpdir()}/daroyan-plain-hono-app-`);
+  await mkdir(`${root}/src/routes`, { recursive: true });
+  await writeFile(
+    `${root}/src/app.ts`,
+    ['import { Hono } from "hono";', 'export default new Hono();', ''].join(
+      '\n'
+    )
+  );
+  await writeFile(
+    `${root}/src/routes/index.ts`,
+    'export const GET = [(c: any) => c.json({ ok: true })] as const;\n'
+  );
+
+  try {
+    await expect(
+      resolveConfig({ configFile: false, plugins: [daroyan()], root }, 'serve')
+    ).resolves.toBeDefined();
+    await expect(
+      readFile(`${root}/.daroyan/entry.ts`, 'utf8')
+    ).resolves.toContain('.get("/"');
+  } finally {
+    await rm(root, { recursive: true });
+  }
+});
+
+test('a chained plain Hono app is accepted as the application root', async () => {
+  const root = await mkdtemp(`${tmpdir()}/daroyan-plain-hono-chained-`);
+  await mkdir(`${root}/src/routes`, { recursive: true });
+  await writeFile(
+    `${root}/src/app.ts`,
+    [
+      'import { Hono as HonoApp } from "hono";',
+      'const app = new HonoApp().get("/manual", (c) => c.json({ manual: true }));',
+      'export { app as default };',
+      '',
+    ].join('\n')
+  );
+  await writeFile(
+    `${root}/src/routes/index.ts`,
+    'export const GET = [(c: any) => c.json({ ok: true })] as const;\n'
+  );
+
+  try {
+    await expect(
+      resolveConfig({ configFile: false, plugins: [daroyan()], root }, 'serve')
+    ).resolves.toBeDefined();
+  } finally {
+    await rm(root, { recursive: true });
+  }
+});
+
 test('the app instance may use a local default export list', async () => {
   const root = await mkdtemp(`${tmpdir()}/daroyan-app-export-list-`);
   await mkdir(`${root}/src/routes`, { recursive: true });

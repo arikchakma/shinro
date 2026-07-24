@@ -20,21 +20,32 @@ export async function validateAppModule(
   }
   const ast = result.program;
   const factories = new Set<string>();
+  const constructors = new Set<string>();
   const apps = new Set<string>();
 
   for (const statement of ast.body) {
     if (statement.type === 'ImportDeclaration') {
       for (const specifier of statement.specifiers) {
         if (
-          specifier.type === 'ImportSpecifier' &&
-          specifier.imported.type === 'Identifier' &&
-          specifier.imported.name === 'defineApp'
+          specifier.type !== 'ImportSpecifier' ||
+          specifier.imported.type !== 'Identifier'
         ) {
+          continue;
+        }
+
+        if (specifier.imported.name === 'defineApp') {
           factories.add(specifier.local.name);
+        }
+        // `defineApp()` only calls `new Hono()`, so an app module that reaches
+        // for Hono directly is just as valid an application root.
+        if (specifier.imported.name === 'Hono') {
+          constructors.add(specifier.local.name);
         }
       }
     }
   }
+
+  const scope: AppScope = { apps, constructors, factories };
 
   for (const statement of ast.body) {
     const declaration =
@@ -48,7 +59,7 @@ export async function validateAppModule(
     for (const variable of declaration.declarations) {
       if (
         variable.id.type === 'Identifier' &&
-        isAppExpression(variable.init, factories, apps)
+        isAppExpression(variable.init, scope)
       ) {
         apps.add(variable.id.name);
       }
@@ -57,7 +68,7 @@ export async function validateAppModule(
 
   const validDefault = ast.body.some((statement) => {
     if (statement.type === 'ExportDefaultDeclaration') {
-      return isAppExpression(statement.declaration, factories, apps);
+      return isAppExpression(statement.declaration, scope);
     }
 
     if (
@@ -87,7 +98,7 @@ export async function validateAppModule(
 
   if (!validDefault) {
     throw new Error(
-      `[daroyan] Invalid app module ${file}: default-export the Hono instance created by defineApp().`
+      `[daroyan] Invalid app module ${file}: default-export a Hono instance, created either by defineApp() or by new Hono().`
     );
   }
 
@@ -109,26 +120,36 @@ type NodeView = {
   type: string;
 };
 
-function isAppExpression(
-  value: unknown,
-  factories: Set<string>,
-  apps: Set<string>
-): boolean {
+type AppScope = {
+  apps: Set<string>;
+  constructors: Set<string>;
+  factories: Set<string>;
+};
+
+function isAppExpression(value: unknown, scope: AppScope): boolean {
   const node = asNode(value);
   if (!node) {
     return false;
   }
 
   if (node.type === 'Identifier') {
-    return node.name !== undefined && apps.has(node.name);
+    return node.name !== undefined && scope.apps.has(node.name);
+  }
+  if (node.type === 'NewExpression') {
+    const callee = asNode(node.callee);
+    return (
+      callee?.type === 'Identifier' &&
+      callee.name !== undefined &&
+      scope.constructors.has(callee.name)
+    );
   }
   if (node.type === 'CallExpression') {
     const callee = asNode(node.callee);
     if (callee?.type === 'Identifier') {
-      return callee.name !== undefined && factories.has(callee.name);
+      return callee.name !== undefined && scope.factories.has(callee.name);
     }
     return callee?.type === 'MemberExpression'
-      ? isAppExpression(callee.object, factories, apps)
+      ? isAppExpression(callee.object, scope)
       : false;
   }
   if (
@@ -137,7 +158,7 @@ function isAppExpression(
     node.type === 'TSSatisfiesExpression' ||
     node.type === 'TSNonNullExpression'
   ) {
-    return isAppExpression(node.expression, factories, apps);
+    return isAppExpression(node.expression, scope);
   }
 
   return false;

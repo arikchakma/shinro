@@ -89,6 +89,19 @@ app.onError((error, c) => {
 export default app;
 ```
 
+`defineApp()` only calls `new Hono()`, so reaching for Hono directly works
+just as well — use whichever reads better:
+
+```ts
+import { Hono } from 'hono';
+
+export default new Hono<AppEnv>();
+```
+
+`defineApp()` earns its keep by binding the app env to `defineHandler()` and
+`defineMiddleware()` project-wide; a plain `new Hono()` app is otherwise
+identical.
+
 You can type context variables two ways, and they compose:
 
 - **On the app env**, as above — declare them once on `defineApp<AppEnv>()`.
