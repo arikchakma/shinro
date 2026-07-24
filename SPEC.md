@@ -15,20 +15,20 @@ The central API is intentionally small:
 
 ```ts
 // src/app.ts
-import { logger } from "hono/logger";
-import { defineApp } from "daroyan/app";
+import { logger } from 'hono/logger';
+import { defineApp } from 'daroyan/app';
 
 const app = defineApp();
 
-app.use("*", logger());
+app.use('*', logger());
 
 app.onError((error, c) => {
   console.error(error);
-  return c.json({ error: "INTERNAL_ERROR" as const }, 500);
+  return c.json({ error: 'INTERNAL_ERROR' as const }, 500);
 });
 
 app.notFound((c) => {
-  return c.json({ error: "NOT_FOUND" as const }, 404);
+  return c.json({ error: 'NOT_FOUND' as const }, 404);
 });
 
 export default app;
@@ -44,12 +44,12 @@ belong to the user's server entry:
 
 ```ts
 // src/server.ts
-import { serve } from "@hono/node-server";
+import { serve } from '@hono/node-server';
 
-import app from "daroyan/entry";
-import { shutdown } from "./shutdown.ts";
-import { initDatabase } from "./lib/db.ts";
-import { initRedis } from "./lib/redis.ts";
+import app from 'daroyan/entry';
+import { shutdown } from './shutdown.ts';
+import { initDatabase } from './lib/db.ts';
+import { initRedis } from './lib/redis.ts';
 
 await Promise.all([initDatabase(), initRedis()]);
 
@@ -58,15 +58,15 @@ const server = serve({
   port: Number(process.env.PORT ?? 3000),
 });
 
-process.once("SIGINT", () => shutdown(server, "SIGINT"));
-process.once("SIGTERM", () => shutdown(server, "SIGTERM"));
+process.once('SIGINT', () => shutdown(server, 'SIGINT'));
+process.once('SIGTERM', () => shutdown(server, 'SIGTERM'));
 ```
 
 Routes are equally small:
 
 ```ts
 // src/routes/health.ts
-import { defineHandler } from "daroyan/app";
+import { defineHandler } from 'daroyan/app';
 
 export const GET = defineHandler((c) => {
   return c.json({ ok: true }, 200);
@@ -77,11 +77,11 @@ Generated `+types` are available but optional:
 
 ```ts
 // src/routes/users/$id.ts
-import { defineHandler } from "daroyan/app";
-import type { Route } from "./+types/$id.ts";
+import { defineHandler } from 'daroyan/app';
+import type { Route } from './+types/$id.ts';
 
 export const GET = defineHandler<Route.Handler>((c) => {
-  return c.json({ id: c.req.param("id") }, 200);
+  return c.json({ id: c.req.param('id') }, 200);
 });
 ```
 
@@ -97,9 +97,16 @@ generic's response-inference limitation is documented in section 14.2.
    install separate route, RPC, development, Node, or Bun plugins.
 2. One route file contains all HTTP methods for its endpoint. The user does
    not create separate `get.ts`, `post.ts`, and `delete.ts` files.
-3. Daroyan bundles the configured server entry to one JavaScript entry file
-   by default. The contents and runtime behavior of that entry remain
-   user-owned.
+3. There is a single configured server entry. Whatever the output shape,
+   `dist/server.mjs` is the one entry point that boots the application, and
+   its contents and runtime behavior remain user-owned.
+
+By default the build is unbundled (`build.unbundle: true`): the output
+preserves the source module tree and keeps dependencies external, so `dist`
+mirrors `src` and is easy to debug. Setting `build.unbundle: false` opts into
+the self-contained single-artifact model — the entry and all of its ordinary
+JavaScript and TypeScript dependencies are bundled into one `dist/server.mjs`
+file (see section 21).
 
 Daroyan is still file-based, so a real application normally contains many
 route files.
@@ -203,8 +210,8 @@ Bun applications can use `Bun.serve()` directly.
 
 ```ts
 // vite.config.ts
-import { daroyan } from "daroyan";
-import { defineConfig } from "vite-plus";
+import { daroyan } from 'daroyan';
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   plugins: [daroyan()],
@@ -219,12 +226,13 @@ export type DaroyanOptions = {
   entry?: string;
   routes?: string;
   ignoredRouteFiles?: string[];
-  basePath?: `/${string}` | "/";
+  basePath?: `/${string}` | '/';
   build?: {
     outDir?: string;
     fileName?: `${string}.mjs`;
     minify?: boolean;
-    sourcemap?: false | "inline";
+    sourcemap?: false | 'inline';
+    unbundle?: boolean;
   };
   rpc?: {
     enabled?: boolean;
@@ -239,20 +247,21 @@ Defaults:
 
 ```ts
 const defaults = {
-  app: "src/app.ts",
-  entry: "src/server.ts",
-  routes: "src/routes",
+  app: 'src/app.ts',
+  entry: 'src/server.ts',
+  routes: 'src/routes',
   ignoredRouteFiles: [],
-  basePath: "/",
+  basePath: '/',
   build: {
-    outDir: "dist",
-    fileName: "server.mjs",
+    outDir: 'dist',
+    fileName: 'server.mjs',
     minify: false,
     sourcemap: false,
+    unbundle: true,
   },
   rpc: {
     enabled: true,
-    outDir: ".daroyan",
+    outDir: '.daroyan',
   },
 } satisfies DaroyanOptions;
 ```
@@ -262,39 +271,46 @@ or shutdown options. Those configure the user's server, not routing.
 
 ## 9. TypeScript configuration
 
-Generated companion types use TypeScript's `rootDirs` support:
+Projects extend the base configuration shipped by the package:
 
 ```jsonc
 {
+  "extends": "daroyan/tsconfig",
   "compilerOptions": {
-    "allowImportingTsExtensions": true,
-    "strict": true,
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "noEmit": true,
-    "rootDirs": [".", "./.daroyan/types"],
+    "paths": {
+      "~/*": ["./src/*"],
+    },
   },
-  "include": ["src", ".daroyan/**/*.d.ts"],
 }
 ```
 
+`daroyan/tsconfig` resolves through the package `exports` map to a shipped
+`tsconfig.base.json`. It sets `moduleResolution: "Bundler"`, the TypeScript
+import-extension options, the `rootDirs` used by generated companions
+(`["${configDir}", "${configDir}/.daroyan/types"]`), and the `include` that
+pulls in the generated declaration tree (`${configDir}/.daroyan/**/*.d.ts`).
+Consumers add only their own `paths`; no `daroyan/app` or `daroyan/entry`
+mapping is required.
+
 Daroyan emits explicit `.ts` import specifiers. TypeScript requires
 `allowImportingTsExtensions` together with `noEmit`, `emitDeclarationOnly`,
-or `rewriteRelativeImportExtensions`; the recommended Vite workflow uses
-`noEmit`.
+or `rewriteRelativeImportExtensions`; the base config uses `noEmit`.
 
 This lets a route optionally import:
 
 ```ts
-import type { Route } from "./+types/$id.ts";
+import type { Route } from './+types/$id.ts';
 ```
 
 without writing generated files into `src/routes`.
 
-Daroyan keeps the project environment binding in
-`.daroyan/daroyan.d.ts`. The TypeScript include above guarantees that
-editors and standalone `tsc` load the project-specific `daroyan/app`
-augmentation without requiring an import in every route.
+The `paths` mapping is intentionally minimal. `daroyan/app` resolves through
+the package `exports` map, and `daroyan/entry` resolves through a generated
+ambient module declaration in `.daroyan/entry.d.ts` — neither needs a hand
+written `paths` entry. The base config's `.daroyan/**/*.d.ts` include
+guarantees that editors and standalone `tsc` load both the project-specific
+`daroyan/app` augmentation (`.daroyan/daroyan.d.ts`) and the assembled entry
+declaration without requiring an import in every route.
 
 Projects should ignore:
 
@@ -325,6 +341,7 @@ copy-pasteable correction when they are missing.
 ├── .daroyan/
 │   ├── client.ts
 │   ├── daroyan.d.ts
+│   ├── entry.d.ts
 │   ├── manifest.json
 │   ├── rpc.ts
 │   └── types/
@@ -348,10 +365,12 @@ type generation.
 Conceptual signature:
 
 ```ts
-import type { Env, HonoOptions } from "hono";
-import { Hono } from "hono";
+import type { Env, HonoOptions } from 'hono';
+import { Hono } from 'hono';
 
-export function defineApp<E extends Env = Env>(options?: HonoOptions<E>): Hono<E>;
+export function defineApp<E extends Env = Env>(
+  options?: HonoOptions<E>
+): Hono<E>;
 ```
 
 It is effectively a correctly configured Hono constructor:
@@ -376,12 +395,12 @@ const app = defineApp<AppEnv>();
 The return value is a normal Hono instance:
 
 ```ts
-app.use("*", middleware);
-app.get("/manual", handler);
-app.route("/legacy", legacyRouter);
+app.use('*', middleware);
+app.get('/manual', handler);
+app.route('/legacy', legacyRouter);
 app.onError(errorHandler);
 app.notFound(notFoundHandler);
-app.request("/health");
+app.request('/health');
 app.fetch(request);
 ```
 
@@ -400,7 +419,7 @@ The configured app module must default-export the Hono instance:
 
 ```ts
 // src/app.ts
-import { defineApp } from "daroyan/app";
+import { defineApp } from 'daroyan/app';
 
 const app = defineApp();
 
@@ -421,7 +440,7 @@ mount file routes.
 Manual Hono routes are allowed:
 
 ```ts
-const app = defineApp().get("/manual", (c) => {
+const app = defineApp().get('/manual', (c) => {
   return c.json({ manual: true }, 200);
 });
 ```
@@ -434,7 +453,7 @@ Routes added later through unassigned mutation:
 
 ```ts
 const app = defineApp();
-app.get("/manual", handler);
+app.get('/manual', handler);
 ```
 
 work at runtime, but Hono's `typeof app` does not retain that route schema.
@@ -483,7 +502,7 @@ modules and reserved `_middleware` modules:
 
 ```ts
 daroyan({
-  ignoredRouteFiles: ["internal/**", "**/*.draft.ts"],
+  ignoredRouteFiles: ['internal/**', '**/*.draft.ts'],
 });
 ```
 
@@ -531,9 +550,9 @@ One file may export multiple methods:
 
 ```ts
 // src/routes/api/users/index.ts
-import { zValidator } from "@hono/zod-validator";
-import { defineHandler } from "daroyan/app";
-import { z } from "zod";
+import { zValidator } from '@hono/zod-validator';
+import { defineHandler } from 'daroyan/app';
+import { z } from 'zod';
 
 const createUser = z.object({
   name: z.string().min(1),
@@ -545,8 +564,8 @@ export const GET = defineHandler(async (c) => {
   return c.json({ users }, 200);
 });
 
-export const POST = defineHandler(zValidator("json", createUser), async (c) => {
-  const user = await insertUser(c.req.valid("json"));
+export const POST = defineHandler(zValidator('json', createUser), async (c) => {
+  const user = await insertUser(c.req.valid('json'));
   return c.json({ user }, 201);
 });
 ```
@@ -571,10 +590,10 @@ optional.
 
 ```ts
 // src/routes/api/users/$id.ts
-import { defineHandler } from "daroyan/app";
+import { defineHandler } from 'daroyan/app';
 
 export const GET = defineHandler((c) => {
-  return c.json({ id: c.req.param("id") }, 200);
+  return c.json({ id: c.req.param('id') }, 200);
 });
 ```
 
@@ -593,11 +612,11 @@ It does not provide exact filename-derived parameter-key checking inside
 
 ```ts
 // src/routes/api/users/$id.ts
-import { defineHandler } from "daroyan/app";
-import type { Route } from "./+types/$id.ts";
+import { defineHandler } from 'daroyan/app';
+import type { Route } from './+types/$id.ts';
 
 export const GET = defineHandler<Route.Handler>((c) => {
-  const id = c.req.param("id");
+  const id = c.req.param('id');
 
   // Known filename parameters are definitely present.
   const exactId: string = id;
@@ -615,7 +634,7 @@ The companion is conceptually:
 ```ts
 export namespace Route {
   export type Handler = DaroyanRoute<{
-    path: "/api/users/:id";
+    path: '/api/users/:id';
     params: {
       id: string;
     };
@@ -648,16 +667,16 @@ approach because it supplies both runtime validation and typed access:
 
 ```ts
 // src/routes/api/users/$id.ts
-import { zValidator } from "@hono/zod-validator";
-import { defineHandler } from "daroyan/app";
-import { z } from "zod";
+import { zValidator } from '@hono/zod-validator';
+import { defineHandler } from 'daroyan/app';
+import { z } from 'zod';
 
 const params = z.object({
   id: z.string().min(1),
 });
 
-export const GET = defineHandler(zValidator("param", params), async (c) => {
-  const { id } = c.req.valid("param");
+export const GET = defineHandler(zValidator('param', params), async (c) => {
+  const { id } = c.req.valid('param');
   return c.json({ id }, 200);
 });
 ```
@@ -669,12 +688,15 @@ generated `Route` type.
 The two features can be combined:
 
 ```ts
-import type { Route } from "./+types/$id.ts";
+import type { Route } from './+types/$id.ts';
 
-export const GET = defineHandler<Route.Handler>(zValidator("param", params), async (c) => {
-  const { id } = c.req.valid("param");
-  return c.json({ id }, 200);
-});
+export const GET = defineHandler<Route.Handler>(
+  zValidator('param', params),
+  async (c) => {
+    const { id } = c.req.valid('param');
+    return c.json({ id }, 200);
+  }
+);
 ```
 
 Use:
@@ -694,11 +716,11 @@ A route module may default-export a chained Hono sub-router:
 
 ```ts
 // src/routes/admin.ts
-import { Hono } from "hono";
+import { Hono } from 'hono';
 
 const admin = new Hono()
-  .get("/", (c) => c.json({ section: "admin" }, 200))
-  .get("/stats", (c) => c.json({ activeUsers: 42 }, 200));
+  .get('/', (c) => c.json({ section: 'admin' }, 200))
+  .get('/stats', (c) => c.json({ activeUsers: 42 }, 200));
 
 export default admin;
 ```
@@ -728,10 +750,14 @@ sub-router from silently colliding with a descendant file route.
 Pass route-local middleware directly to `defineHandler()`:
 
 ```ts
-export const POST = defineHandler(requireUser, zValidator("json", inputSchema), async (c) => {
-  const input = c.req.valid("json");
-  return c.json({ created: true, input }, 201);
-});
+export const POST = defineHandler(
+  requireUser,
+  zValidator('json', inputSchema),
+  async (c) => {
+    const input = c.req.valid('json');
+    return c.json({ created: true, input }, 201);
+  }
+);
 ```
 
 Validators should normally be route-local so their inferred inputs become
@@ -743,17 +769,17 @@ part of the Hono RPC contract.
 
 ```ts
 // src/routes/api/_middleware.ts
-import { defineMiddleware } from "daroyan/app";
+import { defineMiddleware } from 'daroyan/app';
 
 export default defineMiddleware(
   async (c, next) => {
-    c.header("x-api-version", "1");
+    c.header('x-api-version', '1');
     await next();
   },
   async (c, next) => {
-    c.set("requestStartedAt", Date.now());
+    c.set('requestStartedAt', Date.now());
     await next();
-  },
+  }
 );
 ```
 
@@ -785,12 +811,16 @@ export default defineMiddleware(...security, authenticate());
 Generated middleware companion types are also optional:
 
 ```ts
-import { defineMiddleware } from "daroyan/app";
-import type { Route } from "./+types/_middleware.ts";
+import { defineMiddleware } from 'daroyan/app';
+import type { Route } from './+types/_middleware.ts';
 
-export default defineMiddleware<Route.Middleware>(requestId(), authenticate(), async (c, next) => {
-  await next();
-});
+export default defineMiddleware<Route.Middleware>(
+  requestId(),
+  authenticate(),
+  async (c, next) => {
+    await next();
+  }
+);
 ```
 
 To author a **named** middleware handler with the same env typing, reach for Hono's
@@ -799,12 +829,12 @@ To author a **named** middleware handler with the same env typing, reach for Hon
 `defineMiddleware()` for the default export:
 
 ```ts
-import { defineMiddleware } from "daroyan/app";
-import { createMiddleware } from "hono/factory";
-import type { Route } from "./+types/_middleware.ts";
+import { defineMiddleware } from 'daroyan/app';
+import { createMiddleware } from 'hono/factory';
+import type { Route } from './+types/_middleware.ts';
 
-const requestId = createMiddleware<Route.Middleware["env"]>(async (c, next) => {
-  c.set("requestId", crypto.randomUUID());
+const requestId = createMiddleware<Route.Middleware['env']>(async (c, next) => {
+  c.set('requestId', crypto.randomUUID());
   await next();
 });
 
@@ -816,7 +846,7 @@ The middleware companion is conceptually:
 ```ts
 export namespace Route {
   export type Middleware = DaroyanMiddleware<{
-    path: "/api";
+    path: '/api';
     env: AppEnv;
   }>;
 }
@@ -839,7 +869,7 @@ middleware into that route's handler chain. Given a root middleware, an API
 middleware, and `GET /api/users`, runtime registration is conceptually:
 
 ```ts
-app.on("GET", "/api/users", ...rootMiddleware, ...apiMiddleware, ...usersGet);
+app.on('GET', '/api/users', ...rootMiddleware, ...apiMiddleware, ...usersGet);
 ```
 
 Daroyan does not implement directory middleware by assuming a particular
@@ -854,10 +884,10 @@ all internal paths:
 
 ```ts
 const mountedAdmin = new Hono<ProjectEnv>()
-  .use("*", ...rootMiddleware, ...adminMiddleware)
-  .route("/", admin);
+  .use('*', ...rootMiddleware, ...adminMiddleware)
+  .route('/', admin);
 
-app.route("/admin", mountedAdmin);
+app.route('/admin', mountedAdmin);
 ```
 
 The wrapper is an implementation detail and is never imported by user
@@ -882,10 +912,10 @@ export default defineMiddleware(async (c, next) => {
   const user = await authenticate(c.req.raw);
 
   if (!user) {
-    return c.json({ error: "UNAUTHORIZED" as const }, 401);
+    return c.json({ error: 'UNAUTHORIZED' as const }, 401);
   }
 
-  c.set("user", user);
+  c.set('user', user);
   await next();
 });
 ```
@@ -913,11 +943,16 @@ client. Daroyan does not introduce a required global response generic.
 
 ## 17. Environment typing
 
-An explicit app environment is declared once:
+Daroyan supports both of Hono's context-variable typing styles, and they
+compose. A project can use either or both.
+
+### 17.1 App environment generic
+
+An explicit app environment is declared once on `defineApp`:
 
 ```ts
 // src/app.ts
-import { defineApp } from "daroyan/app";
+import { defineApp } from 'daroyan/app';
 
 export type AppEnv = {
   Variables: {
@@ -933,12 +968,33 @@ export default app;
 
 Daroyan infers the environment from the default app export and generates
 one project-level declaration that binds `defineHandler` and
-`defineMiddleware` to it.
+`defineMiddleware` to it. This path also carries `Bindings` for handlers
+that need typed `c.env`.
+
+### 17.2 Global `ContextVariableMap`
+
+The Hono-native alternative: the module that sets a variable also declares
+it by augmenting `hono`'s `ContextVariableMap`. No central `AppEnv` is
+required, and the variable is typed on every Hono context program-wide,
+including the generated RPC application.
+
+```ts
+// src/middlewares/request-id.ts
+declare module 'hono' {
+  interface ContextVariableMap {
+    requestId: string;
+  }
+}
+```
+
+Because Hono types `c.var` as `ContextVariableMap & Env["Variables"]`, a
+variable declared this way and a variable declared on `AppEnv` are both in
+scope simultaneously; the two mechanisms do not conflict.
 
 Route files do not repeat `AppEnv`:
 
 ```ts
-import { defineHandler } from "daroyan/app";
+import { defineHandler } from 'daroyan/app';
 
 export const GET = defineHandler((c) => {
   return c.json({
@@ -956,7 +1012,7 @@ to replace a generic default through module augmentation:
 
 ```ts
 // Conceptual declarations shipped by daroyan/app
-import type { Env, Hono } from "hono";
+import type { Env, Hono } from 'hono';
 
 export interface DaroyanProject {}
 
@@ -976,9 +1032,9 @@ Type generation writes this project-specific merge:
 
 ```ts
 // .daroyan/daroyan.d.ts
-import type app from "../src/app.ts";
+import type app from '../src/app.ts';
 
-declare module "daroyan/app" {
+declare module 'daroyan/app' {
   interface DaroyanProject {
     readonly app: typeof app;
   }
@@ -1006,7 +1062,7 @@ raw server bindings. Those remain application and adapter concerns.
 `daroyan/entry` is the generated application entry:
 
 ```ts
-import app from "daroyan/entry";
+import app from 'daroyan/entry';
 ```
 
 Conceptually, it:
@@ -1037,12 +1093,35 @@ The public name follows Kumoh's `kumoh/entry` convention. Vite internally
 resolves it to the private ID `\0daroyan/entry`; the private ID must never
 appear in user code, generated source imports, errors, or documentation.
 
-The package ships a fallback `daroyan/entry` declaration so TypeScript can
-resolve the subpath before generation. `.daroyan/types/entry.d.ts` refines
-that declaration to the current project's assembled `AppType`. The Vite
-plugin must resolve the runtime import before normal package resolution.
-Importing the package's runtime placeholder without the plugin throws an
-actionable error instead of returning an unassembled app.
+Type generation writes a standalone ambient module declaration to
+`.daroyan/entry.d.ts` that declares `daroyan/entry` and types its default
+export as the current project's assembled `AppType`:
+
+```ts
+// .daroyan/entry.d.ts
+declare module 'daroyan/entry' {
+  const app: import('./rpc.ts').AppType;
+
+  export default app;
+  export { app };
+  export const fetch: typeof app.fetch;
+  export type AppType = import('./rpc.ts').AppType;
+}
+```
+
+This ambient declaration is loaded through the project's
+`.daroyan/**/*.d.ts` include, so `daroyan/entry` resolves without a
+`paths` mapping and without a subpath in the package `exports`. The
+declaration exists only after generation; a clean checkout runs
+`daroyan typegen` (or any Vite command) before type checking, which the
+`typecheck` script wires up. It is written only when RPC generation is
+enabled.
+
+The Vite plugin resolves the runtime import before normal package
+resolution, mapping `daroyan/entry` to the assembled module. Because the
+package no longer ships a runtime placeholder, importing `daroyan/entry`
+without the plugin is an unresolved-module error rather than a returned
+unassembled app.
 
 ## 19. User-owned server entry
 
@@ -1050,12 +1129,12 @@ actionable error instead of returning an unassembled app.
 
 ```ts
 // src/server.ts
-import { serve } from "@hono/node-server";
-import type { ServerType } from "@hono/node-server";
+import { serve } from '@hono/node-server';
+import type { ServerType } from '@hono/node-server';
 
-import app from "daroyan/entry";
-import { closeDatabase, initDatabase } from "./lib/db.ts";
-import { closeRedis, initRedis } from "./lib/redis.ts";
+import app from 'daroyan/entry';
+import { closeDatabase, initDatabase } from './lib/db.ts';
+import { closeRedis, initRedis } from './lib/redis.ts';
 
 await Promise.all([initDatabase(), initRedis()]);
 
@@ -1091,12 +1170,12 @@ function shutdown(server: ServerType, signal: string): Promise<void> {
   return stopping;
 }
 
-process.once("SIGINT", () => {
-  void shutdown(server, "SIGINT");
+process.once('SIGINT', () => {
+  void shutdown(server, 'SIGINT');
 });
 
-process.once("SIGTERM", () => {
-  void shutdown(server, "SIGTERM");
+process.once('SIGTERM', () => {
+  void shutdown(server, 'SIGTERM');
 });
 ```
 
@@ -1106,9 +1185,9 @@ This is application code. Daroyan neither supplies nor calls `shutdown()`.
 
 ```ts
 // src/server.ts
-import app from "daroyan/entry";
+import app from 'daroyan/entry';
 
-import { closeDatabase, initDatabase } from "./lib/db.ts";
+import { closeDatabase, initDatabase } from './lib/db.ts';
 
 await initDatabase();
 
@@ -1124,12 +1203,12 @@ async function shutdown(signal: string) {
   await closeDatabase();
 }
 
-process.once("SIGINT", () => {
-  void shutdown("SIGINT");
+process.once('SIGINT', () => {
+  void shutdown('SIGINT');
 });
 
-process.once("SIGTERM", () => {
-  void shutdown("SIGTERM");
+process.once('SIGTERM', () => {
+  void shutdown('SIGTERM');
 });
 ```
 
@@ -1146,16 +1225,18 @@ configuration:
 
 ```ts
 daroyan({
-  entry: "src/server.node.ts",
+  entry: 'src/server.node.ts',
   build: {
-    fileName: "server.mjs",
+    fileName: 'server.mjs',
   },
 });
 ```
 
-The server adapter is a user dependency. Production builds bundle ordinary
-JavaScript dependencies, including Hono and a JavaScript server adapter,
-into the one emitted entry.
+The server adapter is a user dependency. In the default unbundled build it
+stays external, resolved from `node_modules` at runtime like any other
+dependency; with `build.unbundle: false`, ordinary JavaScript dependencies —
+including Hono and a JavaScript server adapter — are bundled into the one
+emitted entry (see section 21).
 
 ## 20. Development behavior
 
@@ -1188,27 +1269,39 @@ but it must preserve user ownership of the server lifecycle.
 1. scans and validates routes;
 2. refreshes generated type artifacts;
 3. creates the assembled application module;
-4. bundles the configured user server entry;
-5. emits one JavaScript entry by default.
+4. builds the configured user server entry;
+5. emits `dist/server.mjs` as the single entry point.
 
-Default output:
+### 21.1 Default output: unbundled
+
+By default (`build.unbundle: true`) the build preserves the source module
+tree (Rolldown `preserveModules`) so each source file emits a matching
+output file, and dependencies stay external rather than inlined. `dist`
+mirrors `src`, which keeps the output easy to read and debug:
+
+```text
+dist/
+├── server.mjs        # the entry — derived from `entry`, always `*.mjs`
+├── app.mjs
+└── routes/
+    └── health.mjs
+```
+
+The configured server entry keeps its name (`server.mjs` by default), so
+`node dist/server.mjs` still boots. Because dependencies are external, the
+deployment ships `dist` alongside its installed `node_modules` rather than a
+single self-contained file. Multiple JavaScript chunks are expected in this
+mode.
+
+### 21.2 Self-contained output: `build.unbundle: false`
+
+Setting `build.unbundle: false` opts into the single-artifact model: the
+entry and all of its ordinary JavaScript and TypeScript dependencies are
+bundled into one file.
 
 ```text
 dist/
 └── server.mjs
-```
-
-Daroyan does not add listener startup code to the output. Running the file
-executes exactly the user's server entry:
-
-```sh
-node dist/server.mjs
-```
-
-or, for a Bun entry:
-
-```sh
-bun dist/server.mjs
 ```
 
 The one-entry guarantee covers ordinary JavaScript and TypeScript
@@ -1220,8 +1313,24 @@ dependencies. It does not imply embedding:
 - templates and other runtime assets;
 - external WASM files.
 
-Unexpected extra JavaScript chunks are a build error unless a future
-explicit multi-chunk option is added.
+In this mode, unexpected extra JavaScript chunks (for example, from a
+dynamic `import()`) are a build error, and emitted external runtime assets
+produce a warning because they weaken the one-entry deployment model.
+
+### 21.3 Shared behavior
+
+Regardless of mode, Daroyan does not add listener startup code to the
+output. Running the entry executes exactly the user's server entry:
+
+```sh
+node dist/server.mjs
+```
+
+or, for a Bun entry:
+
+```sh
+bun dist/server.mjs
+```
 
 ## 22. Deterministic route assembly
 
@@ -1296,21 +1405,21 @@ Daroyan RPC is Hono RPC. Daroyan does not define another wire protocol.
 The generator creates a chained Hono application in `.daroyan/rpc.ts`:
 
 ```ts
-import { Hono } from "hono";
-import type { ProjectEnv } from "daroyan/app";
+import { Hono } from 'hono';
+import type { ProjectEnv } from 'daroyan/app';
 
-import configuredApp from "../src/app.ts";
-import admin from "../src/routes/admin.ts";
-import apiMiddleware from "../src/routes/api/_middleware.ts";
-import { GET as usersGet, POST as usersPost } from "../src/routes/api/users.ts";
-import { GET as userGet } from "../src/routes/api/users/$id.ts";
+import configuredApp from '../src/app.ts';
+import admin from '../src/routes/admin.ts';
+import apiMiddleware from '../src/routes/api/_middleware.ts';
+import { GET as usersGet, POST as usersPost } from '../src/routes/api/users.ts';
+import { GET as userGet } from '../src/routes/api/users/$id.ts';
 
 const routes = new Hono<ProjectEnv>()
-  .route("/", configuredApp)
-  .get("/api/users", ...apiMiddleware, ...usersGet)
-  .post("/api/users", ...apiMiddleware, ...usersPost)
-  .get("/api/users/:id", ...apiMiddleware, ...userGet)
-  .route("/admin", admin);
+  .route('/', configuredApp)
+  .get('/api/users', ...apiMiddleware, ...usersGet)
+  .post('/api/users', ...apiMiddleware, ...usersPost)
+  .get('/api/users/:id', ...apiMiddleware, ...userGet)
+  .route('/admin', admin);
 
 export type AppType = typeof routes;
 ```
@@ -1355,17 +1464,18 @@ union.
 `.daroyan/client.ts` precomputes the client type:
 
 ```ts
-import type { AppType } from "./rpc.ts";
-import { hc } from "hono/client";
+import type { AppType } from './rpc.ts';
+import { hc } from 'hono/client';
 
-const typedClient = hc<AppType>("");
+const typedClient = hc<AppType>('');
 
 export type Client = typeof typedClient;
 export type { AppType };
 
-export const createClient = (...args: Parameters<typeof hc>): Client => hc<AppType>(...args);
+export const createClient = (...args: Parameters<typeof hc>): Client =>
+  hc<AppType>(...args);
 
-export type { InferRequestType, InferResponseType } from "hono/client";
+export type { InferRequestType, InferResponseType } from 'hono/client';
 ```
 
 The implementation may avoid constructing a placeholder client at runtime,
@@ -1390,11 +1500,11 @@ An API workspace can expose its generated client:
 The consumer:
 
 ```ts
-import { createClient } from "@acme/api/client";
+import { createClient } from '@acme/api/client';
 
-export const api = createClient("http://localhost:3000", {
+export const api = createClient('http://localhost:3000', {
   init: {
-    credentials: "include",
+    credentials: 'include',
   },
 });
 ```
@@ -1407,8 +1517,8 @@ clients, secrets, or Node/Bun adapters to enter a browser bundle.
 ```ts
 const response = await api.api.users.$post({
   json: {
-    name: "Ada",
-    email: "ada@example.com",
+    name: 'Ada',
+    email: 'ada@example.com',
   },
 });
 
@@ -1420,9 +1530,9 @@ if (response.status === 201) {
 Dynamic parameter:
 
 ```ts
-const response = await api.api.users[":id"].$get({
+const response = await api.api.users[':id'].$get({
   param: {
-    id: "usr_123",
+    id: 'usr_123',
   },
 });
 
@@ -1444,8 +1554,8 @@ const query = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 
-export const GET = defineHandler(zValidator("query", query), async (c) => {
-  const input = c.req.valid("query");
+export const GET = defineHandler(zValidator('query', query), async (c) => {
+  const input = c.req.valid('query');
   return c.json(await listUsers(input), 200);
 });
 ```
@@ -1454,8 +1564,8 @@ export const GET = defineHandler(zValidator("query", query), async (c) => {
 // Client
 await api.api.users.$get({
   query: {
-    cursor: "next-token",
-    limit: "50",
+    cursor: 'next-token',
+    limit: '50',
   },
 });
 ```
@@ -1573,13 +1683,13 @@ next.
 Vite-powered tests import the same assembled app as the server:
 
 ```ts
-import { testClient } from "hono/testing";
-import { expect, test } from "vite-plus/test";
-import app from "daroyan/entry";
+import { testClient } from 'hono/testing';
+import { expect, test } from 'vite-plus/test';
+import app from 'daroyan/entry';
 
 const client = testClient(app);
 
-test("GET /health", async () => {
+test('GET /health', async () => {
   const response = await client.health.$get();
 
   expect(response.status).toBe(200);
@@ -1590,7 +1700,7 @@ test("GET /health", async () => {
 Low-level testing remains available:
 
 ```ts
-const response = await app.request("/api/users/usr_123");
+const response = await app.request('/api/users/usr_123');
 ```
 
 Importing the assembled app does not execute `src/server.ts`, create a
@@ -1605,11 +1715,11 @@ spawn the user's server entry explicitly.
 .daroyan/
 ├── client.ts
 ├── daroyan.d.ts
+├── entry.d.ts
 ├── manifest.json
 ├── rpc.ts
 └── types/
     ├── app.d.ts
-    ├── entry.d.ts
     └── src/routes/
         ├── +types/
         │   ├── _middleware.d.ts
@@ -1625,6 +1735,8 @@ Requirements:
 - every generated file begins with a “do not edit” notice;
 - `.daroyan/daroyan.d.ts` contains the project marker augmentation needed
   to bind `daroyan/app` helpers to the configured app environment;
+- `.daroyan/entry.d.ts` declares the `daroyan/entry` ambient module and is
+  written only when RPC generation is enabled;
 - writes are atomic;
 - unchanged files keep their modification time;
 - removed and renamed routes delete stale companions;
@@ -1728,10 +1840,7 @@ Move the nested route into the sub-router or use named method files.
       "types": "./dist/app.d.mts",
       "import": "./dist/app.mjs",
     },
-    "./entry": {
-      "types": "./dist/entry.d.mts",
-      "import": "./dist/entry.mjs",
-    },
+    "./tsconfig": "./tsconfig.base.json",
     "./package.json": "./package.json",
   },
   "peerDependencies": {
@@ -1747,9 +1856,14 @@ it themselves, while Bun applications use their selected Bun API.
 Route modules import runtime-safe helpers from `daroyan/app`. Vite plugin
 implementation and Node built-ins must not enter route or browser graphs.
 
-`daroyan/entry` is a Vite-resolved project module. Its packaged JavaScript
-target is only an explanatory fallback for imports made without the
-Daroyan plugin; it is never the application used by a valid build.
+`./tsconfig` exposes the shipped `tsconfig.base.json` so consumers can
+`extends: "daroyan/tsconfig"`; `tsconfig.base.json` is included in the
+published package files.
+
+`daroyan/entry` is a Vite-resolved project module with no packaged
+JavaScript or declaration target. Its runtime is supplied by the plugin and
+its type by the generated `.daroyan/entry.d.ts` ambient declaration;
+importing it without the plugin is an unresolved-module error.
 
 The package manifest declares the tested v0.1 peer ranges. Publication
 must keep those ranges aligned with the compatibility suite.
@@ -1760,8 +1874,8 @@ must keep those ranges aligned with the compatibility suite.
 
 ```ts
 // vite.config.ts
-import { daroyan } from "daroyan";
-import { defineConfig } from "vite-plus";
+import { daroyan } from 'daroyan';
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   plugins: [daroyan()],
@@ -1772,10 +1886,10 @@ export default defineConfig({
 
 ```ts
 // src/app.ts
-import { logger } from "hono/logger";
-import { defineApp } from "daroyan/app";
+import { logger } from 'hono/logger';
+import { defineApp } from 'daroyan/app';
 
-import type { User } from "./types.ts";
+import type { User } from './types.ts';
 
 export type AppEnv = {
   Variables: {
@@ -1786,15 +1900,15 @@ export type AppEnv = {
 
 const app = defineApp<AppEnv>();
 
-app.use("*", logger());
+app.use('*', logger());
 
 app.onError((error, c) => {
   console.error(error);
-  return c.json({ error: "INTERNAL_ERROR" as const }, 500);
+  return c.json({ error: 'INTERNAL_ERROR' as const }, 500);
 });
 
 app.notFound((c) => {
-  return c.json({ error: "NOT_FOUND" as const }, 404);
+  return c.json({ error: 'NOT_FOUND' as const }, 404);
 });
 
 export default app;
@@ -1804,26 +1918,26 @@ export default app;
 
 ```ts
 // src/routes/_middleware.ts
-import { defineMiddleware } from "daroyan/app";
+import { defineMiddleware } from 'daroyan/app';
 
-import { authenticate } from "../lib/auth.ts";
+import { authenticate } from '../lib/auth.ts';
 
 export default defineMiddleware(
   async (c, next) => {
-    c.set("requestId", crypto.randomUUID());
+    c.set('requestId', crypto.randomUUID());
     await next();
   },
   async (c, next) => {
     const user = await authenticate(c.req.raw);
 
     if (!user) {
-      return c.json({ error: "UNAUTHORIZED" as const }, 401);
+      return c.json({ error: 'UNAUTHORIZED' as const }, 401);
     }
 
-    c.set("user", user);
+    c.set('user', user);
 
     await next();
-  },
+  }
 );
 ```
 
@@ -1831,9 +1945,9 @@ export default defineMiddleware(
 
 ```ts
 // src/routes/api/users/index.ts
-import { zValidator } from "@hono/zod-validator";
-import { defineHandler } from "daroyan/app";
-import { z } from "zod";
+import { zValidator } from '@hono/zod-validator';
+import { defineHandler } from 'daroyan/app';
+import { z } from 'zod';
 
 const createUser = z.object({
   name: z.string().min(1),
@@ -1845,8 +1959,8 @@ export const GET = defineHandler(async (c) => {
   return c.json({ users }, 200);
 });
 
-export const POST = defineHandler(zValidator("json", createUser), async (c) => {
-  const user = await insertUser(c.req.valid("json"));
+export const POST = defineHandler(zValidator('json', createUser), async (c) => {
+  const user = await insertUser(c.req.valid('json'));
   return c.json({ user }, 201);
 });
 ```
@@ -1855,20 +1969,20 @@ export const POST = defineHandler(zValidator("json", createUser), async (c) => {
 
 ```ts
 // src/routes/api/users/$id.ts
-import { zValidator } from "@hono/zod-validator";
-import { defineHandler } from "daroyan/app";
-import { z } from "zod";
+import { zValidator } from '@hono/zod-validator';
+import { defineHandler } from 'daroyan/app';
+import { z } from 'zod';
 
 const params = z.object({
   id: z.string().min(1),
 });
 
-export const GET = defineHandler(zValidator("param", params), async (c) => {
-  const { id } = c.req.valid("param");
+export const GET = defineHandler(zValidator('param', params), async (c) => {
+  const { id } = c.req.valid('param');
   const user = await findUser(id);
 
   if (!user) {
-    return c.json({ error: "NOT_FOUND" as const }, 404);
+    return c.json({ error: 'NOT_FOUND' as const }, 404);
   }
 
   return c.json({ user }, 200);
@@ -1880,24 +1994,27 @@ export const GET = defineHandler(zValidator("param", params), async (c) => {
 The same route could additionally opt into filename-derived typing:
 
 ```ts
-import type { Route } from "./+types/$id.ts";
+import type { Route } from './+types/$id.ts';
 
-export const GET = defineHandler<Route.Handler>(zValidator("param", params), async (c) => {
-  const { id } = c.req.valid("param");
-  return c.json({ user: await findUser(id) }, 200);
-});
+export const GET = defineHandler<Route.Handler>(
+  zValidator('param', params),
+  async (c) => {
+    const { id } = c.req.valid('param');
+    return c.json({ user: await findUser(id) }, 200);
+  }
+);
 ```
 
 ### 28.7 Node server
 
 ```ts
 // src/server.ts
-import { serve } from "@hono/node-server";
+import { serve } from '@hono/node-server';
 
-import app from "daroyan/entry";
-import { shutdown } from "./shutdown.ts";
-import { initDatabase } from "./lib/db.ts";
-import { initRedis } from "./lib/redis.ts";
+import app from 'daroyan/entry';
+import { shutdown } from './shutdown.ts';
+import { initDatabase } from './lib/db.ts';
+import { initRedis } from './lib/redis.ts';
 
 await Promise.all([initDatabase(), initRedis()]);
 
@@ -1906,25 +2023,25 @@ const server = serve({
   port: Number(process.env.PORT ?? 3000),
 });
 
-process.once("SIGINT", () => {
-  void shutdown(server, "SIGINT");
+process.once('SIGINT', () => {
+  void shutdown(server, 'SIGINT');
 });
 
-process.once("SIGTERM", () => {
-  void shutdown(server, "SIGTERM");
+process.once('SIGTERM', () => {
+  void shutdown(server, 'SIGTERM');
 });
 ```
 
 ### 28.8 Client
 
 ```ts
-import { createClient } from "@acme/api/client";
+import { createClient } from '@acme/api/client';
 
-const api = createClient("http://localhost:3000");
+const api = createClient('http://localhost:3000');
 
-const response = await api.api.users[":id"].$get({
+const response = await api.api.users[':id'].$get({
   param: {
-    id: "usr_123",
+    id: 'usr_123',
   },
 });
 
@@ -1980,17 +2097,22 @@ This section describes and constrains the v0.1 implementation.
   handler tuples used at runtime.
 - Generate chained `.route()` registrations for default sub-routers.
 - Generate a precomputed client module.
+- Generate the `.daroyan/entry.d.ts` ambient declaration binding
+  `daroyan/entry` to the assembled `AppType` when RPC is enabled.
 - Use atomic content-aware writes.
 
 ### 29.4 Vite integration
 
-- `config`: establish the user server entry and single-entry build defaults.
+- `config`: establish the user server entry and the build defaults —
+  unbundled (`preserveModules`, external dependencies) unless
+  `build.unbundle: false` selects the single-entry bundle.
 - `configResolved`: scan, validate, and generate.
 - development hooks: execute the configured user entry in an isolated,
   reloadable environment without taking over its lifecycle.
 - `resolveId` and `load`: resolve `daroyan/entry` internally as
   `\0daroyan/entry`.
-- build hooks: assert the expected entry filename and no unexpected chunks.
+- build hooks: assert the expected entry filename; reject unexpected extra
+  chunks only in the single-artifact (`build.unbundle: false`) mode.
 - test integration: expose the assembled app without executing the server
   entry.
 
@@ -2035,6 +2157,9 @@ v0.1 is complete when:
 - an environment declared once through `defineApp<AppEnv>()` types
   `c.var` in every `defineHandler()` and `defineMiddleware()` call without
   repeating `AppEnv`;
+- a variable declared through a `hono` `ContextVariableMap` augmentation is
+  typed on `c.var` alongside the `AppEnv` generic, with no central env
+  required;
 - optional `defineHandler<Route.Handler>()` provides exact filename
   parameters.
 - `zValidator("param", ...)` provides typed, runtime-validated parameters
@@ -2072,10 +2197,12 @@ v0.1 is complete when:
 4. **Bun build testing.** Native build, request, `SIGTERM`, and
    `Bun.Server.stop(false)` behavior is covered with Bun 1.3.11. Daroyan
    exposes no Bun lifecycle abstraction.
-5. **Single-entry dependencies.** Production SSR builds bundle ordinary
-   JavaScript dependencies. Node built-ins stay native. More than one
-   JavaScript chunk is an error, and emitted runtime assets produce a
-   warning. Native `.node` addons, files read at runtime, migrations,
+5. **Build modes.** The default unbundled build preserves the source module
+   tree and keeps dependencies external. The opt-in single-entry build
+   (`build.unbundle: false`) bundles ordinary JavaScript dependencies into
+   one chunk; there, more than one JavaScript chunk is an error and emitted
+   runtime assets produce a warning. Node built-ins stay native in both
+   modes. Native `.node` addons, files read at runtime, migrations,
    templates, and external WASM remain deployment responsibilities of the
    application.
 
