@@ -13,6 +13,7 @@ import { createSources } from './codegen.ts';
 import { validateTypeScriptConfig } from './config.ts';
 import { DevelopmentProcess } from './dev.ts';
 import { warnForMissingClientExport } from './package.ts';
+import { affectsRouteTree } from './scanner.ts';
 import { writeGeneratedTypes } from './typegen.ts';
 
 export type DaroyanOptions = {
@@ -165,7 +166,12 @@ export function daroyan(options: DaroyanOptions = {}): Plugin {
       }
       let developmentProcess: DevelopmentProcess | undefined;
       const onRouteTreeChange = (file: string) => {
-        if (!isWithin(routesDirectory, file)) {
+        // Route directories hold more than routes — fixtures, snapshots,
+        // READMEs — and none of those change what gets generated.
+        if (
+          !isWithin(routesDirectory, file) ||
+          !affectsRouteTree(routesDirectory, file, options.ignoredRouteFiles)
+        ) {
           return;
         }
 

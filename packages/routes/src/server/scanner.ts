@@ -1,5 +1,5 @@
 import { readFile, readdir } from 'node:fs/promises';
-import { dirname, relative, resolve, sep } from 'node:path';
+import { basename, dirname, relative, resolve, sep } from 'node:path';
 
 import { minimatch } from 'minimatch';
 import { parseSync } from 'vite-plus';
@@ -65,23 +65,27 @@ export async function discoverRoutes(
         )
     );
 
-  await Promise.all(middleware.map(validateMiddlewareModule));
+  await settleInOrder(middleware.map(validateMiddlewareModule));
 
-  for (const entry of entries) {
-    if (!entry.isFile()) {
-      continue;
-    }
+  const candidates = entries
+    .filter((entry) => entry.isFile())
+    .map((entry) => resolve(entry.parentPath, entry.name))
+    .filter(
+      (file) =>
+        !isIgnoredRouteFile(routesDirectory, file) &&
+        !matchesIgnoredRouteFile(
+          routesDirectory,
+          file,
+          options.ignoredRouteFiles
+        )
+    );
+  // Route modules are read and parsed concurrently, then inspected in directory
+  // order so diagnostics stay deterministic regardless of which parse lands
+  // first.
+  const parsed = await settleInOrder(candidates.map(readRouteExports));
 
-    const file = resolve(entry.parentPath, entry.name);
-
-    if (
-      isIgnoredRouteFile(routesDirectory, file) ||
-      matchesIgnoredRouteFile(routesDirectory, file, options.ignoredRouteFiles)
-    ) {
-      continue;
-    }
-
-    const routeExports = await readRouteExports(file);
+  for (const [index, file] of candidates.entries()) {
+    const routeExports = parsed[index];
     const path = routePath(routesDirectory, file);
 
     if (routeExports.invalidMethods.length > 0) {
@@ -150,6 +154,22 @@ export async function discoverRoutes(
     })),
     routes: routes.sort(compareRoutes),
   };
+}
+
+// Awaits everything concurrently but surfaces the first failure in argument
+// order, so parallel work cannot make error reporting depend on scheduling.
+async function settleInOrder<T>(work: Promise<T>[]): Promise<T[]> {
+  const settled = await Promise.allSettled(work);
+  const values: T[] = [];
+
+  for (const result of settled) {
+    if (result.status === 'rejected') {
+      throw result.reason;
+    }
+    values.push(result.value);
+  }
+
+  return values;
 }
 
 async function validateMiddlewareModule(file: string): Promise<void> {
@@ -239,6 +259,12 @@ async function validateMiddlewareModule(file: string): Promise<void> {
 }
 
 export function validateRoutes(routes: Route[], root: string): void {
+  // Each route's shape is derived once. Computing it inside the pairwise scan
+  // ran two regex replacements per comparison, which grows quadratically with
+  // the route count.
+  const shapes = routes.map((route) => routeShape(route.path));
+  const hasSubRouter = routes.some((route) => route.kind === 'sub-router');
+
   for (let leftIndex = 0; leftIndex < routes.length; leftIndex += 1) {
     const left = routes[leftIndex];
 
@@ -248,9 +274,10 @@ export function validateRoutes(routes: Route[], root: string): void {
       rightIndex += 1
     ) {
       const right = routes[rightIndex];
-      const sameShape = routeShape(left.path) === routeShape(right.path);
+      const sameShape = shapes[leftIndex] === shapes[rightIndex];
       const subRouterOverlap =
-        reservesPath(left, right.path) || reservesPath(right, left.path);
+        hasSubRouter &&
+        (reservesPath(left, right.path) || reservesPath(right, left.path));
 
       if (!sameShape && !subRouterOverlap) {
         continue;
@@ -279,6 +306,30 @@ export function validateRoutes(routes: Route[], root: string): void {
       );
     }
   }
+}
+
+/**
+ * Whether a file inside the routes directory can change the route tree, so a
+ * watcher can skip regenerating for READMEs, fixtures, snapshots, and the other
+ * files that live alongside routes.
+ */
+export function affectsRouteTree(
+  routesDirectory: string,
+  file: string,
+  ignoredRouteFiles: string[] | undefined
+): boolean {
+  if (matchesIgnoredRouteFile(routesDirectory, file, ignoredRouteFiles)) {
+    return false;
+  }
+
+  return (
+    isDirectoryMiddleware(file) || !isIgnoredRouteFile(routesDirectory, file)
+  );
+}
+
+function isDirectoryMiddleware(file: string): boolean {
+  const name = basename(file);
+  return name === '_middleware.ts' || name === '_middleware.js';
 }
 
 function matchesIgnoredRouteFile(

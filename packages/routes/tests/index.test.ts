@@ -25,6 +25,7 @@ import { expect, expectTypeOf, test } from 'vite-plus/test';
 
 import { createClient } from '../.daroyan/client.ts';
 import { daroyan } from '../src/index.ts';
+import { affectsRouteTree } from '../src/server/scanner.ts';
 import configuredApp from './fixtures/basic/src/app.ts';
 
 const client = testClient(app);
@@ -1126,6 +1127,29 @@ test('adding a route during development regenerates every route-derived artifact
     await rm(root, { recursive: true });
   }
 }, 15_000);
+
+test('only route-tree files are treated as regeneration triggers', () => {
+  const routes = '/project/src/routes';
+  const affects = (file: string, ignored?: string[]) =>
+    affectsRouteTree(routes, `${routes}/${file}`, ignored);
+
+  expect(affects('health.ts')).toBe(true);
+  expect(affects('users/$id.ts')).toBe(true);
+  expect(affects('users/index.js')).toBe(true);
+  expect(affects('_middleware.ts')).toBe(true);
+  expect(affects('users/_middleware.js')).toBe(true);
+
+  expect(affects('README.md')).toBe(false);
+  expect(affects('health.test.ts')).toBe(false);
+  expect(affects('health.spec.ts')).toBe(false);
+  expect(affects('types.d.ts')).toBe(false);
+  expect(affects('_helper.ts')).toBe(false);
+  expect(affects('__tests__/health.ts')).toBe(false);
+  expect(affects('+types/health.d.ts')).toBe(false);
+  expect(affects('internal/secret.ts', ['internal/**'])).toBe(false);
+  // An ignore pattern hides directory middleware as well as route modules.
+  expect(affects('internal/_middleware.ts', ['internal/**'])).toBe(false);
+});
 
 test('removing a route during development deletes its stale companion and registrations', async () => {
   const root = await mkdtemp(`${tmpdir()}/daroyan-route-remove-`);
