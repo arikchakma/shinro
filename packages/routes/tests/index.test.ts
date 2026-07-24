@@ -1946,6 +1946,51 @@ test('a provable parameter schema and filename mismatch emits a warning', async 
   }
 });
 
+test('a parameter schema mismatch is detected for non-zod Hono validators', async () => {
+  const validators = [
+    ['@hono/valibot-validator', 'vValidator'],
+    ['@hono/arktype-validator', 'arktypeValidator'],
+    ['@hono/standard-validator', 'sValidator'],
+  ] as const;
+
+  for (const [module, factory] of validators) {
+    const root = await mkdtemp(`${tmpdir()}/daroyan-param-schema-${factory}-`);
+    const warnings: string[] = [];
+    const logger = createLogger('silent');
+    logger.warn = (message) => {
+      warnings.push(message);
+    };
+
+    await mkdir(`${root}/src/routes/users`, { recursive: true });
+    await writeFile(`${root}/src/app.ts`, temporaryAppSource);
+    await writeFile(
+      `${root}/src/routes/users/$id.ts`,
+      [
+        `import { ${factory} } from ${JSON.stringify(module)};`,
+        'import { z } from "zod";',
+        'export const GET = [',
+        `  ${factory}("param", z.object({ userId: z.string() })),`,
+        '  (c: any) => c.json({ userId: c.req.valid("param").userId }),',
+        '] as const;',
+        '',
+      ].join('\n')
+    );
+
+    try {
+      await resolveConfig(
+        { configFile: false, customLogger: logger, plugins: [daroyan()], root },
+        'serve'
+      );
+
+      expect(warnings.join('\n'), factory).toMatch(
+        /\[daroyan\][\s\S]*src\/routes\/users\/\$id\.ts[\s\S]*parameter schema[\s\S]*userId[\s\S]*id/i
+      );
+    } finally {
+      await rm(root, { recursive: true });
+    }
+  }
+});
+
 test('a parameter schema mismatch is detected through a method export list', async () => {
   const root = await mkdtemp(
     `${tmpdir()}/daroyan-exported-param-schema-warning-`

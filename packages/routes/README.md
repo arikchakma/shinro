@@ -265,8 +265,11 @@ export const GET = defineHandler<Route.Handler>((c) => {
 ```
 
 The companion supplies the filename-derived path and parameter names. It
-does not validate requests at runtime; use `zValidator` when validation is
-required. Supplying the explicit `Route.Handler` generic can widen response
+does not validate requests at runtime; use a validator when validation is
+required. Daroyan cross-checks `"param"` schemas against filename parameters
+for any Hono validator — `hono/validator` and the `@hono/*-validator`
+packages (`zValidator`, `vValidator`, `sValidator`, and friends) all share the
+same `factory("param", schema)` shape. Supplying the explicit `Route.Handler` generic can widen response
 and status inference because TypeScript does not partially infer later
 generic parameters after an explicit one.
 

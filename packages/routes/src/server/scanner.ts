@@ -356,26 +356,24 @@ async function readRouteExports(file: string): Promise<{
       continue;
     }
 
+    const source =
+      typeof statement.source.value === 'string' ? statement.source.value : '';
+
     for (const specifier of statement.specifiers) {
       if (
-        specifier.type === 'ImportSpecifier' &&
-        specifier.imported.type === 'Identifier' &&
-        specifier.imported.name === 'Hono'
+        specifier.type !== 'ImportSpecifier' ||
+        specifier.imported.type !== 'Identifier'
       ) {
+        continue;
+      }
+
+      if (specifier.imported.name === 'Hono') {
         honoConstructors.add(specifier.local.name);
       }
-      if (
-        specifier.type === 'ImportSpecifier' &&
-        specifier.imported.type === 'Identifier' &&
-        specifier.imported.name === 'defineHandler'
-      ) {
+      if (specifier.imported.name === 'defineHandler') {
         handlerFactories.add(specifier.local.name);
       }
-      if (
-        specifier.type === 'ImportSpecifier' &&
-        specifier.imported.type === 'Identifier' &&
-        specifier.imported.name === 'zValidator'
-      ) {
+      if (isValidatorImport(source, specifier.imported.name)) {
         validatorFactories.add(specifier.local.name);
       }
     }
@@ -541,6 +539,19 @@ async function readRouteExports(file: string): Promise<{
         : []
     ),
   };
+}
+
+// Hono's validators all share the `factory("param", schema)` shape, so the
+// filename/schema cross-check applies to the whole ecosystem rather than to
+// `@hono/zod-validator` alone. Recognise them by module — `hono/validator` and
+// the `@hono/*-validator` packages — and fall back to the naming convention so
+// validators re-exported through a project barrel still count.
+function isValidatorImport(source: string, importedName: string): boolean {
+  if (source === 'hono/validator' || /^@hono\/.+-validator$/.test(source)) {
+    return true;
+  }
+
+  return importedName === 'validator' || importedName.endsWith('Validator');
 }
 
 const HONO_ROUTE_METHODS = new Set([
