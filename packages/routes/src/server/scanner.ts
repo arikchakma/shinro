@@ -406,11 +406,7 @@ async function readRouteExports(file: string): Promise<{
       }
       if (
         declaration.id.type === 'Identifier' &&
-        isHandlerBundleExpression(
-          declaration.init,
-          handlerFactories,
-          handlerBundles
-        )
+        !isRejectedHandlerBundle(declaration.init, handlerFactories)
       ) {
         handlerBundles.add(declaration.id.name);
         parameterSchemasByBundle.set(
@@ -677,6 +673,59 @@ function isHandlerBundleExpression(
   }
 
   return false;
+}
+
+// A method export is spread into Hono (`...GET`), so a value that provably is
+// not a handler tuple is worth rejecting early with a precise message. Anything
+// else — a project wrapper, a shared tuple, a helper call — is left to
+// TypeScript, which checks spreadability exactly and reports it against the
+// user's own source rather than against generated code.
+function isRejectedHandlerBundle(
+  value: unknown,
+  factories: Set<string>
+): boolean {
+  const node = asNode(value);
+  if (!node) {
+    return true;
+  }
+
+  if (
+    node.type === 'TSAsExpression' ||
+    node.type === 'TSSatisfiesExpression' ||
+    node.type === 'TSNonNullExpression'
+  ) {
+    return isRejectedHandlerBundle(node.expression, factories);
+  }
+
+  // A literal tuple is fully visible here, so an empty one or one holding a
+  // value that cannot be a handler is provably wrong.
+  if (node.type === 'ArrayExpression') {
+    const elements =
+      (node as NodeView & { elements?: unknown[] }).elements ?? [];
+    return elements.length === 0 || !elements.every(isHandlerValue);
+  }
+  // Likewise for a factory called with no handlers at all.
+  if (node.type === 'CallExpression') {
+    const callee = asNode(node.callee);
+    const arguments_ =
+      (node as NodeView & { arguments?: unknown[] }).arguments ?? [];
+    return (
+      callee?.type === 'Identifier' &&
+      callee.name !== undefined &&
+      factories.has(callee.name) &&
+      (arguments_.length === 0 || !arguments_.every(isHandlerValue))
+    );
+  }
+
+  return (
+    node.type === 'ArrowFunctionExpression' ||
+    node.type === 'ClassExpression' ||
+    node.type === 'FunctionExpression' ||
+    node.type === 'Literal' ||
+    node.type === 'NewExpression' ||
+    node.type === 'ObjectExpression' ||
+    node.type === 'TemplateLiteral'
+  );
 }
 
 function isHandlerValue(value: unknown): boolean {

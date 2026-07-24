@@ -1756,6 +1756,45 @@ test('a named method cannot export an empty handler tuple', async () => {
   }
 });
 
+test('a named method may come from a project wrapper or a shared tuple', async () => {
+  const root = await mkdtemp(`${tmpdir()}/daroyan-wrapped-handler-`);
+
+  await mkdir(`${root}/src/routes`, { recursive: true });
+  await writeFile(`${root}/src/app.ts`, temporaryAppSource);
+  await writeFile(
+    `${root}/src/shared.ts`,
+    [
+      'export const shared = [(c: any) => c.json({ shared: true })] as const;',
+      'export const withAudit = (...handlers: any[]) => handlers;',
+      '',
+    ].join('\n')
+  );
+  await writeFile(
+    `${root}/src/routes/health.ts`,
+    [
+      `import { defineHandler } from ${JSON.stringify(
+        fileURLToPath(new URL('../src/app.ts', import.meta.url))
+      )};`,
+      'import { shared, withAudit } from "../shared.ts";',
+      'export const GET = shared;',
+      'export const POST = withAudit(...defineHandler((c) => c.json({ ok: true })));',
+      '',
+    ].join('\n')
+  );
+
+  try {
+    await expect(
+      resolveConfig({ configFile: false, plugins: [daroyan()], root }, 'serve')
+    ).resolves.toBeDefined();
+
+    const entry = await readFile(`${root}/.daroyan/entry.ts`, 'utf8');
+    expect(entry).toContain('.get("/health"');
+    expect(entry).toContain('.post("/health"');
+  } finally {
+    await rm(root, { recursive: true });
+  }
+});
+
 test('a named method tuple rejects values that cannot be handlers', async () => {
   const root = await mkdtemp(`${tmpdir()}/daroyan-invalid-handler-value-`);
 

@@ -187,9 +187,19 @@ daroyan({
 });
 ```
 
-Supported method values must be local `defineHandler()` tuples. Daroyan
-rejects method-named function/class declarations and external method
-re-exports early instead of allowing a later spread failure.
+A method export is spread into Hono, so it must be an array of handlers.
+`defineHandler()` is the convenient spelling, but a shared tuple or a project
+wrapper works too:
+
+```ts
+export const GET = sharedHandlers;
+export const POST = withAudit(...defineHandler(handler));
+```
+
+Daroyan rejects only what is provably wrong at scan time — an empty tuple, a
+tuple holding a non-handler, a bare function, and method-named function/class
+declarations or external re-exports, none of which can be spread. Anything
+else is left to TypeScript, which checks it against your own source.
 
 ## Directory middleware
 
