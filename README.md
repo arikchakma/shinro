@@ -4,6 +4,7 @@ This repository contains Daroyan, type-safe file routing and Hono RPC for
 user-owned Node.js and Bun servers.
 
 - Package and usage guide: [`packages/routes/README.md`](./packages/routes/README.md)
+- File route conventions: [`docs/file-route-conventions.md`](./docs/file-route-conventions.md)
 - Complete v0.1 contract: [`SPEC.md`](./SPEC.md)
 
 ## Workspace commands
