@@ -50,8 +50,8 @@ your control.
 
 - [`packages/shinro`](./packages/shinro) — the package, with the
   [installation and usage guide](./packages/shinro/README.md).
-- [`apps/api`](./apps/api) — a runnable Node.js API demonstrating every route
-  authoring convention.
+- [`examples/api`](./examples/api) — a runnable Node.js API demonstrating every
+  route authoring convention.
 - [`docs/file-route-conventions.md`](./docs/file-route-conventions.md) — the
   complete list of filename conventions.
 - [`docs/SPEC.md`](./docs/SPEC.md) — the complete v0.1 contract, diagnostics, and test
