@@ -2,6 +2,7 @@
   "name": "@shinro/api",
   "version": "0.0.0",
   "private": true,
+  "description": "Runnable Hono API showcasing every Shinro route authoring convention.",
   "type": "module",
   "exports": {
     "./client": "./.shinro/client.ts",

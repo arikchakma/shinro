@@ -1,8 +1,34 @@
 {
   "name": "shinro",
   "version": "0.0.0",
-  "description": "Type-safe file routing for Hono on Node.js and Bun.",
+  "description": "Type-safe file-based routing and RPC for Hono on Node.js and Bun.",
+  "keywords": [
+    "api",
+    "backend",
+    "bun",
+    "file-based-routing",
+    "file-router",
+    "filesystem-routing",
+    "hono",
+    "node",
+    "routing",
+    "rpc",
+    "server",
+    "type-safe",
+    "typescript",
+    "vite-plugin"
+  ],
+  "homepage": "https://github.com/arikchakma/shinro#readme",
+  "bugs": {
+    "url": "https://github.com/arikchakma/shinro/issues"
+  },
   "license": "MIT",
+  "author": "Arik Chakma <arikchangma@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/arikchakma/shinro.git",
+    "directory": "packages/shinro"
+  },
   "bin": {
     "shinro": "./dist/cli.mjs"
   },
@@ -56,5 +82,8 @@
   "peerDependencies": {
     "hono": "^4.0.0",
     "vite-plus": "^0.2.0"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   }
 }
