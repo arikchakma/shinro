@@ -1,18 +1,17 @@
 # File route conventions
 
-Shinro turns files under `src/routes` into Hono routes. This page is the
-complete list of conventions: how a filename becomes a URL, which files are
-not routes, and how to escape a convention when you need the character
-itself.
+Shinro turns files under `src/routes` into Hono routes. This guide covers every
+filename convention: how files map to URLs, which files Shinro ignores, and how
+to escape reserved characters.
 
-URL structure follows directory structure. A filename is one segment, a
-directory is one segment, and the sigils below change what a segment means.
+URLs follow the directory structure. Each directory and filename contributes
+one segment unless one of the conventions below changes its meaning.
 
 ## Setup
 
 ```ts
 // vite.config.ts
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vite-plus';
 import { shinro } from 'shinro';
 
 export default defineConfig({
@@ -27,8 +26,8 @@ Options that affect routing:
 - `basePath` — a prefix applied to every generated URL, so `basePath: '/v1'`
   serves `src/routes/health.ts` at `/v1/health`. It is not a filename
   convention; every example below shows the path before the prefix.
-- `ignoredRouteFiles` — extra exclusions, as minimatch globs relative to the
-  routes directory.
+- `ignoredRouteFiles` — additional exclusions expressed as minimatch globs
+  relative to the routes directory.
 
 ## Routing conventions
 
@@ -53,8 +52,7 @@ export const GET = defineHandler((c) => c.json({ ok: true }, 200));
 
 ### Index routes
 
-`index` contributes no URL segment, so a directory's own URL is served by the
-`index.ts` inside it.
+`index` contributes no URL segment, so `index.ts` serves its directory's URL.
 
 | Route file                      | URL          |
 | ------------------------------- | ------------ |
@@ -66,15 +64,15 @@ pick one per URL. Use the directory form when the URL has children.
 
 ### Nested routes
 
-Nesting is directory nesting: one directory, one URL segment.
+Each nested directory contributes one URL segment.
 
 | Route file                    | URL              |
 | ----------------------------- | ---------------- |
 | `src/routes/api/users.ts`     | `/api/users`     |
 | `src/routes/api/users/$id.ts` | `/api/users/:id` |
 
-A `.` in a filename is an ordinary character rather than a separator, which is
-what lets a route serve a URL with an extension:
+A `.` in a filename is an ordinary character, allowing a route to serve a URL
+with an extension:
 
 | Route file                   | URL             |
 | ---------------------------- | --------------- |
@@ -118,17 +116,16 @@ be the last segment that contributes to the URL.
 | ------------------------------ | ------------------ |
 | `src/routes/files/$...path.ts` | `/files/:path{.+}` |
 
-`{.+}` requires at least one segment, so `/files/a/b.txt` matches and `/files`
-does not. Add `src/routes/files/index.ts` if the bare path should be served
-too. There is no unnamed catch-all: a catch-all always names its parameter, and
-a project-wide 404 belongs on your Hono app as `app.notFound(...)` rather than
-in the route tree.
+`{.+}` requires at least one segment, so `/files/a/b.txt` matches but `/files`
+does not. Add `src/routes/files/index.ts` to serve the bare path. Catch-alls
+must have names. Handle project-wide 404 responses on the Hono app with
+`app.notFound(...)`, not in the route tree.
 
 ### Route groups
 
 A directory named `(name)` contributes directory-middleware ancestry but no
-URL segment. It is how you apply middleware to a chosen set of sibling URLs
-without renaming them.
+URL segment. Use it to apply middleware to selected sibling routes without
+changing their URLs.
 
 ```text
 src/routes/(authed)/_middleware.ts   ← wraps the two routes below
@@ -161,20 +158,19 @@ src/routes/api/_middleware.ts
 src/routes/api/users.ts
 ```
 
-Inheritance is filesystem containment with no per-route opt-out — a route
-inside a middleware directory is always wrapped by it. To cover only some
-sibling URLs, group the covered ones under a `(name)` directory instead of
-exempting the others.
+Inheritance follows filesystem containment and has no per-route opt-out: a
+route inside a middleware directory is always wrapped by it. To cover only
+some sibling routes, place them under a `(name)` directory.
 
-Shinro flattens the chain onto each named route, so a typed early response
-from middleware (a `401`, say) enters that route's RPC response union. The
-trade is that directory middleware runs only when a route matches; concerns
-that must see every request, such as CORS, belong on the base app.
+Shinro flattens the chain onto each named route, so a typed early middleware
+response, such as `401`, enters that route's RPC response union. Directory
+middleware therefore runs only when a route matches. Concerns that must see
+every request, such as CORS, belong on the base app.
 
 ### Escaping special characters
 
-Wrap a `[...]` span around text that route syntax would otherwise claim, and
-it is emitted literally.
+Wrap text that would otherwise be interpreted as route syntax in `[...]` to
+emit it literally.
 
 | Route file                     | URL             |
 | ------------------------------ | --------------- |
@@ -253,12 +249,12 @@ That file then owns the whole `/admin` namespace, so it cannot coexist with
 
 ### Conflicts
 
-Generation fails, naming both files and the normalized URL, when two routes
-produce the same URL (`users.ts` and `users/index.ts`), when two dynamic
-routes have equivalent matching shapes (`users/$id.ts` and `users/$slug.ts`),
-or when a route invades a sub-router's namespace. Because a group contributes
-no URL segment, files at different depths can collapse onto one URL —
-`(authed)/orders.ts` and `orders.ts` conflict, and the diagnostic says so.
+Generation fails when two routes produce the same URL (`users.ts` and
+`users/index.ts`), when dynamic routes have equivalent matching shapes
+(`users/$id.ts` and `users/$slug.ts`), or when a route enters a sub-router's
+namespace. The diagnostic names both files and the normalized URL. Because a
+group contributes no URL segment, files at different depths can collapse onto
+one URL: `(authed)/orders.ts` and `orders.ts` conflict.
 
 ## Full mapping reference
 
@@ -283,7 +279,7 @@ except `/`.
 
 ## Unsupported
 
-Filename conventions that Shinro deliberately does not have:
+Shinro deliberately omits these filename conventions:
 
 - **Dot delimiters.** `reports.monthly.ts` serves `/reports.monthly`. Use a
   directory to nest.

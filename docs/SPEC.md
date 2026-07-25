@@ -1,13 +1,13 @@
-# Shinro specification
+# Shinro Specification
 
 Status: proposal for refinement  
 Target: v0.1  
 Package name: `shinro`
 
-> Shinro is a file-based routing framework for Hono applications running
-> on Node.js or Bun. One Vite plugin discovers routes, mounts them onto a
-> normal Hono instance, generates optional route types and an end-to-end
-> typed RPC client, and bundles the user's server entry.
+> Shinro provides file-based routing for Hono applications running on Node.js
+> or Bun. One Vite plugin discovers routes, exposes them as a mountable Hono
+> sub-router, generates optional route types and an end-to-end typed RPC
+> client, and bundles the application's server entry.
 
 ## 1. Confirmed API direction
 
@@ -33,13 +33,13 @@ const app = defineApp()
 export default app;
 ```
 
-`defineApp()` returns a real Hono instance. The user may call any Hono API
-on it and exports that instance as the default export.
+`defineApp()` returns a Hono instance. The user may call any Hono API on it
+before exporting that instance as the default export.
 
-`shinro/routes` is the file routes as a mountable Hono sub-router, and the
-application mounts it. Nothing generated imports the application, so the
-application is free to import the generated router — and `src/app.ts` is the
-whole app, with no second module that is secretly the real one.
+`shinro/routes` exposes the file routes as a mountable Hono sub-router. Nothing
+generated imports the application, so the application can safely import the
+router. The exported `src/app.ts` module remains the complete app; no generated
+module replaces it.
 
 Shinro does not define application startup or shutdown APIs. It does not
 register signal handlers, close databases, drain queues, call
@@ -107,7 +107,7 @@ generic's response-inference limitation is documented in section 14.2.
 
 By default the build is unbundled (`build.unbundle: true`): the output
 preserves the source module tree and keeps dependencies external, so `dist`
-mirrors `src` and is easy to debug. Setting `build.unbundle: false` opts into
+mirrors `src` and remains easy to inspect. Setting `build.unbundle: false` opts into
 the self-contained single-artifact model — the entry and all of its ordinary
 JavaScript and TypeScript dependencies are bundled into one `dist/server.mjs`
 file (see section 21).
@@ -130,7 +130,7 @@ application or its process.
 | Directory middleware helper    | `defineMiddleware()` |
 | Generated file router          | `shinro/routes`      |
 | Generated RPC application type | `AppType`            |
-| Generated client factory       | `createClient()`     |
+| Generated client factory       | `defineClient()`     |
 | Generated working directory    | `.shinro/`           |
 | Log prefix                     | `[shinro]`           |
 
@@ -169,10 +169,10 @@ Shinro must not introduce lifecycle hooks such as `onStart`,
 ## 5. Goals
 
 - Add file-based routing to a Hono server with one Vite plugin.
-- Preserve the normal Hono programming model.
+- Preserve the standard Hono programming model.
 - Avoid required per-route generated imports or duplicated path strings.
 - Allow stricter filename-derived route types when a project wants them.
-- Support explicit runtime validation through normal Hono validators.
+- Support explicit runtime validation through Hono validators.
 - Generate an end-to-end typed Hono RPC client.
 - Support user-owned Node.js and Bun server entries.
 - Make adding, removing, or renaming route files update development routing
@@ -392,7 +392,7 @@ described in section 17:
 const app = defineApp<{ Variables: { tenant: string } }>();
 ```
 
-The return value is a normal Hono instance:
+The return value is a Hono instance:
 
 ```ts
 app.use('*', middleware);
@@ -422,9 +422,7 @@ The configured app module must default-export the Hono instance:
 import { defineApp } from 'shinro/app';
 import { routes } from 'shinro/routes';
 
-const app = defineApp()
-  // Any normal Hono configuration can go here.
-  .route('/', routes());
+const app = defineApp().route('/', routes());
 
 export default app;
 ```
@@ -694,7 +692,7 @@ This form still provides:
 - middleware and validator inference;
 - response body and status inference;
 - the generated RPC route and client parameter;
-- normal Hono parameter access.
+- standard Hono parameter access.
 
 It does not provide exact filename-derived parameter-key checking inside
 `c.req.param()`.
@@ -796,7 +794,7 @@ Use:
 - `Route.Handler` when exact filename-derived `c.req.param()` keys are
   useful;
 - both when a team wants both guarantees;
-- neither for a low-ceremony route that accepts normal Hono typing.
+- neither for a low-ceremony route that uses standard Hono typing.
 
 `+types` must never be required for route discovery, runtime registration,
 builds, or RPC generation.
@@ -889,7 +887,7 @@ The bundle preserves the original tuple, including each middleware's input
 and return type. It must not widen the result to `MiddlewareHandler[]`.
 Shinro spreads it during registration, so request-side code runs
 left-to-right. Code after `await next()` unwinds right-to-left, following
-normal Hono middleware behavior.
+standard Hono middleware behavior.
 
 Existing bundles can be composed without a separate array API:
 
@@ -1158,15 +1156,15 @@ export function routes(): Hono<ProjectEnv /* generated schema */>;
 export type Routes = ReturnType<typeof routes>;
 ```
 
-It notably does **not** import `src/app.ts`. The dependency runs one way — the
-application imports the router — which is what allows `src/app.ts` to be the
+It notably does **not** import `src/app.ts`. The dependency runs one way: the
+application imports the router. This allows `src/app.ts` to remain the
 application, with no generated module standing in for it.
 
 The router carries no `onError`. Hono's `route()` wraps every copied handler in
 a compose closure when the sub-app has its own error handler, so error handling
 belongs on the application.
 
-Mounting is a normal Hono call:
+Mounting uses the standard Hono API:
 
 ```ts
 const app = defineApp().route('/', routes());
@@ -1436,8 +1434,8 @@ Registration priority:
 The generated `.shinro/manifest.json` exists for debugging. Production
 code does not read it from disk. Its `file` entries are on-disk paths and
 its `path`/`mountPath` entries are URLs, so a route group appears only in
-`file` and in the `middleware` list — which is what makes a group's effect
-visible when a URL alone would not explain it.
+`file` and in the `middleware` list. This makes the group's effect visible
+when the URL alone would not explain it.
 
 Example:
 
@@ -1557,7 +1555,7 @@ const typedClient = hc<AppType>('');
 export type Client = typeof typedClient;
 export type { AppType };
 
-export const createClient = (...args: Parameters<typeof hc>): Client =>
+export const defineClient = (...args: Parameters<typeof hc>): Client =>
   hc<AppType>(...args);
 
 export type { InferRequestType, InferResponseType } from 'hono/client';
@@ -1585,9 +1583,9 @@ An API workspace can expose its generated client:
 The consumer:
 
 ```ts
-import { createClient } from '@acme/api/client';
+import { defineClient } from '@acme/api/client';
 
-export const api = createClient('http://localhost:3000', {
+export const api = defineClient('http://localhost:3000', {
   init: {
     credentials: 'include',
   },
@@ -1822,8 +1820,8 @@ Requirements:
   resolves to it. It is written whether or not RPC is enabled, because mounting
   it is how the application serves anything;
 - `.shinro/shinro.d.ts` declares the ambient modules for every specifier the
-  plugin resolves. It has no top-level imports, which is what an ambient
-  `declare module` requires; the `shinro/client` and `shinro/rpc` blocks are
+  plugin resolves. It has no top-level imports, as required by an ambient
+  `declare module`; the `shinro/client` and `shinro/rpc` blocks are
   written only when RPC generation is enabled, matching the files that exist;
 - nothing generated imports the application at runtime. `.shinro/client.ts` is
   the only generated module that references it, and only as a type;
@@ -2140,9 +2138,9 @@ process.once('SIGTERM', () => {
 ### 28.8 Client
 
 ```ts
-import { createClient } from '@acme/api/client';
+import { defineClient } from '@acme/api/client';
 
-const api = createClient('http://localhost:3000');
+const api = defineClient('http://localhost:3000');
 
 const response = await api.api.users[':id'].$get({
   param: {
@@ -2253,7 +2251,7 @@ v0.1 is complete when:
 - implementation proceeded as one vertical Red–Green–Refactor slice at a
   time rather than all tests followed by all production code.
 - `plugins: [shinro()]` is the only required Vite integration.
-- `defineApp()` returns a normal Hono instance.
+- `defineApp()` returns a Hono instance.
 - the app module uses ordinary Hono APIs and default-exports the instance.
 - `shinro/routes` exposes the file routes as a mountable sub-router without a
   user-facing `virtual:` import, and `typeof app` retains the mounted schema.
@@ -2294,7 +2292,7 @@ v0.1 is complete when:
 ## 31. Finalized v0.1 implementation decisions
 
 1. **App defaults.** `defineApp()` preserves Hono's default strict routing.
-   Users can pass normal Hono constructor options when they want different
+   Users can pass Hono constructor options when they want different
    behavior.
 2. **Development isolation.** Shinro runs the user-owned server entry in an
    isolated Node child that loads modules through Vite's SSR module runner.
@@ -2320,8 +2318,6 @@ surface:
 
 ```ts
 const app = defineApp();
-
-// Use normal Hono APIs.
 
 export default app;
 ```

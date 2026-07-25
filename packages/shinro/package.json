@@ -1,7 +1,7 @@
 {
   "name": "shinro",
   "version": "0.0.0",
-  "description": "Type-safe file-based routing and RPC for Hono on Node.js and Bun.",
+  "description": "Opinionated file-based routing for Hono with end-to-end type safety.",
   "keywords": [
     "api",
     "backend",

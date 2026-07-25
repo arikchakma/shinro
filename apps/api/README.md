@@ -1,7 +1,7 @@
 # Shinro API showcase
 
-A runnable Node.js API demonstrating Shinro's public route authoring
-features without application infrastructure.
+A runnable Node.js API demonstrating Shinro's route-authoring features in a
+small, focused application.
 
 ```sh
 vp run api#typegen
@@ -17,8 +17,8 @@ configured `/v1` base path.
 - every supported named HTTP method;
 - JSON, query, and parameter validation;
 - route-local and inherited directory middleware;
-- a `(authed)` group directory scoping middleware to `/v1/orders` alone, and
-  an escaped `[sitemap.xml].ts` serving `/v1/sitemap.xml`;
+- a `(authed)` group directory that scopes middleware to `/v1/orders`, plus an
+  escaped `[sitemap.xml].ts` route serving `/v1/sitemap.xml`;
 - optional generated route and middleware companions;
 - a chained Hono sub-router and a chained manual route;
 - generated Hono RPC and client exports;
@@ -28,7 +28,7 @@ Type generation reports Shinro's documented sub-router boundary warning:
 the root directory middleware runs around `/v1/admin`, but its response
 types cannot be merged into every opaque route inside that sub-router.
 
-Try the protected route with and without its demonstration credential:
+Call the protected route with and without the demo credential:
 
 ```sh
 curl http://localhost:3000/v1/protected
