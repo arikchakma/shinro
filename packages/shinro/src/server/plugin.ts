@@ -121,7 +121,6 @@ export function shinro(options: ShinroOptions = {}): Plugin {
               noExternal: [],
             }
           : {
-              // The default single-artifact build inlines every dependency.
               noExternal: true,
             },
       };
@@ -314,8 +313,6 @@ export function shinro(options: ShinroOptions = {}): Plugin {
       }
 
       if (assets.length > 0) {
-        // `this.warn` attributes the message to this plugin and routes it
-        // through the bundler's own reporting.
         this.warn(
           `[shinro] Production output contains an external runtime asset (${assets
             .map((asset) => asset.fileName)

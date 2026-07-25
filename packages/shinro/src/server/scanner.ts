@@ -31,16 +31,13 @@ type DirectoryMiddleware = {
   path: string;
 };
 
-/** One run of a filename segment, either inside a `[...]` escape or outside it. */
 type SegmentPart = {
   escaped: boolean;
   text: string;
 };
 
 type PathSegment = {
-  /** Whether a `[...]` escape made this segment static. */
   escaped: boolean;
-  /** The segment with its escapes resolved, before dynamic mapping. */
   literal: string;
 };
 
@@ -725,14 +722,11 @@ function isRejectedHandlerBundle(
     return isRejectedHandlerBundle(node.expression, factories);
   }
 
-  // A literal tuple is fully visible here, so an empty one or one holding a
-  // value that cannot be a handler is provably wrong.
   if (node.type === 'ArrayExpression') {
     const elements =
       (node as NodeView & { elements?: unknown[] }).elements ?? [];
     return elements.length === 0 || !elements.every(isHandlerValue);
   }
-  // Likewise for a factory called with no handlers at all.
   if (node.type === 'CallExpression') {
     const callee = asNode(node.callee);
     const arguments_ =

@@ -25,9 +25,7 @@ const app = defineApp()
       200
     );
   })
-  // File routes mount after the global middleware, so it wraps them. Hono
-  // composes handlers in registration order, and `route()` copies the generated
-  // router's routes onto this instance rather than nesting a second router.
+  // Global middleware must be registered before file routes.
   .route('/', routes())
   .onError((error, c) => {
     console.error(error);

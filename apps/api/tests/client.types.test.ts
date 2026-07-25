@@ -41,8 +41,6 @@ test('manual and default sub-router paths are retained by RPC generation', () =>
 });
 
 test('a grouped route keeps its middleware response but drops the group segment', () => {
-  // `Client['v1']['orders']` rather than `Client['v1']['(authed)']['orders']`:
-  // the group shapes middleware, not the URL or the RPC contract.
   expectTypeOf<OrdersResponse['status']>().toEqualTypeOf<200 | 401>();
   expectTypeOf<InferResponseType<GetOrders>>().toEqualTypeOf<
     | { error: 'UNAUTHORIZED' }

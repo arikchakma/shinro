@@ -212,7 +212,6 @@ test('a group directory protects its routes without appearing in their URLs', as
     orders: ['ord_1', 'ord_2'],
   });
 
-  // The group names no URL segment, and the sibling outside it stays public.
   expect((await app.request('/v1/(authed)/orders')).status).toBe(404);
   expect((await app.request('/v1/health')).status).toBe(200);
 });

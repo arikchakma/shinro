@@ -38,9 +38,6 @@ const temporaryAppSource = [
 ].join('\n');
 
 test('mounting the generated router keeps one Hono instance', () => {
-  // `route()` copies the sub-router's routes into the parent and returns the
-  // same instance, so file routes land on the app src/app.ts exports rather
-  // than on a separate router dispatched to at request time.
   expect(app.routes.map((route) => route.path)).toContain('/health');
   expect(app.routes.map((route) => route.path)).toContain('/manual');
 });
@@ -603,7 +600,6 @@ test('rpc.outDir refuses a directory holding files Shinro did not generate', asy
       )
     ).rejects.toThrow(/\[shinro\][\s\S]*Refusing to generate[\s\S]*app\.ts/i);
 
-    // The source directory must survive the rejected configuration untouched.
     await expect(readFile(`${root}/src/app.ts`, 'utf8')).resolves.toBe(
       temporaryAppSource
     );
@@ -1131,7 +1127,6 @@ test('only route-tree files are treated as regeneration triggers', () => {
   expect(affects('__tests__/health.ts')).toBe(false);
   expect(affects('+types/health.d.ts')).toBe(false);
   expect(affects('internal/secret.ts', ['internal/**'])).toBe(false);
-  // An ignore pattern hides directory middleware as well as route modules.
   expect(affects('internal/_middleware.ts', ['internal/**'])).toBe(false);
 });
 
@@ -1476,7 +1471,6 @@ test('the default build keeps the server entry but preserves the source module t
       .filter((chunk) => chunk.type === 'chunk');
     const entryChunks = chunks.filter((chunk) => chunk.isEntry);
 
-    // A dynamic import that would fail the single-artifact build is allowed here.
     expect(chunks.length).toBeGreaterThan(1);
     expect(entryChunks).toHaveLength(1);
     expect(entryChunks[0]?.fileName).toBe('server.mjs');
@@ -1649,8 +1643,6 @@ test('an app that never mounts the generated router warns with the route count',
       'serve'
     );
 
-    // Nothing throws — the app is valid Hono, it just serves no file routes.
-    // Silence would leave the user with an empty router and no explanation.
     expect(warnings.join('\n')).toMatch(
       /\[shinro\][\s\S]*src\/app\.ts[\s\S]*shinro\/routes[\s\S]*1[\s\S]*\.route\("\/", routes\(\)\)/i
     );
@@ -3173,8 +3165,6 @@ test('a group directory wraps its routes in middleware without entering the URL'
       default: { request(path: string): Promise<Response> };
     };
 
-    // The group names no URL segment, yet its middleware still wraps the route,
-    // and a sibling outside the group is untouched.
     await expect(
       (await appModule.default.request('/orders')).json()
     ).resolves.toEqual({ group: 'authed' });
@@ -3474,9 +3464,6 @@ test('a production build emits a grouped route under its on-disk path', async ()
 test('a grouped fixture route reaches the client without its group segment', async () => {
   const response = await client.scoped.$get();
 
-  // `client.scoped`, not `client['(grouped)'].scoped`: the group shapes
-  // middleware, not the URL or the RPC contract. That this compiles at all is
-  // the assertion — the group segment is absent from the generated client.
   expect(response.status).toBe(200);
   expect(response.headers.get('x-group')).toBe('grouped');
   await expect(response.json()).resolves.toEqual({ scoped: true });

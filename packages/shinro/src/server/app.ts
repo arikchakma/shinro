@@ -140,7 +140,6 @@ function registersMiddlewareAfterMount(
 
 type ChainCall = { mountsRoutes: boolean; name: string };
 
-/** Every chained call on an expression, ordered base-first. */
 function appChains(value: unknown, routers: Set<string>): ChainCall[][] {
   const node = asNode(value);
   if (!node) {

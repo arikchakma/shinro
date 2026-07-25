@@ -111,7 +111,6 @@ export function importedFrom(
   return locals;
 }
 
-/** Whether an expression tree calls any of the given bound names. */
 export function containsCallTo(value: unknown, names: Set<string>): boolean {
   const node = asNode(value);
   if (!node || names.size === 0) {
@@ -138,7 +137,6 @@ export function containsCallTo(value: unknown, names: Set<string>): boolean {
   );
 }
 
-/** Collects the local names bound to a named import from any module. */
 export function importedAs(
   ast: ReturnType<typeof parseModule>,
   importedName: string
@@ -164,7 +162,6 @@ export function importedAs(
   return locals;
 }
 
-/** Resolves an export specifier's local and exported names to strings. */
 export function specifierNames(specifier: {
   exported: { name?: string; value?: unknown; type: string };
   local: { name?: string; value?: unknown; type: string };
