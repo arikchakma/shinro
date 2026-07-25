@@ -3087,3 +3087,358 @@ test('directory middleware cannot export an empty middleware tuple', async () =>
     await rm(root, { recursive: true });
   }
 });
+
+test('a group directory wraps its routes in middleware without entering the URL', async () => {
+  const packageRoot = fileURLToPath(new URL('..', import.meta.url));
+  const root = await mkdtemp(`${packageRoot}/.daroyan-route-group-`);
+  const helper = JSON.stringify(
+    fileURLToPath(new URL('../src/app.ts', import.meta.url))
+  );
+
+  await mkdir(`${root}/src/routes/(authed)`, { recursive: true });
+  await writeFile(`${root}/src/app.ts`, temporaryAppSource);
+  await writeFile(
+    `${root}/src/routes/(authed)/_middleware.ts`,
+    [
+      `import { defineMiddleware } from ${helper};`,
+      'export default defineMiddleware(async (c, next) => {',
+      '  c.set("group", "authed");',
+      '  await next();',
+      '});',
+      '',
+    ].join('\n')
+  );
+  await writeFile(
+    `${root}/src/routes/(authed)/orders.ts`,
+    'export const GET = [(c: any) => c.json({ group: c.get("group") ?? null })] as const;\n'
+  );
+  await writeFile(
+    `${root}/src/routes/health.ts`,
+    'export const GET = [(c: any) => c.json({ group: c.get("group") ?? null })] as const;\n'
+  );
+
+  const server = await createServer({
+    configFile: false,
+    customLogger: createLogger('silent'),
+    plugins: [daroyan()],
+    root,
+    server: { middlewareMode: true },
+  });
+
+  try {
+    const runner = createServerModuleRunner(server.environments.ssr);
+    const appModule = (await runner.import(`${root}/src/app.ts`)) as {
+      default: { request(path: string): Promise<Response> };
+    };
+
+    // The group names no URL segment, yet its middleware still wraps the route,
+    // and a sibling outside the group is untouched.
+    await expect(
+      (await appModule.default.request('/orders')).json()
+    ).resolves.toEqual({ group: 'authed' });
+    await expect(
+      (await appModule.default.request('/health')).json()
+    ).resolves.toEqual({ group: null });
+    expect((await appModule.default.request('/(authed)/orders')).status).toBe(
+      404
+    );
+  } finally {
+    await server.close();
+    await rm(root, { recursive: true });
+  }
+});
+
+test('a group directory keeps its middleware in the manifest but not in the path', async () => {
+  const root = await mkdtemp(`${tmpdir()}/daroyan-route-group-manifest-`);
+  const helper = JSON.stringify(
+    fileURLToPath(new URL('../src/app.ts', import.meta.url))
+  );
+
+  await mkdir(`${root}/src/routes/(authed)`, { recursive: true });
+  await writeFile(`${root}/src/app.ts`, temporaryAppSource);
+  await writeFile(
+    `${root}/src/routes/(authed)/_middleware.ts`,
+    [
+      `import { defineMiddleware } from ${helper};`,
+      'export default defineMiddleware(async (_c, next) => { await next(); });',
+      '',
+    ].join('\n')
+  );
+  await writeFile(
+    `${root}/src/routes/(authed)/orders.ts`,
+    'export const GET = [(c: any) => c.json({ ok: true })] as const;\n'
+  );
+
+  try {
+    await resolveConfig(
+      { configFile: false, plugins: [daroyan()], root },
+      'serve'
+    );
+    const manifest = JSON.parse(
+      await readFile(`${root}/.daroyan/manifest.json`, 'utf8')
+    ) as {
+      routes: Array<{ file: string; middleware: string[]; path: string }>;
+    };
+
+    expect(manifest.routes).toEqual([
+      {
+        file: 'src/routes/(authed)/orders.ts',
+        kind: 'methods',
+        methods: ['GET'],
+        middleware: ['src/routes/(authed)/_middleware.ts'],
+        path: '/orders',
+      },
+    ]);
+  } finally {
+    await rm(root, { recursive: true });
+  }
+});
+
+test('group directories and escaped segments derive their URLs', async () => {
+  const root = await mkdtemp(`${tmpdir()}/daroyan-segment-derivation-`);
+  const expected = {
+    '(a)/orders.ts': '/orders',
+    '(a)/(b)/nested.ts': '/nested',
+    '(a)/index.ts': '/',
+    '(a)/$id.ts': '/:id',
+    'files/$...path/(a)/index.ts': '/files/:path{.+}',
+    '[(foo)].ts': '/(foo)',
+    '[(bar)]/orders.ts': '/(bar)/orders',
+    '[$]id.ts': '/$id',
+    'v[$]1.ts': '/v$1',
+    '[index].ts': '/index',
+    '[[weird]].ts': '/[weird]',
+    '[sitemap.xml].ts': '/sitemap.xml',
+    // A name beginning with `[` is not `_`-prefixed on disk, so the ignore rules
+    // never applied to it and the escape simply reaches the URL.
+    '[_]internal.ts': '/_internal',
+  };
+
+  await mkdir(`${root}/src/routes`, { recursive: true });
+  await writeFile(`${root}/src/app.ts`, temporaryAppSource);
+  for (const file of Object.keys(expected)) {
+    const directory = file.includes('/')
+      ? `/${file.slice(0, file.lastIndexOf('/'))}`
+      : '';
+    await mkdir(`${root}/src/routes${directory}`, { recursive: true });
+    await writeFile(
+      `${root}/src/routes/${file}`,
+      'export const GET = [(c: any) => c.json({ ok: true })] as const;\n'
+    );
+  }
+
+  try {
+    await resolveConfig(
+      { configFile: false, plugins: [daroyan()], root },
+      'serve'
+    );
+    const manifest = JSON.parse(
+      await readFile(`${root}/.daroyan/manifest.json`, 'utf8')
+    ) as {
+      routes: Array<{ file: string; path: string }>;
+    };
+
+    expect(
+      Object.fromEntries(
+        manifest.routes.map((route) => [
+          route.file.replace('src/routes/', ''),
+          route.path,
+        ])
+      )
+    ).toEqual(expected);
+  } finally {
+    await rm(root, { recursive: true });
+  }
+});
+
+test('malformed groups and unserviceable segments fail with their source file', async () => {
+  const cases = [
+    {
+      file: '(foo).ts',
+      pattern: /\(foo\)" names a route group, which only a directory can be/,
+    },
+    { file: '()/x.ts', pattern: /route group "\(\)" needs a name/ },
+    { file: '( )/x.ts', pattern: /route group "\( \)" needs a name/ },
+    {
+      file: '($id)/x.ts',
+      pattern: /route group "\(\$id\)" cannot declare a dynamic parameter/,
+    },
+    { file: '(authed/x.ts', pattern: /is not a valid route group/ },
+    { file: 'authed)/x.ts', pattern: /is not a valid route group/ },
+    { file: '$id[.pdf].ts', pattern: /cannot contain an escape/ },
+    { file: '[{]id.ts', pattern: /which is Hono path syntax/ },
+  ];
+
+  for (const { file, pattern } of cases) {
+    const root = await mkdtemp(`${tmpdir()}/daroyan-invalid-segment-`);
+    const directory = file.includes('/')
+      ? `/${file.slice(0, file.lastIndexOf('/'))}`
+      : '';
+
+    await mkdir(`${root}/src/routes${directory}`, { recursive: true });
+    await writeFile(`${root}/src/app.ts`, temporaryAppSource);
+    await writeFile(
+      `${root}/src/routes/${file}`,
+      'export const GET = [(c: any) => c.json({ ok: true })] as const;\n'
+    );
+
+    try {
+      await expect(
+        resolveConfig(
+          { configFile: false, plugins: [daroyan()], root },
+          'serve'
+        )
+      ).rejects.toThrow(pattern);
+    } finally {
+      await rm(root, { recursive: true });
+    }
+  }
+});
+
+test('a malformed group in directory middleware names the middleware file', async () => {
+  const root = await mkdtemp(`${tmpdir()}/daroyan-group-middleware-error-`);
+  const helper = JSON.stringify(
+    fileURLToPath(new URL('../src/app.ts', import.meta.url))
+  );
+
+  await mkdir(`${root}/src/routes/($id)`, { recursive: true });
+  await writeFile(`${root}/src/app.ts`, temporaryAppSource);
+  await writeFile(
+    `${root}/src/routes/($id)/_middleware.ts`,
+    [
+      `import { defineMiddleware } from ${helper};`,
+      'export default defineMiddleware(async (_c, next) => { await next(); });',
+      '',
+    ].join('\n')
+  );
+
+  try {
+    // The middleware's own URL is derived from a synthetic `index.ts`, which must
+    // never appear in a diagnostic because the user never wrote it.
+    await expect(
+      resolveConfig({ configFile: false, plugins: [daroyan()], root }, 'serve')
+    ).rejects.toThrow(/\(\$id\)\/_middleware\.ts: route group/);
+  } finally {
+    await rm(root, { recursive: true });
+  }
+});
+
+test('routes that collapse onto one URL through a group explain the collapse', async () => {
+  const layouts = [
+    ['(a)/orders.ts', 'orders.ts'],
+    ['(a)/orders.ts', '(b)/orders.ts'],
+  ];
+
+  for (const files of layouts) {
+    const root = await mkdtemp(`${tmpdir()}/daroyan-group-conflict-`);
+
+    await mkdir(`${root}/src/routes`, { recursive: true });
+    await writeFile(`${root}/src/app.ts`, temporaryAppSource);
+    for (const file of files) {
+      const directory = file.includes('/')
+        ? `/${file.slice(0, file.lastIndexOf('/'))}`
+        : '';
+      await mkdir(`${root}/src/routes${directory}`, { recursive: true });
+      await writeFile(
+        `${root}/src/routes/${file}`,
+        'export const GET = [(c: any) => c.json({ ok: true })] as const;\n'
+      );
+    }
+
+    try {
+      const error = await resolveConfig(
+        { configFile: false, plugins: [daroyan()], root },
+        'serve'
+      ).then(
+        () => undefined,
+        (reason: unknown) => reason as Error
+      );
+
+      expect(error?.message).toContain('Route conflict at "/orders"');
+      for (const file of files) {
+        expect(error?.message).toContain(`src/routes/${file}`);
+      }
+      expect(error?.message).toContain(
+        'A "(group)" directory contributes middleware only'
+      );
+    } finally {
+      await rm(root, { recursive: true });
+    }
+  }
+});
+
+test('a route inside a group keeps its companion type on disk and its URL in the type', async () => {
+  const root = await mkdtemp(`${tmpdir()}/daroyan-group-companion-`);
+
+  await mkdir(`${root}/src/routes/(authed)`, { recursive: true });
+  await writeFile(`${root}/src/app.ts`, temporaryAppSource);
+  await writeFile(
+    `${root}/src/routes/(authed)/orders.ts`,
+    'export const GET = [(c: any) => c.json({ ok: true })] as const;\n'
+  );
+
+  try {
+    await resolveConfig(
+      { configFile: false, plugins: [daroyan()], root },
+      'serve'
+    );
+    // The companion mirrors the source path so `./+types/orders.ts` resolves
+    // through `rootDirs`, while the type it declares carries the served URL.
+    const source = await readFile(
+      `${root}/.daroyan/types/src/routes/(authed)/+types/orders.d.ts`,
+      'utf8'
+    );
+
+    expect(source).toMatch(/path: "\/orders"/);
+  } finally {
+    await rm(root, { recursive: true });
+  }
+});
+
+test('a production build emits a grouped route under its on-disk path', async () => {
+  const packageRoot = fileURLToPath(new URL('..', import.meta.url));
+  const root = await mkdtemp(`${packageRoot}/.daroyan-group-build-`);
+
+  await mkdir(`${root}/src/routes/(authed)`, { recursive: true });
+  await writeFile(`${root}/src/app.ts`, temporaryAppSource);
+  await writeFile(
+    `${root}/src/routes/(authed)/orders.ts`,
+    'export const GET = [(c: any) => c.json({ ok: true })] as const;\n'
+  );
+  await writeFile(
+    `${root}/src/server.ts`,
+    ['import app from "./app.ts";', 'export default app;', ''].join('\n')
+  );
+
+  try {
+    const result = await build({
+      configFile: false,
+      logLevel: 'silent',
+      plugins: [daroyan()],
+      root,
+    });
+    const outputs = Array.isArray(result) ? result : [result];
+    const chunks = outputs
+      .flatMap((output) => ('output' in output ? output.output : []))
+      .filter((chunk) => chunk.type === 'chunk');
+
+    // Rolldown sanitizes `$` out of emitted filenames but leaves parentheses
+    // alone, so an unbundled build keeps the group directory intact.
+    expect(chunks.map((chunk) => chunk.fileName)).toContain(
+      'routes/(authed)/orders.mjs'
+    );
+  } finally {
+    await rm(root, { recursive: true });
+  }
+});
+
+test('a grouped fixture route reaches the client without its group segment', async () => {
+  const response = await client.scoped.$get();
+
+  // `client.scoped`, not `client['(grouped)'].scoped`: the group shapes
+  // middleware, not the URL or the RPC contract. That this compiles at all is
+  // the assertion — the group segment is absent from the generated client.
+  expect(response.status).toBe(200);
+  expect(response.headers.get('x-group')).toBe('grouped');
+  await expect(response.json()).resolves.toEqual({ scoped: true });
+});

@@ -31,6 +31,19 @@ type DirectoryMiddleware = {
   path: string;
 };
 
+/** One run of a filename segment, either inside a `[...]` escape or outside it. */
+type SegmentPart = {
+  escaped: boolean;
+  text: string;
+};
+
+type PathSegment = {
+  /** Whether a `[...]` escape made this segment static. */
+  escaped: boolean;
+  /** The segment with its escapes resolved, before dynamic mapping. */
+  literal: string;
+};
+
 type RouteManifest = {
   middleware: DirectoryMiddleware[];
   routes: Route[];
@@ -169,7 +182,11 @@ export async function discoverRoutes(
   return {
     middleware: middleware.map((file) => ({
       file,
-      path: routePath(routesDirectory, resolve(dirname(file), 'index.ts')),
+      path: routePath(
+        routesDirectory,
+        resolve(dirname(file), 'index.ts'),
+        file
+      ),
     })),
     routes: routes.sort(compareRoutes),
   };
@@ -269,7 +286,11 @@ async function validateMiddlewareModule(file: string): Promise<void> {
   }
 }
 
-export function validateRoutes(routes: Route[], root: string): void {
+export function validateRoutes(
+  routes: Route[],
+  root: string,
+  routesDirectory: string
+): void {
   // Each route's shape is derived once. Computing it inside the pairwise scan
   // ran two regex replacements per comparison, which grows quadratically with
   // the route count.
@@ -294,6 +315,15 @@ export function validateRoutes(routes: Route[], root: string): void {
         continue;
       }
 
+      // Two files at different depths collapsing onto one URL reads as a
+      // contradiction unless the message says why, so a group in either path
+      // explains itself here.
+      const groupHint =
+        isInGroupDirectory(routesDirectory, left.file) ||
+        isInGroupDirectory(routesDirectory, right.file)
+          ? [GROUP_SEGMENT_HINT]
+          : [];
+
       if (subRouterOverlap) {
         const owner = reservesPath(left, right.path) ? left : right;
         const descendant = owner === left ? right : left;
@@ -304,6 +334,7 @@ export function validateRoutes(routes: Route[], root: string): void {
             `- ${toProjectPath(root, owner.file)}`,
             `- ${toProjectPath(root, descendant.file)}`,
             `The default sub-router at ${owner.path} owns its complete mount namespace.`,
+            ...groupHint,
           ].join('\n')
         );
       }
@@ -313,6 +344,7 @@ export function validateRoutes(routes: Route[], root: string): void {
           `[daroyan] Route conflict at ${JSON.stringify(sameShape ? left.path : `${left.path} ↔ ${right.path}`)}:`,
           `- ${toProjectPath(root, left.file)}`,
           `- ${toProjectPath(root, right.file)}`,
+          ...groupHint,
         ].join('\n')
       );
     }
@@ -866,44 +898,88 @@ function sameStringSet(left: string[], right: string[]): boolean {
   );
 }
 
-function routePath(routesDirectory: string, file: string): string {
+/**
+ * The URL a route file serves.
+ *
+ * `reportedFile` exists because directory middleware derives its own URL from a
+ * synthetic `index.ts` inside its directory, so every diagnostic here must name
+ * the file the user actually wrote rather than one that does not exist.
+ */
+function routePath(
+  routesDirectory: string,
+  file: string,
+  reportedFile: string = file
+): string {
   const relativeFile = relative(routesDirectory, file).split(sep).join('/');
-  const segments = relativeFile.replace(/\.[^.]+$/, '').split('/');
+  const pathSegments = relativeFile.replace(/\.[^.]+$/, '').split('/');
+  const lastIndex = pathSegments.length - 1;
+  const segments: PathSegment[] = [];
 
-  if (segments.at(-1) === 'index') {
+  for (const [index, segment] of pathSegments.entries()) {
+    const parts = segmentParts(segment);
+
+    if (parts.some((part) => part.escaped) || !isGroupSegment(segment)) {
+      segments.push(pathSegment(reportedFile, parts, segment));
+      continue;
+    }
+
+    // Grouping is a property of a directory. A file has no descendants to group,
+    // and dropping its segment would alias the route onto its parent's URL, so
+    // the two readings get two spellings instead of one and a guess.
+    if (index === lastIndex) {
+      throw new Error(
+        `[daroyan] Invalid route ${reportedFile}: ${JSON.stringify(
+          segment
+        )} names a route group, which only a directory can be. Move the route into a ${JSON.stringify(
+          segment
+        )} directory, or rename it to ${JSON.stringify(
+          `[${segment}]`
+        )} to serve ${JSON.stringify(`/${segment}`)} literally.`
+      );
+    }
+
+    assertGroupName(reportedFile, segment);
+    // A group directory contributes middleware ancestry but no URL segment, so
+    // it is dropped before anything below reads the derived path. That ordering
+    // is what makes the catch-all and duplicate-parameter rules describe the URL
+    // a route serves rather than how deeply it nests on disk.
+  }
+
+  const lastSegment = segments.at(-1);
+  if (lastSegment && !lastSegment.escaped && lastSegment.literal === 'index') {
     segments.pop();
   }
 
-  const catchAllIndex = segments.findIndex((segment) =>
-    segment.startsWith('$...')
+  const catchAllIndex = segments.findIndex(
+    (segment) => !segment.escaped && segment.literal.startsWith('$...')
   );
   if (catchAllIndex !== -1 && catchAllIndex !== segments.length - 1) {
     throw new Error(
-      `[daroyan] Invalid route ${file}: catch-all segment ${JSON.stringify(
-        segments[catchAllIndex]
+      `[daroyan] Invalid route ${reportedFile}: catch-all segment ${JSON.stringify(
+        segments[catchAllIndex].literal
       )} must be final.`
     );
   }
 
   const parameters = new Set<string>();
   for (const segment of segments) {
-    if (!segment.startsWith('$')) {
+    if (segment.escaped || !segment.literal.startsWith('$')) {
       continue;
     }
 
-    const parameter = segment.startsWith('$...')
-      ? segment.slice(4)
-      : segment.slice(1);
+    const parameter = segment.literal.startsWith('$...')
+      ? segment.literal.slice(4)
+      : segment.literal.slice(1);
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(parameter)) {
       throw new Error(
-        `[daroyan] Invalid route ${file}: invalid dynamic parameter name ${JSON.stringify(
+        `[daroyan] Invalid route ${reportedFile}: invalid dynamic parameter name ${JSON.stringify(
           parameter
         )}. Use letters, numbers, and underscores, starting with a letter or underscore.`
       );
     }
     if (parameters.has(parameter)) {
       throw new Error(
-        `[daroyan] Invalid route ${file}: duplicate dynamic parameter ${JSON.stringify(
+        `[daroyan] Invalid route ${reportedFile}: duplicate dynamic parameter ${JSON.stringify(
           parameter
         )}. Every filename parameter in a route must have a unique name.`
       );
@@ -911,8 +987,123 @@ function routePath(routesDirectory: string, file: string): string {
     parameters.add(parameter);
   }
 
-  const path = segments.map(routeSegment).join('/');
+  const path = segments
+    .map((segment) =>
+      segment.escaped ? segment.literal : routeSegment(segment.literal)
+    )
+    .join('/');
   return path ? `/${path}` : '/';
+}
+
+/**
+ * Splits a filename segment into escaped and unescaped runs. A `[...]` span is
+ * emitted literally, which is what lets a URL contain a character that is
+ * otherwise route syntax.
+ *
+ * Matching `[` to the *next* `]` is deliberate: it makes `[[weird]]` resolve to
+ * `[weird]` on its own, and leaves an unmatched `[` as an ordinary character, so
+ * escaping never needs a diagnostic of its own.
+ */
+function segmentParts(segment: string): SegmentPart[] {
+  const parts: SegmentPart[] = [];
+  let index = 0;
+
+  while (index < segment.length) {
+    const open = segment.indexOf('[', index);
+    const close = open === -1 ? -1 : segment.indexOf(']', open + 1);
+
+    if (close === -1) {
+      parts.push({ escaped: false, text: segment.slice(index) });
+      break;
+    }
+
+    if (open > index) {
+      parts.push({ escaped: false, text: segment.slice(index, open) });
+    }
+    parts.push({ escaped: true, text: segment.slice(open + 1, close) });
+    index = close + 1;
+  }
+
+  return parts;
+}
+
+/**
+ * Resolves one segment's escapes and rejects the shapes that cannot be served.
+ * An escape makes a segment static: its text reaches the URL verbatim rather
+ * than being read as a parameter or a group.
+ */
+function pathSegment(
+  file: string,
+  parts: SegmentPart[],
+  segment: string
+): PathSegment {
+  const escaped = parts.some((part) => part.escaped);
+  const unescaped = parts
+    .filter((part) => !part.escaped)
+    .map((part) => part.text)
+    .join('');
+
+  // Reached only for a segment that is not a well-formed group, so any bare
+  // parenthesis left here is a malformed one.
+  if (/[()]/.test(unescaped)) {
+    throw new Error(
+      `[daroyan] Invalid route ${file}: ${JSON.stringify(
+        segment
+      )} is not a valid route group. Write "(name)" to group routes without adding a URL segment, or ${JSON.stringify(
+        `[${segment}]`
+      )} to serve the parentheses literally.`
+    );
+  }
+
+  if (escaped && unescaped.startsWith('$')) {
+    throw new Error(
+      `[daroyan] Invalid route ${file}: dynamic segment ${JSON.stringify(
+        segment
+      )} cannot contain an escape, because Hono would read the escaped text as part of the parameter name. Escape the whole segment, or drop the escape.`
+    );
+  }
+
+  const literal = parts.map((part) => part.text).join('');
+  const dynamic = !escaped && literal.startsWith('$');
+  // A static segment reaches Hono verbatim, so a character Hono treats as path
+  // syntax would silently register something else — most sharply `[:]id`, which
+  // would become a parameter rather than the literal `:id` it asks for.
+  const honoSyntax = dynamic ? null : /[:{}*?]/.exec(literal);
+  if (honoSyntax) {
+    throw new Error(
+      `[daroyan] Invalid route ${file}: segment ${JSON.stringify(
+        literal
+      )} contains ${JSON.stringify(
+        honoSyntax[0]
+      )}, which is Hono path syntax and cannot be served as a literal URL segment.`
+    );
+  }
+
+  return { escaped, literal };
+}
+
+function assertGroupName(file: string, segment: string): void {
+  const name = segment.slice(1, -1);
+
+  if (name.trim() === '') {
+    throw new Error(
+      `[daroyan] Invalid route ${file}: route group ${JSON.stringify(
+        segment
+      )} needs a name. Name it after what its routes share, such as "(authed)".`
+    );
+  }
+
+  if (name.startsWith('$')) {
+    throw new Error(
+      `[daroyan] Invalid route ${file}: route group ${JSON.stringify(
+        segment
+      )} cannot declare a dynamic parameter. A group contributes middleware only, so ${JSON.stringify(
+        name
+      )} would never reach the URL. Use a ${JSON.stringify(
+        name
+      )} directory for the parameter.`
+    );
+  }
 }
 
 function routeSegment(segment: string): string {
@@ -963,6 +1154,27 @@ function routeShape(path: string): string {
   return path
     .replace(/:[^/{}]+\{\.\+\}/g, '$catch-all')
     .replace(/:[^/{}]+/g, '$dynamic');
+}
+
+const GROUP_SEGMENT_HINT =
+  'A "(group)" directory contributes middleware only, so it adds no URL segment.';
+
+function isInGroupDirectory(routesDirectory: string, file: string): boolean {
+  return relative(routesDirectory, file)
+    .split(sep)
+    .slice(0, -1)
+    .some(isGroupSegment);
+}
+
+/**
+ * Whether a directory name is written as a route group, `(name)`. Recognition is
+ * deliberately looser than a valid name so that `()` reads as a malformed group
+ * and can say so, rather than falling through to a literal URL segment.
+ */
+function isGroupSegment(segment: string): boolean {
+  return (
+    segment.length >= 2 && segment.startsWith('(') && segment.endsWith(')')
+  );
 }
 
 function isCatchAllSegment(segment: string): boolean {

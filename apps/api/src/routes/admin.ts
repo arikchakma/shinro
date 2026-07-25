@@ -5,7 +5,7 @@ const admin = new Hono()
     return c.json({ section: 'admin' as const }, 200);
   })
   .get('/stats', (c) => {
-    return c.json({ activeRoutes: 11 }, 200);
+    return c.json({ activeRoutes: 13 }, 200);
   });
 
 export default admin;

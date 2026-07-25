@@ -6,6 +6,8 @@ export const GET = defineHandler((c) => {
       name: 'Daroyan API showcase' as const,
       endpoints: [
         '/v1/health',
+        '/v1/orders',
+        '/v1/sitemap.xml',
         '/v1/resources',
         '/v1/resources/:id',
         '/v1/teams/:teamId/members/:memberId',

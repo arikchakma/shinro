@@ -176,7 +176,7 @@ test('a default sub-router retains internal RPC routes and inherited runtime mid
     section: 'admin',
   });
   await expect(stats.json()).resolves.toEqual({
-    activeRoutes: 11,
+    activeRoutes: 13,
   });
 });
 
@@ -195,4 +195,32 @@ test('the configured app owns its not-found response', async () => {
   await expect(response.json()).resolves.toEqual({
     error: 'NOT_FOUND',
   });
+});
+
+test('a group directory protects its routes without appearing in their URLs', async () => {
+  const denied = await app.request('/v1/orders');
+  const allowed = await app.request('/v1/orders', {
+    headers: {
+      authorization: 'Bearer demo',
+    },
+  });
+
+  expect(denied.status).toBe(401);
+  await expect(denied.json()).resolves.toEqual({ error: 'UNAUTHORIZED' });
+  expect(allowed.status).toBe(200);
+  await expect(allowed.json()).resolves.toMatchObject({
+    orders: ['ord_1', 'ord_2'],
+  });
+
+  // The group names no URL segment, and the sibling outside it stays public.
+  expect((await app.request('/v1/(authed)/orders')).status).toBe(404);
+  expect((await app.request('/v1/health')).status).toBe(200);
+});
+
+test('an escaped filename serves its literal URL', async () => {
+  const response = await app.request('/v1/sitemap.xml');
+
+  expect(response.status).toBe(200);
+  expect(response.headers.get('content-type')).toContain('application/xml');
+  await expect(response.text()).resolves.toBe('<urlset />');
 });

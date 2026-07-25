@@ -17,6 +17,8 @@ configured `/v1` base path.
 - every supported named HTTP method;
 - JSON, query, and parameter validation;
 - route-local and inherited directory middleware;
+- a `(authed)` group directory scoping middleware to `/v1/orders` alone, and
+  an escaped `[sitemap.xml].ts` serving `/v1/sitemap.xml`;
 - optional generated route and middleware companions;
 - a chained Hono sub-router and a chained manual route;
 - generated Hono RPC and client exports;

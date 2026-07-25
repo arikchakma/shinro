@@ -191,7 +191,7 @@ Daroyan must not introduce lifecycle hooks such as `onStart`,
 - OpenAPI generation.
 - Deployment orchestration.
 - Automatically publishing a generated RPC client to npm.
-- Route groups, layouts, or optional filename segments.
+- Layouts or optional filename segments.
 - Making arbitrary external assets or native addons part of the
   single-entry bundle.
 
@@ -480,15 +480,20 @@ Daroyan scans `src/routes/**/*.{ts,js}` by default.
 | `src/routes/api/users/$id.ts`      | `/api/users/:id`      |
 | `src/routes/api/$version/users.ts` | `/api/:version/users` |
 | `src/routes/files/$...path.ts`     | `/files/:path{.+}`    |
+| `src/routes/(authed)/orders.ts`    | `/orders`             |
+| `src/routes/[(foo)].ts`            | `/(foo)`              |
 
 Rules:
 
 - `index` contributes no URL segment.
 - `$name` becomes the required Hono parameter `:name`.
 - `$...name` becomes the one-or-more catch-all `:name{.+}`.
+- `(name)` is a route group. It contributes no URL segment; see §12.2.
+- `[...]` escapes the conventions above; see §12.3.
 - Dynamic directories follow the same rules as dynamic files.
 - Every dynamic parameter name must be unique within one route.
-- Catch-all segments must be final.
+- Catch-all segments must be final. A group segment after a catch-all does
+  not violate this, because it contributes no URL segment.
 - Generated RPC URLs are canonicalized without trailing slashes, except
   `/`.
 
@@ -516,6 +521,12 @@ daroyan({
 
 Built-in exclusions always apply and cannot be re-enabled by this option.
 
+A route group is **pathless, not ignored**: its `_middleware.ts` and its
+routes are live. Because `ignoredRouteFiles` patterns match the on-disk
+path, a pattern must include the group directory even though no URL does —
+`'(internal)/**'`, not `'internal/**'`. Bare parentheses are literal in
+minimatch; only a `?@!+*` prefix makes them an extglob group.
+
 ### 12.1 Conflicts
 
 These files conflict because they produce the same URL:
@@ -539,6 +550,78 @@ Sub-router namespace ownership uses route-pattern compatibility, not only
 literal string prefixes. For example, a sub-router at `/admin` conflicts
 with `src/routes/$section/stats.ts` because both can serve
 `/admin/stats`.
+
+Because a group contributes no URL segment, files at different depths can
+collapse onto one URL and conflict:
+
+```text
+src/routes/(authed)/orders.ts
+src/routes/orders.ts
+```
+
+When either file sits in a group, the diagnostic says so, since two paths
+reported against one URL is otherwise a contradiction.
+
+### 12.2 Route groups
+
+A directory named `(name)` contributes directory-middleware ancestry but no
+URL segment. It is the supported way to apply middleware to a chosen set of
+sibling URLs without renaming them:
+
+```text
+src/routes/(authed)/_middleware.ts   → wraps the two routes below
+src/routes/(authed)/orders.ts        → /orders
+src/routes/(authed)/billing.ts       → /billing
+src/routes/health.ts                 → /health, unwrapped
+```
+
+Grouping stays a property of a directory, so containment remains the whole
+rule: a route inside a middleware directory is always wrapped by it, and
+there is no per-route opt-out to audit.
+
+- A group may nest. `(a)/(b)/x.ts` serves `/x` and inherits both.
+- `(a)/index.ts` serves the group's parent URL.
+- A group name never reaches a URL, so it may not declare a parameter:
+  `($id)` is rejected.
+- `()` and an unbalanced `(name` are rejected as malformed groups rather
+  than served literally. Use §12.3 to serve parentheses.
+- A **file** named `(foo).ts` is rejected. A file has no descendants to
+  group, and treating it as one would alias the route onto its parent URL.
+
+### 12.3 Escaping
+
+A `[...]` span in a filename segment is emitted literally, so a URL can
+contain a character that is otherwise route syntax. Escaping follows
+[React Router's convention](https://reactrouter.com/how-to/file-route-conventions).
+
+| Route file                     | URL             |
+| ------------------------------ | --------------- |
+| `src/routes/[(foo)].ts`        | `/(foo)`        |
+| `src/routes/[(foo)]/orders.ts` | `/(foo)/orders` |
+| `src/routes/[$]id.ts`          | `/$id`          |
+| `src/routes/v[$]1.ts`          | `/v$1`          |
+| `src/routes/[index].ts`        | `/index`        |
+| `src/routes/[[weird]].ts`      | `/[weird]`      |
+| `src/routes/[sitemap.xml].ts`  | `/sitemap.xml`  |
+
+Rules:
+
+- An escape makes its segment static. The segment is never read as a
+  parameter or a group.
+- A `[` is matched to the next `]`. An unmatched `[` is an ordinary
+  character, which is why `[[weird]]` resolves to `[weird]` and why escaping
+  needs no diagnostic of its own.
+- A segment that both looks dynamic and contains an escape is rejected.
+  Hono would read the escaped text as part of the parameter name, so
+  `$id[.pdf].ts` fails rather than serving something else.
+- A resolved segment may not contain `:`, `{`, `}`, `*`, or `?`. Those are
+  Hono path syntax, so a literal one cannot be served — `[:]id.ts` is
+  rejected rather than silently registering the parameter `:id`.
+- Escaping does not decide whether a file is a route. The exclusions above
+  apply to the name on disk, and a name beginning with `[` was never
+  excluded, so `[_]internal.ts` serves `/_internal`.
+- A literal parenthesis in a **directory** name is only reachable through an
+  escape, because bare parentheses there always mean grouping.
 
 ## 13. Route module API
 
@@ -871,6 +954,11 @@ src/routes/api/admin/_middleware.ts
 A request under `/api/admin` runs them in that order. Child middleware
 augments rather than replaces ancestor middleware, and each handler runs
 once per request.
+
+Ancestry is directory containment, so a route group (§12.2) is how a
+middleware is scoped to some sibling URLs but not others. Because a group
+adds on-disk depth without URL depth, its middleware's own URL is its
+parent's, while the routes it wraps keep their unprefixed URLs.
 
 For named method routes, Daroyan flattens the applicable directory
 middleware into that route's handler chain. Given a root middleware, an API
@@ -1346,7 +1434,10 @@ Registration priority:
    `OPTIONS`.
 
 The generated `.daroyan/manifest.json` exists for debugging. Production
-code does not read it from disk.
+code does not read it from disk. Its `file` entries are on-disk paths and
+its `path`/`mountPath` entries are URLs, so a route group appears only in
+`file` and in the `middleware` list — which is what makes a group's effect
+visible when a URL alone would not explain it.
 
 Example:
 
@@ -1781,6 +1872,11 @@ Build errors:
   route;
 - non-final catch-all segments;
 - invalid dynamic parameter names;
+- a route group with no name, with a dynamic parameter, or with unbalanced
+  parentheses;
+- a route file named like a group, which only a directory can be;
+- a dynamic segment containing an escape;
+- an escaped segment resolving to Hono path syntax;
 - mixed default sub-router and method exports;
 - unsupported method export values;
 - external method re-exports whose handler tuple cannot be proven;
@@ -2073,6 +2169,9 @@ This section describes and constrains the v0.1 implementation.
 - Resolve paths relative to Vite's resolved project root.
 - Parse route modules with an AST parser.
 - Normalize separators to `/`.
+- Resolve `[...]` escapes and drop group directories before deriving a URL,
+  so every rule below describes the URL a route serves rather than its
+  position on disk.
 - Classify every route as a named-method record or default sub-router
   record.
 - Reserve a default sub-router's complete mount namespace.
@@ -2173,6 +2272,8 @@ v0.1 is complete when:
 - `zValidator("param", ...)` provides typed, runtime-validated parameters
   without requiring `Route`.
 - static, dynamic, nested, index, and catch-all routes work.
+- a `(group)` directory scopes middleware to its routes while contributing no
+  URL segment, and `[...]` serves an otherwise-reserved character literally.
 - ancestor middleware stacks root-to-leaf, applies to a route at the
   middleware directory's exact URL, and runs once.
 - one `_middleware.ts` can declare multiple ordered middleware handlers.

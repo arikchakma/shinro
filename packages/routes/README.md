@@ -214,13 +214,21 @@ Supported named exports are `GET`, `POST`, `PUT`, `PATCH`, `DELETE`,
 | `app/routes/api/users/index.ts` | `/api/users`       |
 | `app/routes/api/users/$id.ts`   | `/api/users/:id`   |
 | `app/routes/files/$...path.ts`  | `/files/:path{.+}` |
+| `app/routes/(authed)/orders.ts` | `/orders`          |
+| `app/routes/[(foo)].ts`         | `/(foo)`           |
 
 Catch-all parameters match one or more segments. Static routes register
 before dynamic routes, which register before catch-alls.
 
+A `(name)` directory is a **route group**: it scopes directory middleware
+without contributing a URL segment. `[...]` escapes any of these
+conventions. Both are covered below, and every convention is collected in
+[File route conventions](../../docs/file-route-conventions.md).
+
 Files beginning with `_` or `.`, declaration files, test/spec files, and
 files under `__tests__`, `__fixtures__`, `.dot-directories`, or `+types`
-are not routes.
+are not routes. A route group is pathless, not ignored — its routes and its
+`_middleware.ts` are live.
 
 Additional files can be excluded with route-relative
 [minimatch](https://www.npmjs.com/package/minimatch) globs. A match
@@ -301,6 +309,49 @@ app.use('*', requestId());
 
 Keep `_middleware.ts` for route-scoped concerns such as authenticating a
 section of the API, where running only on real routes is what you want.
+
+### Group directories
+
+Middleware inheritance is directory containment, so scoping middleware to
+_some_ sibling URLs but not others is a question of where files live. A
+directory named `(name)` contributes middleware ancestry but no URL segment:
+
+```text
+app/routes/(authed)/_middleware.ts   ← auth
+app/routes/(authed)/orders.ts        → /orders    (authed)
+app/routes/(authed)/billing.ts       → /billing   (authed)
+app/routes/health.ts                 → /health    (public)
+```
+
+`/orders` is protected, `/health` is not, and neither URL mentions the
+group. Nothing opts out of anything: a route inside a middleware directory
+is always wrapped by it, which is what makes the rule worth trusting.
+`.daroyan/manifest.json` records the group in each route's `file` and
+`middleware` entries, so the wrapping is visible even though no URL shows it.
+
+Groups nest, and `(authed)/index.ts` serves the group's parent URL. A group
+name never reaches a URL, so it cannot declare a parameter — `($id)` is
+rejected, as are `()` and an unbalanced `(authed`.
+
+### Escaping conventions
+
+To serve a character that route syntax would otherwise claim, wrap it in
+`[...]`, following React Router's convention:
+
+| File                          | URL            |
+| ----------------------------- | -------------- |
+| `app/routes/[sitemap.xml].ts` | `/sitemap.xml` |
+| `app/routes/[(foo)].ts`       | `/(foo)`       |
+| `app/routes/[$]id.ts`         | `/$id`         |
+| `app/routes/[index].ts`       | `/index`       |
+| `app/routes/[[weird]].ts`     | `/[weird]`     |
+
+An escape makes its segment static, so it is never read as a parameter or a
+group. A `[` matches the next `]`, and a stray `[` is an ordinary character.
+Because the point of escaping is emitting a literal, two shapes are rejected
+rather than silently reinterpreted: a dynamic segment containing an escape
+(`$id[.pdf].ts`, which Hono would read as the parameter `id.pdf`), and a
+resolved segment holding Hono path syntax (`[:]id.ts`, `{`, `}`, `*`, `?`).
 
 Route-local middleware and validators go directly in `defineHandler()`:
 

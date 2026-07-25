@@ -66,7 +66,7 @@ export async function createSources(
     ...middleware,
     path: withBasePath(basePath, middleware.path),
   }));
-  validateRoutes(routes, config.root);
+  validateRoutes(routes, config.root, routesDirectory);
 
   if (appAnalysis.hasEarlyResponseMiddleware && routes.length > 0) {
     config.logger.warn(
