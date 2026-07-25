@@ -4,8 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vp run website#dev",
-    "dev:api": "vp run @shinro/api#dev",
+    "dev": "vp run @shinro/api#dev",
     "prepare": "vp config",
     "ready": "vp fmt && vp lint && vp run -r test && vp run -r build"
   },
