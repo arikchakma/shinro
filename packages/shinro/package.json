@@ -1,0 +1,60 @@
+{
+  "name": "shinro",
+  "version": "0.0.0",
+  "description": "Type-safe file routing for Hono on Node.js and Bun.",
+  "license": "MIT",
+  "bin": {
+    "shinro": "./dist/cli.mjs"
+  },
+  "files": [
+    "dist",
+    "tsconfig.base.json"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    },
+    "./app": {
+      "types": "./dist/app.d.mts",
+      "import": "./dist/app.mjs"
+    },
+    "./cli": {
+      "types": "./dist/cli.d.mts",
+      "import": "./dist/cli.mjs"
+    },
+    "./package.json": "./package.json",
+    "./tsconfig": "./tsconfig.base.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "vp pack",
+    "check": "vp check",
+    "dev": "vp pack --watch",
+    "prepublishOnly": "vp run build",
+    "test": "vp test"
+  },
+  "dependencies": {
+    "minimatch": "catalog:"
+  },
+  "devDependencies": {
+    "@hono/node-server": "catalog:",
+    "@hono/zod-validator": "catalog:",
+    "@types/node": "^26.1.1",
+    "@typescript/native-preview": "catalog:",
+    "bumpp": "^11.1.0",
+    "hono": "^4.10.0",
+    "typescript": "^7.0.2",
+    "vite": "catalog:",
+    "vite-plus": "catalog:",
+    "vitest": "catalog:",
+    "zod": "catalog:"
+  },
+  "peerDependencies": {
+    "hono": "^4.0.0",
+    "vite-plus": "^0.2.0"
+  }
+}

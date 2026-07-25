@@ -1,4 +1,4 @@
-import { defineMiddleware } from 'daroyan/app';
+import { defineMiddleware } from 'shinro/app';
 
 import {
   beginMiddlewareChain,

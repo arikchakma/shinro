@@ -1,4 +1,4 @@
-import { defineHandler } from 'daroyan/app';
+import { defineHandler } from 'shinro/app';
 
 // `[...]` escapes the route conventions, so this file serves `/v1/sitemap.xml`
 // rather than a dynamic or grouped segment.

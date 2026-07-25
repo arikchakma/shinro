@@ -1,5 +1,5 @@
 import { zValidator } from '@hono/zod-validator';
-import { defineHandler } from 'daroyan/app';
+import { defineHandler } from 'shinro/app';
 import { z } from 'zod';
 
 const resourceParams = z.object({

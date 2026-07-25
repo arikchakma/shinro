@@ -1,11 +1,11 @@
 {
-  "name": "api",
+  "name": "@shinro/api",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "exports": {
-    "./client": "./.daroyan/client.ts",
-    "./rpc": "./.daroyan/rpc.ts"
+    "./client": "./.shinro/client.ts",
+    "./rpc": "./.shinro/rpc.ts"
   },
   "scripts": {
     "build": "vp build",
@@ -13,7 +13,7 @@
     "dev": "vp dev",
     "start": "node dist/server.mjs",
     "test": "vp test",
-    "typegen": "vp run daroyan#build && daroyan typegen"
+    "typegen": "vp run shinro#build && shinro typegen"
   },
   "dependencies": {
     "@hono/node-server": "catalog:",
@@ -23,7 +23,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.1.1",
-    "daroyan": "workspace:*",
+    "shinro": "workspace:*",
     "typescript": "^7.0.2",
     "vite-plus": "catalog:"
   }

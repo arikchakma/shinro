@@ -1,11 +1,11 @@
 {
-  "name": "fs-routes",
+  "name": "@shinro/root",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vp run website#dev",
-    "dev:api": "vp run api#dev",
+    "dev:api": "vp run @shinro/api#dev",
     "prepare": "vp config",
     "ready": "vp fmt && vp lint && vp run -r test && vp run -r build"
   },

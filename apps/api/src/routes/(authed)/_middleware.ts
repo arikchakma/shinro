@@ -1,4 +1,4 @@
-import { defineMiddleware } from 'daroyan/app';
+import { defineMiddleware } from 'shinro/app';
 
 // A group directory scopes this middleware to a set of sibling URLs without
 // putting "(authed)" in any of them, so `/v1/orders` is protected while its

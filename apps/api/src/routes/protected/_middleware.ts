@@ -1,4 +1,4 @@
-import { defineMiddleware } from 'daroyan/app';
+import { defineMiddleware } from 'shinro/app';
 
 export default defineMiddleware(async (c, next) => {
   if (c.req.header('authorization') !== 'Bearer demo') {

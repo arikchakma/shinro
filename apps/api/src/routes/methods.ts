@@ -1,4 +1,4 @@
-import { defineHandler } from 'daroyan/app';
+import { defineHandler } from 'shinro/app';
 
 export const PUT = defineHandler((c) => {
   return c.json({ method: 'PUT' as const }, 200);

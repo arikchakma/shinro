@@ -1,6 +1,6 @@
-# Daroyan API showcase
+# Shinro API showcase
 
-A runnable Node.js API demonstrating Daroyan's public route authoring
+A runnable Node.js API demonstrating Shinro's public route authoring
 features without application infrastructure.
 
 ```sh
@@ -24,7 +24,7 @@ configured `/v1` base path.
 - generated Hono RPC and client exports;
 - a one-file Node build with application-owned graceful shutdown.
 
-Type generation reports Daroyan's documented sub-router boundary warning:
+Type generation reports Shinro's documented sub-router boundary warning:
 the root directory middleware runs around `/v1/admin`, but its response
 types cannot be merged into every opaque route inside that sub-router.
 

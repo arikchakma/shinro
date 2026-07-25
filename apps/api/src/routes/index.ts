@@ -1,9 +1,9 @@
-import { defineHandler } from 'daroyan/app';
+import { defineHandler } from 'shinro/app';
 
 export const GET = defineHandler((c) => {
   return c.json(
     {
-      name: 'Daroyan API showcase' as const,
+      name: 'Shinro API showcase' as const,
       endpoints: [
         '/v1/health',
         '/v1/orders',

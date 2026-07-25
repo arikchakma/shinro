@@ -1,6 +1,6 @@
 # File route conventions
 
-Daroyan turns files under `src/routes` into Hono routes. This page is the
+Shinro turns files under `src/routes` into Hono routes. This page is the
 complete list of conventions: how a filename becomes a URL, which files are
 not routes, and how to escape a convention when you need the character
 itself.
@@ -13,10 +13,10 @@ directory is one segment, and the sigils below change what a segment means.
 ```ts
 // vite.config.ts
 import { defineConfig } from 'vite';
-import { daroyan } from 'daroyan';
+import { shinro } from 'shinro';
 
 export default defineConfig({
-  plugins: [daroyan()],
+  plugins: [shinro()],
 });
 ```
 
@@ -46,7 +46,7 @@ Each route file exports one handler per HTTP method:
 
 ```ts
 // src/routes/health.ts
-import { defineHandler } from 'daroyan/app';
+import { defineHandler } from 'shinro/app';
 
 export const GET = defineHandler((c) => c.json({ ok: true }, 200));
 ```
@@ -166,7 +166,7 @@ inside a middleware directory is always wrapped by it. To cover only some
 sibling URLs, group the covered ones under a `(name)` directory instead of
 exempting the others.
 
-Daroyan flattens the chain onto each named route, so a typed early response
+Shinro flattens the chain onto each named route, so a typed early response
 from middleware (a `401`, say) enters that route's RPC response union. The
 trade is that directory middleware runs only when a route matches; concerns
 that must see every request, such as CORS, belong on the base app.
@@ -220,7 +220,7 @@ Project-specific exclusions go in `ignoredRouteFiles`. A match excludes both
 route modules and `_middleware.ts`:
 
 ```ts
-daroyan({
+shinro({
   ignoredRouteFiles: ['internal/**', '**/*.draft.ts'],
 });
 ```
@@ -283,7 +283,7 @@ except `/`.
 
 ## Unsupported
 
-Filename conventions that Daroyan deliberately does not have:
+Filename conventions that Shinro deliberately does not have:
 
 - **Dot delimiters.** `reports.monthly.ts` serves `/reports.monthly`. Use a
   directory to nest.

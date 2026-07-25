@@ -1,4 +1,4 @@
-import { defineHandler } from 'daroyan/app';
+import { defineHandler } from 'shinro/app';
 
 import type { Route } from './+types/$...path';
 

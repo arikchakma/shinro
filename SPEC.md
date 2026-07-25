@@ -1,10 +1,10 @@
-# Daroyan specification
+# Shinro specification
 
 Status: proposal for refinement  
 Target: v0.1  
-Package name: `daroyan`
+Package name: `shinro`
 
-> Daroyan is a file-based routing framework for Hono applications running
+> Shinro is a file-based routing framework for Hono applications running
 > on Node.js or Bun. One Vite plugin discovers routes, mounts them onto a
 > normal Hono instance, generates optional route types and an end-to-end
 > typed RPC client, and bundles the user's server entry.
@@ -16,8 +16,8 @@ The central API is intentionally small:
 ```ts
 // src/app.ts
 import { logger } from 'hono/logger';
-import { defineApp } from 'daroyan/app';
-import { routes } from 'daroyan/routes';
+import { defineApp } from 'shinro/app';
+import { routes } from 'shinro/routes';
 
 const app = defineApp()
   .use('*', logger())
@@ -36,12 +36,12 @@ export default app;
 `defineApp()` returns a real Hono instance. The user may call any Hono API
 on it and exports that instance as the default export.
 
-`daroyan/routes` is the file routes as a mountable Hono sub-router, and the
+`shinro/routes` is the file routes as a mountable Hono sub-router, and the
 application mounts it. Nothing generated imports the application, so the
 application is free to import the generated router — and `src/app.ts` is the
 whole app, with no second module that is secretly the real one.
 
-Daroyan does not define application startup or shutdown APIs. It does not
+Shinro does not define application startup or shutdown APIs. It does not
 register signal handlers, close databases, drain queues, call
 `process.exit()`, or hide the native server handle. Those responsibilities
 belong to the user's server entry:
@@ -70,7 +70,7 @@ Routes are equally small:
 
 ```ts
 // src/routes/health.ts
-import { defineHandler } from 'daroyan/app';
+import { defineHandler } from 'shinro/app';
 
 export const GET = defineHandler((c) => {
   return c.json({ ok: true }, 200);
@@ -81,7 +81,7 @@ Generated `+types` are available but optional:
 
 ```ts
 // src/routes/users/$id.ts
-import { defineHandler } from 'daroyan/app';
+import { defineHandler } from 'shinro/app';
 import type { Route } from './+types/$id.ts';
 
 export const GET = defineHandler<Route.Handler>((c) => {
@@ -97,7 +97,7 @@ generic's response-inference limitation is documented in section 14.2.
 
 “Single” has three meanings in this specification:
 
-1. The only Vite integration is `plugins: [daroyan()]`. The user does not
+1. The only Vite integration is `plugins: [shinro()]`. The user does not
    install separate route, RPC, development, Node, or Bun plugins.
 2. One route file contains all HTTP methods for its endpoint. The user does
    not create separate `get.ts`, `post.ts`, and `delete.ts` files.
@@ -112,34 +112,34 @@ the self-contained single-artifact model — the entry and all of its ordinary
 JavaScript and TypeScript dependencies are bundled into one `dist/server.mjs`
 file (see section 21).
 
-Daroyan is still file-based, so a real application normally contains many
+Shinro is still file-based, so a real application normally contains many
 route files.
 
 ## 3. Name and vocabulary
 
-“Daroyan” means doorman or gatekeeper in Bengali. The framework directs
+“Shinro” means doorman or gatekeeper in Bengali. The framework directs
 incoming requests to the correct file without taking ownership of the
 application or its process.
 
 | Concept                        | Public name          |
 | ------------------------------ | -------------------- |
-| Framework package              | `daroyan`            |
-| Vite plugin                    | `daroyan()`          |
+| Framework package              | `shinro`             |
+| Vite plugin                    | `shinro()`           |
 | Hono app factory               | `defineApp()`        |
 | Route handler helper           | `defineHandler()`    |
 | Directory middleware helper    | `defineMiddleware()` |
-| Generated file router          | `daroyan/routes`     |
+| Generated file router          | `shinro/routes`      |
 | Generated RPC application type | `AppType`            |
 | Generated client factory       | `createClient()`     |
-| Generated working directory    | `.daroyan/`          |
-| Log prefix                     | `[daroyan]`          |
+| Generated working directory    | `.shinro/`           |
+| Log prefix                     | `[shinro]`           |
 
 The names intentionally resemble Kumoh, while the process model is better
 suited to long-running Node.js and Bun servers.
 
 ## 4. Design principles
 
-### 4.1 Daroyan owns
+### 4.1 Shinro owns
 
 - route discovery and conflict detection;
 - deterministic middleware and route registration;
@@ -163,7 +163,7 @@ suited to long-running Node.js and Bun servers.
 - process exit behavior;
 - runtime-specific server options such as TLS, HTTP/2, and WebSockets.
 
-Daroyan must not introduce lifecycle hooks such as `onStart`,
+Shinro must not introduce lifecycle hooks such as `onStart`,
 `onShutdown`, `startup`, or `shutdown`.
 
 ## 5. Goals
@@ -199,7 +199,7 @@ Daroyan must not introduce lifecycle hooks such as `onStart`,
 
 ```sh
 vp add hono
-vp add -D daroyan
+vp add -D shinro
 ```
 
 Node.js applications install Hono's Node adapter:
@@ -214,18 +214,18 @@ Bun applications can use `Bun.serve()` directly.
 
 ```ts
 // vite.config.ts
-import { daroyan } from 'daroyan';
+import { shinro } from 'shinro';
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
-  plugins: [daroyan()],
+  plugins: [shinro()],
 });
 ```
 
 Conceptual options:
 
 ```ts
-export type DaroyanOptions = {
+export type ShinroOptions = {
   app?: string;
   entry?: string;
   routes?: string;
@@ -244,7 +244,7 @@ export type DaroyanOptions = {
   };
 };
 
-export function daroyan(options?: DaroyanOptions): Plugin;
+export function shinro(options?: ShinroOptions): Plugin;
 ```
 
 Defaults:
@@ -265,9 +265,9 @@ const defaults = {
   },
   rpc: {
     enabled: true,
-    outDir: '.daroyan',
+    outDir: '.shinro',
   },
-} satisfies DaroyanOptions;
+} satisfies ShinroOptions;
 ```
 
 There are deliberately no `runtime`, `serve`, `port`, `hostname`, signal,
@@ -279,7 +279,7 @@ Projects extend the base configuration shipped by the package:
 
 ```jsonc
 {
-  "extends": "daroyan/tsconfig",
+  "extends": "shinro/tsconfig",
   "compilerOptions": {
     "paths": {
       "~/*": ["./src/*"],
@@ -288,15 +288,15 @@ Projects extend the base configuration shipped by the package:
 }
 ```
 
-`daroyan/tsconfig` resolves through the package `exports` map to a shipped
+`shinro/tsconfig` resolves through the package `exports` map to a shipped
 `tsconfig.base.json`. It sets `moduleResolution: "Bundler"`, the TypeScript
 import-extension options, the `rootDirs` used by generated companions
-(`["${configDir}", "${configDir}/.daroyan/types"]`), and the `include` that
-pulls in the generated declaration tree (`${configDir}/.daroyan/**/*.d.ts`).
-Consumers add only their own `paths`; no `daroyan/app` or `daroyan/routes`
+(`["${configDir}", "${configDir}/.shinro/types"]`), and the `include` that
+pulls in the generated declaration tree (`${configDir}/.shinro/**/*.d.ts`).
+Consumers add only their own `paths`; no `shinro/app` or `shinro/routes`
 mapping is required.
 
-Daroyan emits explicit `.ts` import specifiers. TypeScript requires
+Shinro emits explicit `.ts` import specifiers. TypeScript requires
 `allowImportingTsExtensions` together with `noEmit`, `emitDeclarationOnly`,
 or `rewriteRelativeImportExtensions`; the base config uses `noEmit`.
 
@@ -308,17 +308,17 @@ import type { Route } from './+types/$id.ts';
 
 without writing generated files into `src/routes`.
 
-The `paths` mapping is intentionally minimal. `daroyan/app` resolves through
-the package `exports` map, and `daroyan/routes`, `daroyan/client`, and
-`daroyan/rpc` resolve through generated ambient module declarations in
-`.daroyan/daroyan.d.ts` — none needs a hand written `paths` entry. The base
-config's `.daroyan/**/*.d.ts` include guarantees that editors and standalone
+The `paths` mapping is intentionally minimal. `shinro/app` resolves through
+the package `exports` map, and `shinro/routes`, `shinro/client`, and
+`shinro/rpc` resolve through generated ambient module declarations in
+`.shinro/shinro.d.ts` — none needs a hand written `paths` entry. The base
+config's `.shinro/**/*.d.ts` include guarantees that editors and standalone
 `tsc` load those declarations without requiring an import in every route.
 
 Projects should ignore:
 
 ```gitignore
-.daroyan/
+.shinro/
 dist/
 ```
 
@@ -341,9 +341,9 @@ copy-pasteable correction when they are missing.
 │           └── users/
 │               ├── index.ts
 │               └── $id.ts
-├── .daroyan/
+├── .shinro/
 │   ├── client.ts
-│   ├── daroyan.d.ts
+│   ├── shinro.d.ts
 │   ├── manifest.json
 │   ├── routes.ts
 │   ├── rpc.ts
@@ -359,7 +359,7 @@ copy-pasteable correction when they are missing.
 development and production builds, but not for route scanning or RPC-only
 type generation.
 
-`shutdown.ts` is an example of user code, not a Daroyan convention.
+`shutdown.ts` is an example of user code, not a Shinro convention.
 
 ## 11. The application module
 
@@ -385,7 +385,7 @@ const app = defineApp();
 ```
 
 An explicit environment is still accepted, but it types this app only — route
-files follow `ProjectEnv`, which comes from the `DaroyanEnv` augmentation
+files follow `ProjectEnv`, which comes from the `ShinroEnv` augmentation
 described in section 17:
 
 ```ts
@@ -419,8 +419,8 @@ The configured app module must default-export the Hono instance:
 
 ```ts
 // src/app.ts
-import { defineApp } from 'daroyan/app';
-import { routes } from 'daroyan/routes';
+import { defineApp } from 'shinro/app';
+import { routes } from 'shinro/routes';
 
 const app = defineApp()
   // Any normal Hono configuration can go here.
@@ -453,7 +453,7 @@ const app = defineApp().get('/manual', (c) => {
 });
 ```
 
-File routes remain the recommended public API surface. Daroyan can include
+File routes remain the recommended public API surface. Shinro can include
 manual routes in the RPC contract only when Hono has retained their schema,
 which requires chaining and assigning the result as shown above.
 
@@ -465,11 +465,11 @@ app.get('/manual', handler);
 ```
 
 work at runtime, but Hono's `typeof app` does not retain that route schema.
-Daroyan must not claim RPC typing for those manual routes.
+Shinro must not claim RPC typing for those manual routes.
 
 ## 12. File-to-URL convention
 
-Daroyan scans `src/routes/**/*.{ts,js}` by default.
+Shinro scans `src/routes/**/*.{ts,js}` by default.
 
 | Route file                         | URL                   |
 | ---------------------------------- | --------------------- |
@@ -514,7 +514,7 @@ middleware validation. A pattern therefore excludes both ordinary route
 modules and reserved `_middleware` modules:
 
 ```ts
-daroyan({
+shinro({
   ignoredRouteFiles: ['internal/**', '**/*.draft.ts'],
 });
 ```
@@ -543,7 +543,7 @@ src/routes/users/$id.ts
 src/routes/users/$slug.ts
 ```
 
-Daroyan reports both source files and the normalized route, then fails
+Shinro reports both source files and the normalized route, then fails
 generation and build.
 
 Sub-router namespace ownership uses route-pattern compatibility, not only
@@ -642,7 +642,7 @@ One file may export multiple methods:
 ```ts
 // src/routes/api/users/index.ts
 import { zValidator } from '@hono/zod-validator';
-import { defineHandler } from 'daroyan/app';
+import { defineHandler } from 'shinro/app';
 import { z } from 'zod';
 
 const createUser = z.object({
@@ -674,14 +674,14 @@ as are external method re-exports whose tuple shape cannot be validated.
 
 ## 14. Optional generated route types
 
-Daroyan generates a type-only companion for every route. Importing it is
+Shinro generates a type-only companion for every route. Importing it is
 optional.
 
 ### 14.1 Minimal form
 
 ```ts
 // src/routes/api/users/$id.ts
-import { defineHandler } from 'daroyan/app';
+import { defineHandler } from 'shinro/app';
 
 export const GET = defineHandler((c) => {
   return c.json({ id: c.req.param('id') }, 200);
@@ -703,7 +703,7 @@ It does not provide exact filename-derived parameter-key checking inside
 
 ```ts
 // src/routes/api/users/$id.ts
-import { defineHandler } from 'daroyan/app';
+import { defineHandler } from 'shinro/app';
 import type { Route } from './+types/$id.ts';
 
 export const GET = defineHandler<Route.Handler>((c) => {
@@ -724,7 +724,7 @@ The companion is conceptually:
 
 ```ts
 export namespace Route {
-  export type Handler = DaroyanRoute<{
+  export type Handler = ShinroRoute<{
     path: '/api/users/:id';
     params: {
       id: string;
@@ -759,7 +759,7 @@ approach because it supplies both runtime validation and typed access:
 ```ts
 // src/routes/api/users/$id.ts
 import { zValidator } from '@hono/zod-validator';
-import { defineHandler } from 'daroyan/app';
+import { defineHandler } from 'shinro/app';
 import { z } from 'zod';
 
 const params = z.object({
@@ -860,7 +860,7 @@ part of the Hono RPC contract.
 
 ```ts
 // src/routes/api/_middleware.ts
-import { defineMiddleware } from 'daroyan/app';
+import { defineMiddleware } from 'shinro/app';
 
 export default defineMiddleware(
   async (c, next) => {
@@ -887,7 +887,7 @@ defineMiddleware<Route.Middleware>(middlewareA, middlewareB);
 
 The bundle preserves the original tuple, including each middleware's input
 and return type. It must not widen the result to `MiddlewareHandler[]`.
-Daroyan spreads it during registration, so request-side code runs
+Shinro spreads it during registration, so request-side code runs
 left-to-right. Code after `await next()` unwinds right-to-left, following
 normal Hono middleware behavior.
 
@@ -902,7 +902,7 @@ export default defineMiddleware(...security, authenticate());
 Generated middleware companion types are also optional:
 
 ```ts
-import { defineMiddleware } from 'daroyan/app';
+import { defineMiddleware } from 'shinro/app';
 import type { Route } from './+types/_middleware.ts';
 
 export default defineMiddleware<Route.Middleware>(
@@ -920,7 +920,7 @@ To author a **named** middleware handler with the same env typing, reach for Hon
 `defineMiddleware()` for the default export:
 
 ```ts
-import { defineMiddleware } from 'daroyan/app';
+import { defineMiddleware } from 'shinro/app';
 import { createMiddleware } from 'hono/factory';
 import type { Route } from './+types/_middleware.ts';
 
@@ -936,7 +936,7 @@ The middleware companion is conceptually:
 
 ```ts
 export namespace Route {
-  export type Middleware = DaroyanMiddleware<{
+  export type Middleware = ShinroMiddleware<{
     path: '/api';
     env: ProjectEnv;
   }>;
@@ -960,7 +960,7 @@ middleware is scoped to some sibling URLs but not others. Because a group
 adds on-disk depth without URL depth, its middleware's own URL is its
 parent's, while the routes it wraps keep their unprefixed URLs.
 
-For named method routes, Daroyan flattens the applicable directory
+For named method routes, Shinro flattens the applicable directory
 middleware into that route's handler chain. Given a root middleware, an API
 middleware, and `GET /api/users`, runtime registration is conceptually:
 
@@ -968,7 +968,7 @@ middleware, and `GET /api/users`, runtime registration is conceptually:
 app.on('GET', '/api/users', ...rootMiddleware, ...apiMiddleware, ...usersGet);
 ```
 
-Daroyan does not implement directory middleware by assuming a particular
+Shinro does not implement directory middleware by assuming a particular
 Hono wildcard behavior. Flattening guarantees that middleware applies to
 the route at the directory's own URL as well as its descendants. Because
 conflicting route shapes are rejected, exactly one flattened route chain
@@ -1029,28 +1029,28 @@ Two boundaries remain:
 
 - middleware manually registered on the base app is not reconstructable as
   part of every file route's response schema;
-- a default-exported Hono sub-router retains its own RPC schema, but Daroyan
+- a default-exported Hono sub-router retains its own RPC schema, but Shinro
   cannot automatically add responses from surrounding directory
   middleware to every opaque internal route in v0.1.
 
 Authors of default sub-routers should attach contract-relevant middleware
 inside their chained sub-router when its early responses must appear in the
-client. Daroyan does not introduce a required global response generic.
+client. Shinro does not introduce a required global response generic.
 
 ## 17. Environment typing
 
-Daroyan supports both of Hono's context-variable typing styles, and they
+Shinro supports both of Hono's context-variable typing styles, and they
 compose. A project can use either or both.
 
 ### 17.1 The project environment
 
 The project environment is declared once, by augmenting the interface
-`daroyan/app` exports:
+`shinro/app` exports:
 
 ```ts
 // src/app.ts
-declare module 'daroyan/app' {
-  interface DaroyanEnv {
+declare module 'shinro/app' {
+  interface ShinroEnv {
     Variables: {
       requestId: string;
       user: User;
@@ -1066,7 +1066,7 @@ too: `@hono/node-server` passes `{ incoming, outgoing }` as `c.env` on every
 request, so typed bindings are not a Workers-only concern.
 
 The augmentation is written by the application rather than derived from it. That
-is what makes it acyclic: if Daroyan inferred the environment from
+is what makes it acyclic: if Shinro inferred the environment from
 `typeof app`, and `app.ts` imports the generated router, and the generated
 router is built on `ProjectEnv`, the type would depend on itself.
 
@@ -1086,13 +1086,13 @@ declare module 'hono' {
 ```
 
 Because Hono types `c.var` as `ContextVariableMap & Env["Variables"]`, a
-variable declared this way and a variable declared on `DaroyanEnv` are both in
+variable declared this way and a variable declared on `ShinroEnv` are both in
 scope simultaneously; the two mechanisms do not conflict.
 
 Route files do not repeat the environment:
 
 ```ts
-import { defineHandler } from 'daroyan/app';
+import { defineHandler } from 'shinro/app';
 
 export const GET = defineHandler((c) => {
   return c.json({
@@ -1109,12 +1109,12 @@ The package declarations use a mergeable interface rather than trying to replace
 a generic default through module augmentation:
 
 ```ts
-// Conceptual declarations shipped by daroyan/app
+// Conceptual declarations shipped by shinro/app
 import type { Env } from 'hono';
 
-export interface DaroyanEnv extends Env {}
+export interface ShinroEnv extends Env {}
 
-export type ProjectEnv = DaroyanEnv;
+export type ProjectEnv = ShinroEnv;
 
 export function defineApp<E extends Env = ProjectEnv>(): Hono<E>;
 export const defineHandler: DefineHandler<ProjectEnv>;
@@ -1122,7 +1122,7 @@ export const defineMiddleware: DefineMiddleware<ProjectEnv>;
 ```
 
 `Bindings` and `Variables` are both `object` in Hono, so no conditional type is
-needed: un-augmented, `DaroyanEnv` is structurally `Env`, which is exactly the
+needed: un-augmented, `ShinroEnv` is structurally `Env`, which is exactly the
 fallback behaviour. Augmented, the declared members narrow the inherited
 optional ones.
 
@@ -1130,19 +1130,19 @@ Nothing is generated for the environment. There is no inference step to fail,
 and renaming or restructuring the application's own types cannot silently
 degrade route typing.
 
-v0.1 supports one Daroyan application per TypeScript project. `DaroyanEnv` is
+v0.1 supports one Shinro application per TypeScript project. `ShinroEnv` is
 program-wide, so separate applications in a monorepo use separate
 `tsconfig.json` programs to keep their environments distinct.
 
-Daroyan does not normalize `process.env`, `Bun.env`, or runtime-specific
+Shinro does not normalize `process.env`, `Bun.env`, or runtime-specific
 raw server bindings. Those remain application and adapter concerns.
 
 ## 18. Mountable generated router
 
-`daroyan/routes` is the generated file router:
+`shinro/routes` is the generated file router:
 
 ```ts
-import { routes } from 'daroyan/routes';
+import { routes } from 'shinro/routes';
 ```
 
 Conceptually, it:
@@ -1180,12 +1180,12 @@ parent's under the mount path, so `typeof app` is the complete RPC contract.
 a concrete `Hono<ProjectEnv>` router mounts onto any app without threading
 generics.
 
-Type generation writes ambient module declarations to `.daroyan/daroyan.d.ts`
+Type generation writes ambient module declarations to `.shinro/shinro.d.ts`
 for every specifier the plugin resolves:
 
 ```ts
-// .daroyan/daroyan.d.ts
-declare module 'daroyan/routes' {
+// .shinro/shinro.d.ts
+declare module 'shinro/routes' {
   export const routes: typeof import('./routes.ts').routes;
   export type Routes = import('./routes.ts').Routes;
 }
@@ -1193,15 +1193,15 @@ declare module 'daroyan/routes' {
 
 Each declaration indirects through the real file via `import(...)`, which keeps
 the chained route schema intact. They are loaded through the project's
-`.daroyan/**/*.d.ts` include, so the specifiers resolve without a `paths`
+`.shinro/**/*.d.ts` include, so the specifiers resolve without a `paths`
 mapping and without a subpath in the package `exports`. The declarations exist
-only after generation; a clean checkout runs `daroyan typegen` (or any Vite
-command) before type checking. The `daroyan/routes` block is always written; the
-`daroyan/client` and `daroyan/rpc` blocks only when RPC generation is enabled,
+only after generation; a clean checkout runs `shinro typegen` (or any Vite
+command) before type checking. The `shinro/routes` block is always written; the
+`shinro/client` and `shinro/rpc` blocks only when RPC generation is enabled,
 matching the files that exist.
 
 The Vite plugin resolves these imports before normal package resolution. Because
-the package ships no runtime placeholder for them, importing `daroyan/routes`
+the package ships no runtime placeholder for them, importing `shinro/routes`
 without the plugin is an unresolved-module error rather than a silently empty
 router.
 
@@ -1261,7 +1261,7 @@ process.once('SIGTERM', () => {
 });
 ```
 
-This is application code. Daroyan neither supplies nor calls `shutdown()`.
+This is application code. Shinro neither supplies nor calls `shutdown()`.
 
 ### 19.2 Bun
 
@@ -1295,18 +1295,18 @@ process.once('SIGTERM', () => {
 ```
 
 The project chooses the appropriate Bun shutdown semantics and version
-requirements. Daroyan does not wrap `Bun.Server`.
+requirements. Shinro does not wrap `Bun.Server`.
 
 ### 19.3 Runtime portability
 
 An application may maintain separate Node and Bun entries or write one
-entry with runtime detection. Daroyan does not force one strategy.
+entry with runtime detection. Shinro does not force one strategy.
 
 The configured `entry` option selects the file bundled by a given Vite
 configuration:
 
 ```ts
-daroyan({
+shinro({
   entry: 'src/server.node.ts',
   build: {
     fileName: 'server.mjs',
@@ -1322,20 +1322,20 @@ emitted entry (see section 21).
 
 ## 20. Development behavior
 
-`vp dev` loads the configured user server entry through Daroyan's Vite
+`vp dev` loads the configured user server entry through Shinro's Vite
 development environment. The entry remains responsible for initialization,
 listener creation, and cleanup.
 
 Development requirements:
 
-- Daroyan transforms and serves the same application module used for build.
+- Shinro transforms and serves the same application module used for build.
 - Editing route code updates request handling without regenerating the
   route manifest.
 - Adding, deleting, or renaming a route rescans the manifest, regenerates
   RPC and optional companion types, and restarts or reloads the user entry
   as required.
-- Daroyan must not install its own signal handlers into the application.
-- When Daroyan must restart an isolated development server process, it
+- Shinro must not install its own signal handlers into the application.
+- When Shinro must restart an isolated development server process, it
   terminates it through normal process semantics so the user's handlers can
   run.
 - Route conflicts and syntax failures retain a clear last-known-good/error
@@ -1401,7 +1401,7 @@ produce a warning because they weaken the one-entry deployment model.
 
 ### 21.3 Shared behavior
 
-Regardless of mode, Daroyan does not add listener startup code to the
+Regardless of mode, Shinro does not add listener startup code to the
 output. Running the entry executes exactly the user's server entry:
 
 ```sh
@@ -1433,7 +1433,7 @@ Registration priority:
 5. methods in the fixed order `GET`, `POST`, `PUT`, `PATCH`, `DELETE`,
    `OPTIONS`.
 
-The generated `.daroyan/manifest.json` exists for debugging. Production
+The generated `.shinro/manifest.json` exists for debugging. Production
 code does not read it from disk. Its `file` entries are on-disk paths and
 its `path`/`mountPath` entries are URLs, so a route group appears only in
 `file` and in the `middleware` list — which is what makes a group's effect
@@ -1485,13 +1485,13 @@ machine paths.
 
 ## 23. RPC design
 
-Daroyan RPC is Hono RPC. Daroyan does not define another wire protocol.
+Shinro RPC is Hono RPC. Shinro does not define another wire protocol.
 
-The generator creates a chained Hono application in `.daroyan/rpc.ts`:
+The generator creates a chained Hono application in `.shinro/rpc.ts`:
 
 ```ts
 import { Hono } from 'hono';
-import type { ProjectEnv } from 'daroyan/app';
+import type { ProjectEnv } from 'shinro/app';
 
 import configuredApp from '../src/app.ts';
 import admin from '../src/routes/admin.ts';
@@ -1546,7 +1546,7 @@ union.
 
 ### 23.1 Generated client
 
-`.daroyan/client.ts` precomputes the client type:
+`.shinro/client.ts` precomputes the client type:
 
 ```ts
 import type { AppType } from './rpc.ts';
@@ -1576,8 +1576,8 @@ An API workspace can expose its generated client:
   "name": "@acme/api",
   "type": "module",
   "exports": {
-    "./client": "./.daroyan/client.ts",
-    "./rpc": "./.daroyan/rpc.ts",
+    "./client": "./.shinro/client.ts",
+    "./rpc": "./.shinro/rpc.ts",
   },
 }
 ```
@@ -1657,7 +1657,7 @@ await api.api.users.$get({
 
 ### 23.4 RPC guarantees and boundaries
 
-Daroyan guarantees:
+Shinro guarantees:
 
 - discovered paths and exported methods appear on `Client`;
 - paths declared by a chained default sub-router appear beneath its mount
@@ -1669,7 +1669,7 @@ Daroyan guarantees:
 - `c.json()` bodies and explicit statuses flow to the client;
 - adding, removing, or renaming a route updates the contract.
 
-Daroyan does not claim:
+Shinro does not claim:
 
 - runtime validation without a validator;
 - filename-derived server parameter-key checking without optional `Route`;
@@ -1687,7 +1687,7 @@ response must appear in the RPC contract.
 
 ### 24.1 Test-driven implementation
 
-Daroyan is implemented with test-driven development. Production code for a
+Shinro is implemented with test-driven development. Production code for a
 behavior must not be written before a test demonstrates that the behavior
 is missing.
 
@@ -1703,7 +1703,7 @@ Every implementation slice follows:
 
 A syntax error, missing dependency, broken test runner, or unrelated
 failure does not count as Red. The failure must prove that the public
-Daroyan behavior under development does not exist or is incorrect.
+Shinro behavior under development does not exist or is incorrect.
 
 Tests are added as vertical slices. The project must not write the complete
 test suite first and then implement the complete framework. Each new test
@@ -1717,12 +1717,12 @@ refactor while green.
 
 Tests exercise public authoring and consumption interfaces:
 
-- `plugins: [daroyan()]`;
-- imports from `daroyan/app` and `daroyan/routes`;
+- `plugins: [shinro()]`;
+- imports from `shinro/app` and `shinro/routes`;
 - route and `_middleware.ts` files;
 - `app.request()` and Hono's `testClient()`;
 - the generated public `Client` and `AppType`;
-- `daroyan typegen`;
+- `shinro typegen`;
 - Node and Bun server-entry builds.
 
 Tests must not primarily assert private scanner functions, internal hook
@@ -1731,7 +1731,7 @@ may supplement a behavioral test, but a snapshot alone does not prove the
 runtime or TypeScript contract.
 
 Mocks are limited to true system boundaries such as external services,
-time, or randomness. Daroyan's scanner, manifest, assembler, generator, and
+time, or randomness. Shinro's scanner, manifest, assembler, generator, and
 Vite plugin should be exercised together through small fixture projects
 where practical.
 
@@ -1747,7 +1747,7 @@ is:
 
 1. one named `GET` file is discovered, mounted, requestable, and present
    on the generated client;
-2. a `DaroyanEnv` augmentation types a route's `c.var` without repeating an
+2. a `ShinroEnv` augmentation types a route's `c.var` without repeating an
    environment generic;
 3. multiple directory middleware handlers run once in order for both the
    directory URL and a descendant route;
@@ -1798,9 +1798,9 @@ spawn the user's server entry explicitly.
 ## 25. Generated artifacts
 
 ```text
-.daroyan/
+.shinro/
 ├── client.ts
-├── daroyan.d.ts
+├── shinro.d.ts
 ├── manifest.json
 ├── routes.ts
 ├── rpc.ts
@@ -1818,14 +1818,14 @@ spawn the user's server entry explicitly.
 Requirements:
 
 - every generated file begins with a “do not edit” notice;
-- `.daroyan/routes.ts` is the mountable route table, and `daroyan/routes`
+- `.shinro/routes.ts` is the mountable route table, and `shinro/routes`
   resolves to it. It is written whether or not RPC is enabled, because mounting
   it is how the application serves anything;
-- `.daroyan/daroyan.d.ts` declares the ambient modules for every specifier the
+- `.shinro/shinro.d.ts` declares the ambient modules for every specifier the
   plugin resolves. It has no top-level imports, which is what an ambient
-  `declare module` requires; the `daroyan/client` and `daroyan/rpc` blocks are
+  `declare module` requires; the `shinro/client` and `shinro/rpc` blocks are
   written only when RPC generation is enabled, matching the files that exist;
-- nothing generated imports the application at runtime. `.daroyan/client.ts` is
+- nothing generated imports the application at runtime. `.shinro/client.ts` is
   the only generated module that references it, and only as a type;
 - output an earlier format generated is removed, recognised by its notice
   regardless of the format number it names;
@@ -1842,17 +1842,17 @@ tests, preview, or build.
 The package also exposes:
 
 ```sh
-daroyan typegen
+shinro typegen
 ```
 
-This loads `vite.config.ts`, finds `daroyan()`, performs the same scan and
+This loads `vite.config.ts`, finds `shinro()`, performs the same scan and
 generation, then exits without executing the user's server entry. It exists
 for clean standalone type checking:
 
 ```jsonc
 {
   "scripts": {
-    "typecheck": "daroyan typegen && tsc --noEmit",
+    "typecheck": "shinro typegen && tsc --noEmit",
   },
 }
 ```
@@ -1862,7 +1862,7 @@ for clean standalone type checking:
 Build errors:
 
 - missing or invalid default app export;
-- multiple `daroyan()` plugin instances in one TypeScript project;
+- multiple `shinro()` plugin instances in one TypeScript project;
 - configured app export is not created by `defineApp()`;
 - missing routes directory;
 - missing server entry during dev or build;
@@ -1881,7 +1881,7 @@ Build errors:
 - unsupported method export values;
 - external method re-exports whose handler tuple cannot be proven;
 - default export that is not a Hono sub-router;
-- unresolved `daroyan/routes`, which means the Vite plugin did not run;
+- unresolved `shinro/routes`, which means the Vite plugin did not run;
 - production output unexpectedly split into multiple JavaScript chunks.
 
 Warnings:
@@ -1890,8 +1890,8 @@ Warnings:
 - TypeScript is not strict;
 - generated client package export is missing;
 - a parameter schema does not correspond to the filename parameters when
-  Daroyan can prove the mismatch;
-- the app module never mounts `daroyan/routes` while file routes exist, so
+  Shinro can prove the mismatch;
+- the app module never mounts `shinro/routes` while file routes exist, so
   none of them are served;
 - middleware is registered after the mount, where Hono's registration-order
   composition means it never wraps a file route;
@@ -1907,7 +1907,7 @@ warning. It is a supported API choice.
 Example conflict:
 
 ```text
-[daroyan] Route conflict for /api/users
+[shinro] Route conflict for /api/users
   - src/routes/api/users.ts
   - src/routes/api/users/index.ts
 
@@ -1917,7 +1917,7 @@ Remove one file or choose a different URL.
 Example sub-router namespace conflict:
 
 ```text
-[daroyan] Route namespace conflict at /admin
+[shinro] Route namespace conflict at /admin
   - src/routes/admin.ts default-exports a Hono sub-router
   - src/routes/admin/stats.ts maps beneath the same mount
 
@@ -1930,7 +1930,7 @@ Move the nested route into the sub-router or use named method files.
 ```jsonc
 {
   "bin": {
-    "daroyan": "./dist/cli.mjs",
+    "shinro": "./dist/cli.mjs",
   },
   "exports": {
     ".": {
@@ -1951,19 +1951,19 @@ Move the nested route into the sub-router or use named method files.
 }
 ```
 
-`@hono/node-server` is not a Daroyan dependency. Node applications install
+`@hono/node-server` is not a Shinro dependency. Node applications install
 it themselves, while Bun applications use their selected Bun API.
 
-Route modules import runtime-safe helpers from `daroyan/app`. Vite plugin
+Route modules import runtime-safe helpers from `shinro/app`. Vite plugin
 implementation and Node built-ins must not enter route or browser graphs.
 
 `./tsconfig` exposes the shipped `tsconfig.base.json` so consumers can
-`extends: "daroyan/tsconfig"`; `tsconfig.base.json` is included in the
+`extends: "shinro/tsconfig"`; `tsconfig.base.json` is included in the
 published package files.
 
-`daroyan/routes`, `daroyan/client`, and `daroyan/rpc` are Vite-resolved project
+`shinro/routes`, `shinro/client`, and `shinro/rpc` are Vite-resolved project
 modules with no packaged JavaScript or declaration target. Their runtime is
-supplied by the plugin and their types by the generated `.daroyan/daroyan.d.ts`
+supplied by the plugin and their types by the generated `.shinro/shinro.d.ts`
 ambient declarations; importing one without the plugin is an unresolved-module
 error. Every specifier the declarations name must also resolve in the plugin, or
 the types promise a module the bundler cannot find.
@@ -1977,11 +1977,11 @@ must keep those ranges aligned with the compatibility suite.
 
 ```ts
 // vite.config.ts
-import { daroyan } from 'daroyan';
+import { shinro } from 'shinro';
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
-  plugins: [daroyan()],
+  plugins: [shinro()],
 });
 ```
 
@@ -1990,13 +1990,13 @@ export default defineConfig({
 ```ts
 // src/app.ts
 import { logger } from 'hono/logger';
-import { defineApp } from 'daroyan/app';
-import { routes } from 'daroyan/routes';
+import { defineApp } from 'shinro/app';
+import { routes } from 'shinro/routes';
 
 import type { User } from './types.ts';
 
-declare module 'daroyan/app' {
-  interface DaroyanEnv {
+declare module 'shinro/app' {
+  interface ShinroEnv {
     Variables: {
       requestId: string;
       user: User;
@@ -2023,7 +2023,7 @@ export default app;
 
 ```ts
 // src/routes/_middleware.ts
-import { defineMiddleware } from 'daroyan/app';
+import { defineMiddleware } from 'shinro/app';
 
 import { authenticate } from '../lib/auth.ts';
 
@@ -2051,7 +2051,7 @@ export default defineMiddleware(
 ```ts
 // src/routes/api/users/index.ts
 import { zValidator } from '@hono/zod-validator';
-import { defineHandler } from 'daroyan/app';
+import { defineHandler } from 'shinro/app';
 import { z } from 'zod';
 
 const createUser = z.object({
@@ -2075,7 +2075,7 @@ export const POST = defineHandler(zValidator('json', createUser), async (c) => {
 ```ts
 // src/routes/api/users/$id.ts
 import { zValidator } from '@hono/zod-validator';
-import { defineHandler } from 'daroyan/app';
+import { defineHandler } from 'shinro/app';
 import { z } from 'zod';
 
 const params = z.object({
@@ -2195,15 +2195,15 @@ This section describes and constrains the v0.1 implementation.
 ### 29.3 Type generator
 
 - Generate optional route and middleware companions bound to `ProjectEnv`,
-  which the application declares by augmenting `DaroyanEnv` — there is no
+  which the application declares by augmenting `ShinroEnv` — there is no
   environment inference step.
 - Generate named RPC registrations with the same flattened middleware and
   handler tuples used at runtime.
 - Generate chained `.route()` registrations for default sub-routers.
 - Generate a precomputed client module whose `AppType` is `typeof app`, taken
   from the configured app module as a type-only import.
-- Generate the `.daroyan/daroyan.d.ts` ambient declarations for every specifier
-  the plugin resolves, always including `daroyan/routes` and adding the RPC pair
+- Generate the `.shinro/shinro.d.ts` ambient declarations for every specifier
+  the plugin resolves, always including `shinro/routes` and adding the RPC pair
   when RPC is enabled.
 - Remove output an earlier format generated.
 - Use atomic content-aware writes.
@@ -2216,8 +2216,8 @@ This section describes and constrains the v0.1 implementation.
 - `configResolved`: scan, validate, and generate.
 - development hooks: execute the configured user entry in an isolated,
   reloadable environment without taking over its lifecycle.
-- `resolveId`: resolve `daroyan/routes` to the generated router, and
-  `daroyan/client` / `daroyan/rpc` to their files when RPC is enabled.
+- `resolveId`: resolve `shinro/routes` to the generated router, and
+  `shinro/client` / `shinro/rpc` to their files when RPC is enabled.
 - build hooks: assert the expected entry filename; reject unexpected extra
   chunks only in the single-artifact (`build.unbundle: false`) mode.
 - test integration: the application module is directly importable, so tests
@@ -2252,21 +2252,21 @@ v0.1 is complete when:
   failing for the intended reason before its production implementation.
 - implementation proceeded as one vertical Red–Green–Refactor slice at a
   time rather than all tests followed by all production code.
-- `plugins: [daroyan()]` is the only required Vite integration.
+- `plugins: [shinro()]` is the only required Vite integration.
 - `defineApp()` returns a normal Hono instance.
 - the app module uses ordinary Hono APIs and default-exports the instance.
-- `daroyan/routes` exposes the file routes as a mountable sub-router without a
+- `shinro/routes` exposes the file routes as a mountable sub-router without a
   user-facing `virtual:` import, and `typeof app` retains the mounted schema.
 - the server entry imports the app module directly, not a generated one.
-- Daroyan exposes no application lifecycle or shutdown API.
+- Shinro exposes no application lifecycle or shutdown API.
 - the user's Node or Bun entry controls the native server handle and
   signals.
 - route files work without generated imports.
-- an environment declared once by augmenting `DaroyanEnv` types `c.var` in
+- an environment declared once by augmenting `ShinroEnv` types `c.var` in
   every `defineHandler()` and `defineMiddleware()` call without repeating a
   generic;
 - a variable declared through a `hono` `ContextVariableMap` augmentation is
-  typed on `c.var` alongside `DaroyanEnv`, with no central env required;
+  typed on `c.var` alongside `ShinroEnv`, with no central env required;
 - optional `defineHandler<Route.Handler>()` provides exact filename
   parameters.
 - `zValidator("param", ...)` provides typed, runtime-validated parameters
@@ -2288,7 +2288,7 @@ v0.1 is complete when:
   method, and middleware metadata.
 - Node and Bun example entries build and run independently.
 - conflicts and invalid modules fail with actionable diagnostics.
-- `daroyan typegen` prepares a clean checkout for type checking.
+- `shinro typegen` prepares a clean checkout for type checking.
 - `vp check` and `vp test` pass for the package and example applications.
 
 ## 31. Finalized v0.1 implementation decisions
@@ -2296,7 +2296,7 @@ v0.1 is complete when:
 1. **App defaults.** `defineApp()` preserves Hono's default strict routing.
    Users can pass normal Hono constructor options when they want different
    behavior.
-2. **Development isolation.** Daroyan runs the user-owned server entry in an
+2. **Development isolation.** Shinro runs the user-owned server entry in an
    isolated Node child that loads modules through Vite's SSR module runner.
    Structural changes are validated before restart, and restarts begin with
    `SIGTERM` so user shutdown handlers can run.
@@ -2304,7 +2304,7 @@ v0.1 is complete when:
    `/` before file routes. Chained manual routes retain their schema and
    enter the client; unassigned Hono mutations remain runtime-only.
 4. **Bun build testing.** Native build, request, `SIGTERM`, and
-   `Bun.Server.stop(false)` behavior is covered with Bun 1.3.11. Daroyan
+   `Bun.Server.stop(false)` behavior is covered with Bun 1.3.11. Shinro
    exposes no Bun lifecycle abstraction.
 5. **Build modes.** The default unbundled build preserves the source module
    tree and keeps dependencies external. The opt-in single-entry build

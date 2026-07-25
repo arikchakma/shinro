@@ -14,7 +14,7 @@ test('the index route describes the versioned showcase', async () => {
     'root:first,root:second'
   );
   expect(response.headers.get('x-request-id')).toBe(body.requestId);
-  expect(body.name).toBe('Daroyan API showcase');
+  expect(body.name).toBe('Shinro API showcase');
   expect(body.endpoints).toContain('/v1/resources/:id');
 });
 
@@ -161,7 +161,7 @@ test('directory middleware contributes an early response and protects descendant
   });
   expect(allowed.status).toBe(200);
   await expect(allowed.json()).resolves.toMatchObject({
-    secret: 'daroyan',
+    secret: 'shinro',
   });
 });
 

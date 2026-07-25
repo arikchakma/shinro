@@ -1,4 +1,4 @@
-import { defineHandler } from 'daroyan/app';
+import { defineHandler } from 'shinro/app';
 
 declare module 'hono' {
   interface ContextVariableMap {

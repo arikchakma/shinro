@@ -4,7 +4,7 @@ import type {
   Client,
   InferRequestType,
   InferResponseType,
-} from '../.daroyan/client.ts';
+} from '../.shinro/client.ts';
 
 type CreateResource = Client['v1']['resources']['$post'];
 type GetResource = Client['v1']['resources'][':id']['$get'];
@@ -31,7 +31,7 @@ test('filename parameters and middleware responses reach the generated client', 
   }>();
   expectTypeOf<ProtectedResponse['status']>().toEqualTypeOf<200 | 401>();
   expectTypeOf<InferResponseType<GetProtected>>().toEqualTypeOf<
-    { error: 'UNAUTHORIZED' } | { requestId: string; secret: 'daroyan' }
+    { error: 'UNAUTHORIZED' } | { requestId: string; secret: 'shinro' }
   >();
 });
 

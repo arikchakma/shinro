@@ -1,8 +1,8 @@
-import { defineApp } from 'daroyan/app';
-import { routes } from 'daroyan/routes';
+import { defineApp } from 'shinro/app';
+import { routes } from 'shinro/routes';
 
-declare module 'daroyan/app' {
-  interface DaroyanEnv {
+declare module 'shinro/app' {
+  interface ShinroEnv {
     Variables: {
       requestId: string;
     };

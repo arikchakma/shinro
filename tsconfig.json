@@ -3,10 +3,10 @@
     "noEmit": true,
     "module": "esnext",
     "moduleResolution": "bundler",
-    "rootDirs": [".", "./.daroyan/types"],
+    "rootDirs": [".", "./.shinro/types"],
     "strict": true,
     "allowImportingTsExtensions": true,
     "esModuleInterop": true
   },
-  "include": ["apps", "packages", "tools", ".daroyan/**/*.d.ts"]
+  "include": ["apps", "packages", "tools", ".shinro/**/*.d.ts"]
 }
