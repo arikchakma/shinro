@@ -207,6 +207,11 @@ function stripJsonComments(source: string): string {
   let output = '';
   let inString = false;
   let escaped = false;
+  // Where in `output` the last comma outside a string landed, or -1 once
+  // another value character proved it was not a trailing one. Tracking it here
+  // rather than sweeping the finished text is what keeps a `,}` inside a string
+  // value intact.
+  let pendingComma = -1;
 
   for (let index = 0; index < source.length; index += 1) {
     const character = source[index];
@@ -226,6 +231,7 @@ function stripJsonComments(source: string): string {
 
     if (character === '"') {
       inString = true;
+      pendingComma = -1;
       output += character;
       continue;
     }
@@ -251,8 +257,24 @@ function stripJsonComments(source: string): string {
       continue;
     }
 
+    if (character === ',') {
+      pendingComma = output.length;
+    } else if (character === '}' || character === ']') {
+      if (pendingComma !== -1) {
+        // Blank the comma in place. Comments already collapse to newlines to
+        // keep line numbers, and rewriting rather than splicing keeps columns
+        // honest too.
+        output = `${output.slice(0, pendingComma)} ${output.slice(
+          pendingComma + 1
+        )}`;
+      }
+      pendingComma = -1;
+    } else if (character.trim() !== '') {
+      pendingComma = -1;
+    }
+
     output += character;
   }
 
-  return output.replace(/,\s*([}\]])/g, '$1');
+  return output;
 }

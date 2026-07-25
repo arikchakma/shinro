@@ -2901,6 +2901,60 @@ test('TypeScript settings inherited from a relative config are accepted', async 
   }
 });
 
+test('reading a tsconfig keeps punctuation inside string values', async () => {
+  const root = await mkdtemp(`${tmpdir()}/daroyan-jsonc-tsconfig-`);
+  const warnings: string[] = [];
+  const logger = createLogger('silent');
+  logger.warn = (message) => {
+    warnings.push(message);
+  };
+
+  await mkdir(`${root}/src/routes`, { recursive: true });
+  await writeFile(`${root}/src/app.ts`, temporaryAppSource);
+  // The base is named so that its path ends in the same two characters as a
+  // trailing comma before a closing bracket. Stripping those commas by pattern
+  // over the finished text would rewrite this string, and the extends would
+  // then resolve to a file that does not exist.
+  await writeFile(
+    `${root}/tsconfig,]base.json`,
+    JSON.stringify({
+      compilerOptions: {
+        allowImportingTsExtensions: true,
+        module: 'ESNext',
+        moduleResolution: 'Bundler',
+        noEmit: true,
+        strict: true,
+      },
+    })
+  );
+  await writeFile(
+    `${root}/tsconfig.json`,
+    [
+      '{',
+      '  // Comments and trailing commas are both legal here.',
+      '  "extends": "./tsconfig,]base.json",',
+      '  "compilerOptions": {',
+      '    "rootDirs": [".", "./.daroyan/types"],',
+      '  },',
+      '  /* block */',
+      '  "include": ["src", ".daroyan/**/*.d.ts"],',
+      '}',
+      '',
+    ].join('\n')
+  );
+
+  try {
+    await resolveConfig(
+      { configFile: false, customLogger: logger, plugins: [daroyan()], root },
+      'serve'
+    );
+
+    expect(warnings).toEqual([]);
+  } finally {
+    await rm(root, { recursive: true });
+  }
+});
+
 test('TypeScript settings inherited from a package config are accepted', async () => {
   const root = await mkdtemp(`${tmpdir()}/daroyan-package-tsconfig-`);
   const warnings: string[] = [];
