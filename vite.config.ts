@@ -26,6 +26,8 @@ export default defineConfig({
       sortScripts: true,
     },
     sortImports: {},
-    ignorePatterns: ['dist/', 'node_modules/'],
+    // `_static/` holds the readme cover source, whose code panel relies on
+    // `white-space: pre` and so cannot survive reflowing.
+    ignorePatterns: ['_static/', 'dist/', 'node_modules/'],
   },
 });
