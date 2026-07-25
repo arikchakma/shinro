@@ -22,7 +22,7 @@ import {
 } from 'vite-plus';
 import { expect, expectTypeOf, test } from 'vite-plus/test';
 
-import { createClient } from '../.shinro/client.ts';
+import { defineClient } from '../.shinro/client.ts';
 import { shinro } from '../src/index.ts';
 import { affectsRouteTree } from '../src/server/scanner.ts';
 import app from './fixtures/basic/src/app.ts';
@@ -342,7 +342,7 @@ test('a default sub-router namespace rejects dynamically matching descendants', 
 });
 
 test('the generated client exposes the assembled application contract', () => {
-  const generatedClient = createClient('http://localhost');
+  const generatedClient = defineClient('http://localhost');
 
   expectTypeOf(generatedClient.health.$get).toBeFunction();
   expectTypeOf(generatedClient.manual.$get).toBeFunction();
@@ -1936,11 +1936,11 @@ test('every specifier the generated declarations name is importable', async () =
       routes: unknown;
     };
     const clientModule = (await runner.import('shinro/client')) as {
-      createClient: unknown;
+      defineClient: unknown;
     };
 
     expect(typeof routesModule.routes).toBe('function');
-    expect(typeof clientModule.createClient).toBe('function');
+    expect(typeof clientModule.defineClient).toBe('function');
     await expect(runner.import('shinro/rpc')).resolves.toBeDefined();
   } finally {
     await server.close();
@@ -1949,7 +1949,7 @@ test('every specifier the generated declarations name is importable', async () =
 });
 
 test('response contracts survive the mount into the generated client', () => {
-  const generated = createClient('http://localhost');
+  const generated = defineClient('http://localhost');
 
   // `route()` merges the sub-router's schema into the app's under the mount
   // path, so status literals and middleware response unions declared in route

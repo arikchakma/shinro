@@ -190,7 +190,7 @@ export async function createSources(
       'export type Client = typeof typedClient;',
       'export type { AppType };',
       '',
-      'export const createClient = (...args: Parameters<typeof hc>): Client =>',
+      'export const defineClient = (...args: Parameters<typeof hc>): Client =>',
       '  hc<AppType>(...args);',
       '',
       'export type { InferRequestType, InferResponseType } from "hono/client";',
@@ -272,7 +272,7 @@ export async function createSources(
         ? [
             '',
             `declare module "${CLIENT_ID}" {`,
-            `  export const createClient: typeof import("./${CLIENT_FILE}").createClient;`,
+            `  export const defineClient: typeof import("./${CLIENT_FILE}").defineClient;`,
             `  export type Client = import("./${CLIENT_FILE}").Client;`,
             `  export type AppType = import("./${CLIENT_FILE}").AppType;`,
             '  export type { InferRequestType, InferResponseType } from "hono/client";',

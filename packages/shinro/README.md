@@ -475,9 +475,9 @@ Shinro generates `.shinro/client.ts`, and `.shinro/rpc.ts` re-exports
 `AppType` from it for workspaces that publish their types:
 
 ```ts
-import { createClient } from './.shinro/client.ts';
+import { defineClient } from './.shinro/client.ts';
 
-const api = createClient('http://localhost:3000');
+const api = defineClient('http://localhost:3000');
 
 const response = await api.api.users.$post({
   json: {
