@@ -1,7 +1,12 @@
 import { readFile, readdir } from 'node:fs/promises';
-import { basename, dirname, relative, resolve, sep } from 'node:path';
-
-import { minimatch } from 'minimatch';
+import {
+  basename,
+  dirname,
+  matchesGlob,
+  relative,
+  resolve,
+  sep,
+} from 'node:path';
 
 import { HTTP_METHODS } from '../constants.ts';
 import type { NodeView } from './ast.ts';
@@ -384,7 +389,8 @@ function matchesIgnoredRouteFile(
   const routeRelativeFile = relative(routesDirectory, file)
     .split(sep)
     .join('/');
-  return patterns.some((pattern) => minimatch(routeRelativeFile, pattern));
+
+  return patterns.some((pattern) => matchesGlob(routeRelativeFile, pattern));
 }
 
 function isIgnoredRouteFile(routesDirectory: string, file: string): boolean {

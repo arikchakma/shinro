@@ -505,7 +505,7 @@ Ignored files:
 - `*.test.*` and `*.spec.*`;
 - files under `__tests__`, `__fixtures__`, or `+types`.
 
-`ignoredRouteFiles` adds project-specific exclusions using minimatch
+`ignoredRouteFiles` adds project-specific exclusions using `path.matchesGlob`
 patterns relative to the configured routes directory, with `/` separators
 on every operating system. Matching is performed before route parsing or
 middleware validation. A pattern therefore excludes both ordinary route
@@ -522,8 +522,13 @@ Built-in exclusions always apply and cannot be re-enabled by this option.
 A route group is **pathless, not ignored**: its `_middleware.ts` and its
 routes are live. Because `ignoredRouteFiles` patterns match the on-disk
 path, a pattern must include the group directory even though no URL does —
-`'(internal)/**'`, not `'internal/**'`. Bare parentheses are literal in
-minimatch; only a `?@!+*` prefix makes them an extglob group.
+`'(internal)/**'`, not `'internal/**'`. Bare parentheses are literal; only a
+`?@!+*` prefix makes them an extglob group.
+
+Matching runs on Node's own glob implementation, so the plugin ships no glob
+dependency. Node prints an experimental warning for it before Node 24, and
+because the matcher is only reached once a project configures patterns, that
+warning appears exactly for projects using this option on an older runtime.
 
 ### 12.1 Conflicts
 

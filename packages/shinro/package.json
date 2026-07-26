@@ -64,9 +64,6 @@
     "release": "bumpp",
     "test": "vp test"
   },
-  "dependencies": {
-    "minimatch": "^10.2.5"
-  },
   "devDependencies": {
     "@hono/node-server": "catalog:",
     "@hono/zod-validator": "catalog:",

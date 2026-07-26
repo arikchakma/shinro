@@ -231,9 +231,9 @@ files under `__tests__`, `__fixtures__`, `.dot-directories`, or `+types`
 are not routes. A route group is pathless, not ignored — its routes and its
 `_middleware.ts` are live.
 
-Additional files can be excluded with route-relative
-[minimatch](https://www.npmjs.com/package/minimatch) globs. A match
-excludes both route modules and directory middleware:
+Additional files can be excluded with route-relative globs, matched by
+[`path.matchesGlob`](https://nodejs.org/api/path.html#pathmatchesglobpath-pattern).
+A match excludes both route modules and directory middleware:
 
 ```ts
 shinro({

@@ -26,8 +26,8 @@ Options that affect routing:
 - `basePath` — a prefix applied to every generated URL, so `basePath: '/v1'`
   serves `src/routes/health.ts` at `/v1/health`. It is not a filename
   convention; every example below shows the path before the prefix.
-- `ignoredRouteFiles` — additional exclusions expressed as minimatch globs
-  relative to the routes directory.
+- `ignoredRouteFiles` — additional exclusions expressed as `path.matchesGlob`
+  globs relative to the routes directory.
 
 ## Routing conventions
 

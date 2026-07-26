@@ -903,7 +903,7 @@ test('reserved basenames and directories are excluded from route discovery', asy
   }
 });
 
-test('ignoredRouteFiles excludes route-relative minimatch globs', async () => {
+test('ignoredRouteFiles excludes route-relative globs', async () => {
   const packageRoot = fileURLToPath(new URL('..', import.meta.url));
   const root = await mkdtemp(`${packageRoot}/.shinro-custom-ignored-routes-`);
 
