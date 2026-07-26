@@ -82,7 +82,7 @@
   },
   "peerDependencies": {
     "hono": "^4.0.0",
-    "vite-plus": "^0.2.0"
+    "vite": "^8.0.0"
   },
   "engines": {
     "node": ">=22.12.0"

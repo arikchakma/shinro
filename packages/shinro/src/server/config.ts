@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, extname, relative, resolve, sep } from 'node:path';
 
-import type { Logger } from 'vite-plus';
+import type { Logger } from 'vite';
 
 type TypeScriptConfig = {
   compilerOptions?: {

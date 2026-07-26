@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { relative, resolve, sep } from 'node:path';
 
-import type { Logger } from 'vite-plus';
+import type { Logger } from 'vite';
 
 export async function warnForMissingClientExport(options: {
   logger: Logger;

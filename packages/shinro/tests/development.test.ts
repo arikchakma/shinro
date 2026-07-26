@@ -9,7 +9,7 @@ import {
 } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
-import { createServer } from 'vite-plus';
+import { createServer } from 'vite';
 import { expect, test } from 'vite-plus/test';
 
 test('development reloads the isolated user entry and terminates each process normally', async () => {
@@ -24,7 +24,7 @@ test('development reloads the isolated user entry and terminates each process no
     `${root}/vite.config.ts`,
     [
       `import { shinro } from ${JSON.stringify(plugin)};`,
-      'import { defineConfig } from "vite-plus";',
+      'import { defineConfig } from "vite";',
       'export default defineConfig({ plugins: [shinro()] });',
       '',
     ].join('\n')
@@ -105,7 +105,7 @@ test('editing route code reloads its behavior without rewriting the route manife
     `${root}/vite.config.ts`,
     [
       `import { shinro } from ${JSON.stringify(plugin)};`,
-      'import { defineConfig } from "vite-plus";',
+      'import { defineConfig } from "vite";',
       'export default defineConfig({ plugins: [shinro()] });',
       '',
     ].join('\n')
@@ -178,7 +178,7 @@ test('an invalid structural route change keeps the last-known-good server runnin
     `${root}/vite.config.ts`,
     [
       `import { shinro } from ${JSON.stringify(plugin)};`,
-      'import { defineConfig } from "vite-plus";',
+      'import { defineConfig } from "vite";',
       'export default defineConfig({ plugins: [shinro()] });',
       '',
     ].join('\n')
@@ -259,7 +259,7 @@ test('development fails immediately with guidance when the server entry is missi
     `${root}/vite.config.ts`,
     [
       `import { shinro } from ${JSON.stringify(plugin)};`,
-      'import { defineConfig } from "vite-plus";',
+      'import { defineConfig } from "vite";',
       'export default defineConfig({ plugins: [shinro()] });',
       '',
     ].join('\n')

@@ -11,7 +11,7 @@ one segment unless one of the conventions below changes its meaning.
 
 ```ts
 // vite.config.ts
-import { defineConfig } from 'vite-plus';
+import { defineConfig } from 'vite';
 import { shinro } from 'shinro';
 
 export default defineConfig({

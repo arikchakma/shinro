@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { resolveConfig } from 'vite-plus';
+import { resolveConfig } from 'vite';
 
 import type { ShinroApi } from './server/plugin.ts';
 

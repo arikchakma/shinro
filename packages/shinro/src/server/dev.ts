@@ -2,10 +2,10 @@ import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
 
-import type { Logger } from 'vite-plus';
+import type { Logger } from 'vite';
 
 const RUNNER_SOURCE = `
-import { createServer, createServerModuleRunner } from "vite-plus";
+import { createServer, createServerModuleRunner } from "vite";
 
 const server = await createServer({
   configFile: process.env.SHINRO_DEV_CONFIG || undefined,

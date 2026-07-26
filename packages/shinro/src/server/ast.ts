@@ -1,4 +1,4 @@
-import { parseSync } from 'vite-plus';
+import { parseSync } from 'vite';
 
 /**
  * The subset of an oxc AST node this plugin reads. Route and app modules are

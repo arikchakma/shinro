@@ -31,7 +31,7 @@ Bun can use `Bun.serve()` directly.
 ```ts
 // vite.config.ts
 import { shinro } from 'shinro';
-import { defineConfig } from 'vite-plus';
+import { defineConfig } from 'vite';
 
 export default defineConfig({
   plugins: [shinro()],

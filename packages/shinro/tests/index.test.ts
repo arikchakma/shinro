@@ -19,7 +19,7 @@ import {
   createServer,
   createServerModuleRunner,
   resolveConfig,
-} from 'vite-plus';
+} from 'vite';
 import { expect, expectTypeOf, test } from 'vite-plus/test';
 
 import { defineClient } from '../.shinro/client.ts';

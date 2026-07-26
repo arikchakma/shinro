@@ -52,7 +52,7 @@ test('typegen prepares every generated type artifact in a clean checkout', async
     `${root}/vite.config.ts`,
     [
       `import { shinro } from ${JSON.stringify(plugin)};`,
-      'import { defineConfig } from "vite-plus";',
+      'import { defineConfig } from "vite";',
       'export default defineConfig({ plugins: [shinro()] });',
       '',
     ].join('\n')
@@ -196,7 +196,7 @@ test('concurrent typegen processes commit one complete generated directory', asy
     `${root}/vite.config.ts`,
     [
       `import { shinro } from ${JSON.stringify(plugin)};`,
-      'import { defineConfig } from "vite-plus";',
+      'import { defineConfig } from "vite";',
       'export default defineConfig({ plugins: [shinro()] });',
       '',
     ].join('\n')

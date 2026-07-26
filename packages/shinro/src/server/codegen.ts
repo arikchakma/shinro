@@ -1,7 +1,7 @@
 import { access } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
-import type { ResolvedConfig } from 'vite-plus';
+import type { ResolvedConfig } from 'vite';
 
 import {
   CLIENT_FILE,

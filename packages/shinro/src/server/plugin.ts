@@ -1,7 +1,7 @@
 import { access, readdir } from 'node:fs/promises';
 import { basename, dirname, extname, relative, resolve, sep } from 'node:path';
 
-import type { Plugin, ResolvedConfig, ViteDevServer } from 'vite-plus';
+import type { Plugin, ResolvedConfig, ViteDevServer } from 'vite';
 
 import {
   CLIENT_FILE,

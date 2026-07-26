@@ -215,7 +215,7 @@ Bun applications can use `Bun.serve()` directly.
 ```ts
 // vite.config.ts
 import { shinro } from 'shinro';
-import { defineConfig } from 'vite-plus';
+import { defineConfig } from 'vite';
 
 export default defineConfig({
   plugins: [shinro()],
@@ -1944,7 +1944,7 @@ Move the nested route into the sub-router or use named method files.
   },
   "peerDependencies": {
     "hono": "^4.0.0",
-    "vite-plus": "^0.2.0",
+    "vite": "^8.0.0",
   },
 }
 ```
@@ -1976,7 +1976,7 @@ must keep those ranges aligned with the compatibility suite.
 ```ts
 // vite.config.ts
 import { shinro } from 'shinro';
-import { defineConfig } from 'vite-plus';
+import { defineConfig } from 'vite';
 
 export default defineConfig({
   plugins: [shinro()],
