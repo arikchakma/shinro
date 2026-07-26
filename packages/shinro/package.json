@@ -65,7 +65,7 @@
     "test": "vp test"
   },
   "dependencies": {
-    "minimatch": "catalog:"
+    "minimatch": "^10.2.5"
   },
   "devDependencies": {
     "@hono/node-server": "catalog:",

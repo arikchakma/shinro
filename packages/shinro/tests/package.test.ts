@@ -27,6 +27,28 @@ test('public package subpaths expose matching runtime and declaration files', as
   });
 });
 
+test('published dependency ranges resolve without the workspace', async () => {
+  const packageJson = JSON.parse(
+    await readFile(new URL('../package.json', import.meta.url), 'utf8')
+  ) as {
+    dependencies?: Record<string, string>;
+    peerDependencies?: Record<string, string>;
+  };
+
+  // `catalog:` and `workspace:` are pnpm protocols that only `pnpm publish`
+  // rewrites. Installers see whatever the tarball holds, so a consumer-facing
+  // range has to be a literal one no matter which client publishes.
+  const specifiers = [
+    ...Object.entries(packageJson.dependencies ?? {}),
+    ...Object.entries(packageJson.peerDependencies ?? {}),
+  ];
+
+  expect(specifiers.length).toBeGreaterThan(0);
+  for (const [name, specifier] of specifiers) {
+    expect(`${name}@${specifier}`).toMatch(/@[\d^~><=*]/);
+  }
+});
+
 test('the package build does not leak the fixture application environment', async () => {
   const packageRoot = new URL('..', import.meta.url);
 

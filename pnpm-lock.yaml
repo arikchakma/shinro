@@ -15,9 +15,6 @@ catalogs:
     '@typescript/native-preview':
       specifier: 7.0.0-dev.20260707.2
       version: 7.0.0-dev.20260707.2
-    minimatch:
-      specifier: ^10.2.5
-      version: 10.2.5
     typescript:
       specifier: ^5
       version: 5.9.3
@@ -93,7 +90,7 @@ importers:
   packages/shinro:
     dependencies:
       minimatch:
-        specifier: 'catalog:'
+        specifier: ^10.2.5
         version: 10.2.5
       vite:
         specifier: npm:@voidzero-dev/vite-plus-core@latest
