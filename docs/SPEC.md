@@ -742,17 +742,26 @@ Supported call forms:
 ```ts
 defineHandler(handler);
 defineHandler(middleware, handler);
+defineHandler(middleware, validator, handler);
 
 defineHandler<Route.Handler>(handler);
 defineHandler<Route.Handler>(middleware, handler);
 ```
 
+Either form accepts a final handler preceded by up to nine middleware or
+validators. Without the generic, each validated input accumulates into every
+later position, so the handler reads all of them through `c.req.valid()`.
+
 The generated generic changes types only. It does not register the route,
-add validation, or change runtime behavior. Supplying the explicit
-`Route.Handler` generic can widen response and status inference because
-TypeScript does not partially infer later generic parameters after an
-explicit one. Routes that prioritize the narrowest RPC response contract
-can omit the companion generic and use validators for runtime input.
+add validation, or change runtime behavior. Supplying it does stop input
+inference, because TypeScript does not partially infer later generic
+parameters after an explicit one: every parameter after `Route.Handler`
+falls back to a default, leaving the chain's inputs blank. A validator in
+that position still runs, and its schema still reaches the RPC contract, but
+`c.req.valid()` has nothing to read — middleware, which carries no input, is
+unaffected. The same rule is why the generic widens response and status
+inference. Routes that read validated input, or want the narrowest RPC
+response contract, omit the generic.
 
 ### 14.3 Recommended parameter validation
 
@@ -779,7 +788,11 @@ The validator makes `c.req.valid("param")` exact and rejects invalid
 requests at runtime. For many routes, this removes any reason to import the
 generated `Route` type.
 
-The two features can be combined:
+The two features compose at runtime but not in the type system. A validator
+may precede the handler under an explicit generic — it validates, and its
+schema still reaches the RPC contract — but `Route.Handler` stops input
+inference, so the handler reads its parameters from the filename and
+`c.req.valid()` stays empty:
 
 ```ts
 import type { Route } from './+types/$id.ts';
@@ -787,18 +800,24 @@ import type { Route } from './+types/$id.ts';
 export const GET = defineHandler<Route.Handler>(
   zValidator('param', params),
   async (c) => {
-    const { id } = c.req.valid('param');
+    // Validated at runtime, typed from the filename.
+    const id = c.req.param('id');
     return c.json({ id }, 200);
   }
 );
 ```
+
+For parameters this costs little, because the filename supplies the same
+keys. A route reading a validated body or query wants the inferred form,
+where the schema types `c.req.valid()` directly.
 
 Use:
 
 - a validator when input must be checked at runtime;
 - `Route.Handler` when exact filename-derived `c.req.param()` keys are
   useful;
-- both when a team wants both guarantees;
+- both when a route wants runtime validation and filename typing, accepting
+  that `c.req.valid()` is unavailable;
 - neither for a low-ceremony route that uses standard Hono typing.
 
 `+types` must never be required for route discovery, runtime registration,
@@ -2099,7 +2118,10 @@ export const GET = defineHandler(zValidator('param', params), async (c) => {
 
 ### 28.6 Resource route using optional `Route`
 
-The same route could additionally opt into filename-derived typing:
+The same route can opt into filename-derived typing instead of reading its
+validated input. The validator still runs; under an explicit generic the
+handler takes its parameters from the filename rather than `c.req.valid()`,
+as §14.3 describes:
 
 ```ts
 import type { Route } from './+types/$id.ts';
@@ -2107,7 +2129,7 @@ import type { Route } from './+types/$id.ts';
 export const GET = defineHandler<Route.Handler>(
   zValidator('param', params),
   async (c) => {
-    const { id } = c.req.valid('param');
+    const id = c.req.param('id');
     return c.json({ user: await findUser(id) }, 200);
   }
 );

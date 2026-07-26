@@ -70,7 +70,11 @@ test('the package build does not leak the fixture application environment', asyn
 
   expect(declared).not.toContain('tests/fixtures');
   expect(declared).not.toContain('requestId');
-  expect(declared).toContain('Factory<ProjectEnv');
+  // Handler and middleware positions both resolve their environment through
+  // `RouteEnv`, so neither carries a resolved environment from whichever
+  // application happened to run the build.
+  expect(declared).toContain('Handler<RouteEnv<Route>');
+  expect(declared).toContain('E extends Env = RouteEnv<Route>');
   // `ShinroEnv` ships empty and the project fills it in by augmentation, so a
   // member here would mean a local environment had been baked into the package.
   expect(declared).toMatch(/interface ShinroEnv extends Env \{\s*\}/);

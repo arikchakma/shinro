@@ -8,6 +8,7 @@ import type {
 
 type CreateResource = Client['v1']['resources']['$post'];
 type GetResource = Client['v1']['resources'][':id']['$get'];
+type PatchResource = Client['v1']['resources'][':id']['$patch'];
 type GetMember =
   Client['v1']['teams'][':teamId']['members'][':memberId']['$get'];
 type GetProtected = Client['v1']['protected']['$get'];
@@ -21,6 +22,15 @@ test('the generated client exposes validated request inputs', () => {
   }>();
   expectTypeOf<InferRequestType<GetResource>['param']>().toEqualTypeOf<{
     id: string;
+  }>();
+});
+
+test('a route with two validators keeps both inputs in the contract', () => {
+  expectTypeOf<InferRequestType<PatchResource>['param']>().toEqualTypeOf<{
+    id: string;
+  }>();
+  expectTypeOf<InferRequestType<PatchResource>['json']>().toEqualTypeOf<{
+    name: string;
   }>();
 });
 

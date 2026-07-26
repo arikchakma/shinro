@@ -832,6 +832,24 @@ test('zValidator provides runtime and RPC parameter validation without Route', a
   expect(invalidResponse.status).toBe(400);
 });
 
+test('two validators accumulate into the handler and the RPC contract', async () => {
+  const response = await client.validated[':id'].$patch({
+    json: { name: 'Example' },
+    param: { id: 'usr_123' },
+  });
+  const invalidResponse = await client.validated[':id'].$patch({
+    json: { name: '' },
+    param: { id: 'usr_123' },
+  });
+
+  expectTypeOf(response.status).toEqualTypeOf<200 | 400>();
+  await expect(response.json()).resolves.toEqual({
+    id: 'usr_123',
+    name: 'Example',
+  });
+  expect(invalidResponse.status).toBe(400);
+});
+
 test('test files are excluded from route discovery', async () => {
   const response = await app.request('/ignored.spec.route');
 

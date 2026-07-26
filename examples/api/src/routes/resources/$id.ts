@@ -27,19 +27,23 @@ export const GET = defineHandler(zValidator('param', resourceParams), (c) => {
   );
 });
 
-export const PATCH = defineHandler(zValidator('json', updateResource), (c) => {
-  const id = c.req.param('id');
-  const input = c.req.valid('json');
-  return c.json(
-    {
-      resource: {
-        id,
-        name: input.name,
+export const PATCH = defineHandler(
+  zValidator('param', resourceParams),
+  zValidator('json', updateResource),
+  (c) => {
+    const { id } = c.req.valid('param');
+    const input = c.req.valid('json');
+    return c.json(
+      {
+        resource: {
+          id,
+          name: input.name,
+        },
       },
-    },
-    200
-  );
-});
+      200
+    );
+  }
+);
 
 export const DELETE = defineHandler(
   zValidator('param', resourceParams),

@@ -395,6 +395,10 @@ export const GET = defineHandler<Route.Handler>((c) => {
 
 The companion supplies the filename-derived path and parameter names. It does
 not validate requests at runtime; use a validator when validation is required.
+Middleware and validators can still precede the handler, but an explicit type
+argument stops TypeScript inferring what follows it, so under the companion a
+validator runs without typing `c.req.valid()`. Read validated input from the
+inferred form instead.
 Shinro cross-checks `"param"` schemas against filename parameters for any Hono
 validator. The validators from `hono/validator` and `@hono/*-validator`
 packages (`zValidator`, `vValidator`, `sValidator`, and others) share the same
