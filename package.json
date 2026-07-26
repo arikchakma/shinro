@@ -11,9 +11,14 @@
   },
   "type": "module",
   "scripts": {
+    "build": "vp run -r build",
     "dev": "vp run @shinro/api#dev",
+    "fmt": "vp fmt",
+    "fmt:check": "vp fmt --check",
+    "lint": "vp lint",
+    "lint:fix": "vp lint --fix --fix-suggestions --fix-dangerously",
     "prepare": "vp config",
-    "ready": "vp fmt && vp lint && vp run -r test && vp run -r build"
+    "release": "vp run --filter shinro release"
   },
   "devDependencies": {
     "vite-plus": "catalog:"

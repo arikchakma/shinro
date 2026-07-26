@@ -61,6 +61,7 @@
     "check": "vp check",
     "dev": "vp pack --watch",
     "prepublishOnly": "vp run build",
+    "release": "bumpp",
     "test": "vp test"
   },
   "dependencies": {
