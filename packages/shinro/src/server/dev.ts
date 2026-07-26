@@ -4,8 +4,10 @@ import { once } from 'node:events';
 
 import type { Logger } from 'vite';
 
+const VITE_ENTRY = import.meta.resolve('vite');
+
 const RUNNER_SOURCE = `
-import { createServer, createServerModuleRunner } from "vite";
+import { createServer, createServerModuleRunner } from ${JSON.stringify(VITE_ENTRY)};
 
 const server = await createServer({
   configFile: process.env.SHINRO_DEV_CONFIG || undefined,
