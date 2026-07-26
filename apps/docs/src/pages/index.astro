@@ -1,4 +1,5 @@
 ---
+import routeFlowSvg from '../assets/route-flow.svg?raw';
 import Snippet from '../components/Snippet.astro';
 import Layout from '../layouts/Layout.astro';
 
@@ -20,6 +21,15 @@ export const GET = defineHandler((c) => {
   description="Shinro turns route files into a mountable Hono router and an end-to-end typed client."
   {headings}
 >
+  <link
+    slot="head"
+    rel="preload"
+    href="/fonts/balsamiq-sans.woff2"
+    as="font"
+    type="font/woff2"
+    crossorigin
+  />
+
   <h1>File-based routing</h1>
 
   <p>
@@ -36,49 +46,13 @@ export const GET = defineHandler((c) => {
 
   <figure class="route-figure">
     <Snippet code={routeExample} title="src/routes/users/$id.ts" />
-    <div class="route-preview" aria-label="Shinro route generation flow">
-      <div class="route-flow">
-        <div class="route-flow-node route-flow-source">
-          <span>Input</span>
-          <strong>Route files</strong>
-        </div>
-
-        <svg
-          class="route-flow-link"
-          viewBox="0 0 56 16"
-          preserveAspectRatio="none"
-          aria-hidden="true"
-        >
-          <path d="M1 8h49"></path>
-          <path d="m45 3 5 5-5 5"></path>
-        </svg>
-
-        <div class="route-flow-node route-flow-engine">
-          <span>Vite plugin</span>
-          <code>shinro()</code>
-        </div>
-
-        <svg
-          class="route-flow-branch"
-          viewBox="0 0 64 96"
-          preserveAspectRatio="none"
-          aria-hidden="true"
-        >
-          <path d="M1 48h22M23 20v56M23 20h35M23 76h35"></path>
-          <path d="m53 15 5 5-5 5M53 71l5 5-5 5"></path>
-        </svg>
-
-        <div class="route-flow-outputs">
-          <div class="route-flow-node">
-            <span>Runtime</span>
-            <strong>Hono router</strong>
-          </div>
-          <div class="route-flow-node">
-            <span>Contract</span>
-            <strong>Typed client</strong>
-          </div>
-        </div>
-      </div>
+    <div class="route-preview">
+      <div
+        class="route-flow-svg"
+        role="img"
+        aria-label="Route files flow through the Shinro Vite plugin to produce a Hono router and typed client."
+        set:html={routeFlowSvg}
+      />
     </div>
     <figcaption>
       One route tree drives runtime registration and the client contract.
