@@ -8,8 +8,7 @@ const headings = [
   { depth: 2, slug: 'where-to-start', text: 'Where to start' },
 ];
 
-const routeExample = `// src/routes/users/$id.ts
-import { defineHandler } from 'shinro/app';
+const routeExample = `import { defineHandler } from 'shinro/app';
 
 export const GET = defineHandler((c) => {
   return c.json({ id: c.req.param('id') }, 200);
@@ -25,7 +24,7 @@ export const GET = defineHandler((c) => {
 
   <p>
     Shinro turns a folder of route modules into a regular Hono router and a
-    typed client. Add, move, or remove a route, and both update together—without
+    typed client. Add, move, or remove a route, and both update together without
     a route registry or client types to maintain by hand.
   </p>
 
@@ -36,7 +35,7 @@ export const GET = defineHandler((c) => {
   </p>
 
   <figure class="route-figure">
-    <Snippet code={routeExample} />
+    <Snippet code={routeExample} title="src/routes/users/$id.ts" />
     <div class="route-preview" aria-label="Shinro route generation flow">
       <div class="route-flow">
         <div class="route-flow-node">Route files</div>

@@ -35,7 +35,7 @@ src/routes/api/_middleware.ts
 src/routes/api/users.ts
 ```
 
-Shinro flattens this chain onto each named route. Typed early responses from middleware—such as an authentication `401`—therefore become part of that route's RPC response union.
+Shinro flattens this chain onto each named route. Typed early responses from middleware, such as an authentication `401`, therefore become part of that route's RPC response union.
 
 ## Unmatched requests
 

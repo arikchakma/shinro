@@ -71,6 +71,21 @@ const next =
     {noIndex && <meta name="robots" content="noindex" />}
     <link rel="canonical" href={canonicalUrl} />
 
+    <link
+      rel="preload"
+      href="/fonts/geist-variable.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/geist-mono-variable.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:creator" content={siteConfig.twitter} />
     <meta property="twitter:title" content={title} />
@@ -251,22 +266,63 @@ const next =
             }
             pre.dataset.copyEnhanced = 'true';
 
+            const code = pre.querySelector('code');
+            const firstLine = code?.querySelector<HTMLElement>('.line');
+            const firstLineText = firstLine?.textContent?.trim() ?? '';
+            const filename = firstLineText.match(
+              /^\/\/\s+(.+\.(?:ts|tsx|js|jsx|mjs|cjs|json|jsonc))$/
+            )?.[1];
+
             const button = document.createElement('button');
             button.type = 'button';
             button.className = 'markdown-copy-button';
             button.setAttribute('aria-label', 'Copy code');
+            button.setAttribute('title', 'Copy code');
             button.innerHTML =
-              '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2.5"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg><span>Copy</span>';
+              '<svg class="copy-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2.5"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg><svg class="check-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m4 12.5 5 5L20 6.5"></path></svg><span class="sr-only" data-copy-status role="status"></span>';
             button.addEventListener('click', async () => {
               const value = pre.querySelector('code')?.textContent ?? '';
               await navigator.clipboard.writeText(value);
               button.dataset.copied = 'true';
-              button.querySelector('span')!.textContent = 'Copied';
+              button.setAttribute('aria-label', 'Copied');
+              button.setAttribute('title', 'Copied');
+              button.querySelector<HTMLElement>(
+                '[data-copy-status]'
+              )!.textContent = 'Code copied to clipboard';
               window.setTimeout(() => {
                 delete button.dataset.copied;
-                button.querySelector('span')!.textContent = 'Copy';
+                button.setAttribute('aria-label', 'Copy code');
+                button.setAttribute('title', 'Copy code');
+                button.querySelector<HTMLElement>(
+                  '[data-copy-status]'
+                )!.textContent = '';
               }, 1800);
             });
+
+            if (filename && firstLine) {
+              const wrapper = document.createElement('div');
+              wrapper.className = 'markdown-code-block';
+
+              const header = document.createElement('div');
+              header.className = 'markdown-code-header';
+
+              const title = document.createElement('span');
+              title.className = 'markdown-code-title';
+              title.textContent = filename;
+
+              firstLine.remove();
+              while (
+                code?.firstChild?.nodeType === 3 &&
+                !code.firstChild.textContent?.trim()
+              ) {
+                code.firstChild.remove();
+              }
+              pre.before(wrapper);
+              wrapper.append(header, pre);
+              header.append(title, button);
+              return;
+            }
+
             pre.append(button);
           });
 

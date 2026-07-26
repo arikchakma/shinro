@@ -29,7 +29,7 @@ In a workspace where the package itself must build first:
 
 ## Development
 
-`vp dev` runs Vite with the Shinro plugin. Structural changes—adding, moving, or removing a route—regenerate routing and client types during development.
+`vp dev` runs Vite with the Shinro plugin. Structural changes, including adding, moving, or removing a route, regenerate routing and client types during development.
 
 ```sh
 vp dev
