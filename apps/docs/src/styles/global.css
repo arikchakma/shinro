@@ -729,34 +729,94 @@ select {
 
 .route-preview {
   display: grid;
-  min-height: 190px;
+  min-height: 180px;
   place-items: center;
-  padding: 2rem;
+  padding: 1.75rem clamp(1rem, 4vw, 2rem);
   border-top: 1px solid var(--chrome-ring);
   background: var(--canvas-bg);
 }
 
 .route-flow {
-  display: flex;
+  display: grid;
   width: 100%;
+  max-width: 36rem;
+  grid-template-columns: minmax(7.5rem, 1fr) 3.5rem minmax(
+      7.5rem,
+      1fr
+    ) 4rem minmax(8.5rem, 1.1fr);
   align-items: center;
-  justify-content: center;
-  gap: clamp(0.5rem, 2.5vw, 1.25rem);
 }
 
 .route-flow-node {
+  display: flex;
   min-width: 0;
-  padding: 0.9rem clamp(0.7rem, 2vw, 1.2rem);
-  border: 1.5px solid var(--chrome-fg-800);
-  border-radius: 0.65rem;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--chrome-ring);
+  border-radius: 0.55rem;
   color: var(--chrome-fg-900);
-  font-size: clamp(0.72rem, 2vw, 0.9rem);
-  text-align: center;
+  background: var(--chrome-rest);
 }
 
-.route-flow-arrow {
+.route-flow-node span {
   color: var(--chrome-fg-500);
-  font-size: 1.25rem;
+  font-size: 9.5px;
+  font-weight: 550;
+  letter-spacing: 0.07em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+.route-flow-node strong,
+.route-flow-node code {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.route-flow-engine {
+  border-color: var(--chrome-fg-800);
+  color: var(--canvas-bg);
+  background: var(--chrome-fg-900);
+}
+
+.route-flow-engine span {
+  color: var(--chrome-fg-400);
+}
+
+.docs-content .route-flow-engine code {
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  font-family:
+    'Geist Mono', 'Geist Mono Fallback', ui-monospace, SFMono-Regular,
+    'SF Mono', Menlo, Consolas, monospace;
+}
+
+.route-flow-outputs {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.route-flow-link,
+.route-flow-branch {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.route-flow-link path,
+.route-flow-branch path {
+  fill: none;
+  stroke: var(--chrome-fg-400);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.25;
+  vector-effect: non-scaling-stroke;
 }
 
 .route-figure figcaption {
@@ -764,6 +824,35 @@ select {
   border-top: 1px solid var(--chrome-ring);
   color: var(--chrome-fg-600);
   font-size: 12.5px;
+}
+
+@media (max-width: 560px) {
+  .route-preview {
+    padding-block: 1.5rem;
+  }
+
+  .route-flow {
+    max-width: 18rem;
+    grid-template-columns: 1fr;
+    justify-items: stretch;
+  }
+
+  .route-flow-link {
+    width: 2rem;
+    transform: rotate(90deg);
+    justify-self: center;
+  }
+
+  .route-flow-branch {
+    width: 3rem;
+    margin-block: -0.15rem;
+    transform: rotate(90deg);
+    justify-self: center;
+  }
+
+  .route-flow-outputs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (min-width: 640px) {

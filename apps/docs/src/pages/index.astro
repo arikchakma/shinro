@@ -38,11 +38,46 @@ export const GET = defineHandler((c) => {
     <Snippet code={routeExample} title="src/routes/users/$id.ts" />
     <div class="route-preview" aria-label="Shinro route generation flow">
       <div class="route-flow">
-        <div class="route-flow-node">Route files</div>
-        <span class="route-flow-arrow" aria-hidden="true">→</span>
-        <div class="route-flow-node">Hono router</div>
-        <span class="route-flow-arrow" aria-hidden="true">→</span>
-        <div class="route-flow-node">Typed client</div>
+        <div class="route-flow-node route-flow-source">
+          <span>Input</span>
+          <strong>Route files</strong>
+        </div>
+
+        <svg
+          class="route-flow-link"
+          viewBox="0 0 56 16"
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          <path d="M1 8h49"></path>
+          <path d="m45 3 5 5-5 5"></path>
+        </svg>
+
+        <div class="route-flow-node route-flow-engine">
+          <span>Vite plugin</span>
+          <code>shinro()</code>
+        </div>
+
+        <svg
+          class="route-flow-branch"
+          viewBox="0 0 64 96"
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          <path d="M1 48h22M23 20v56M23 20h35M23 76h35"></path>
+          <path d="m53 15 5 5-5 5M53 71l5 5-5 5"></path>
+        </svg>
+
+        <div class="route-flow-outputs">
+          <div class="route-flow-node">
+            <span>Runtime</span>
+            <strong>Hono router</strong>
+          </div>
+          <div class="route-flow-node">
+            <span>Contract</span>
+            <strong>Typed client</strong>
+          </div>
+        </div>
       </div>
     </div>
     <figcaption>
