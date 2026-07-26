@@ -15,7 +15,9 @@ export default defineConfig({
       typeCheck: true,
       typeAware: true,
     },
-    ignorePatterns: ['.astro/'],
+    // `prototype/` is illustrative source for designs not built yet: it has no
+    // installed dependencies, so every import in it is unresolvable.
+    ignorePatterns: ['.astro/', 'prototype/'],
   },
   fmt: {
     endOfLine: 'lf',
@@ -29,7 +31,14 @@ export default defineConfig({
     sortImports: {},
     // `_static/` holds the readme cover source, whose code panel relies on
     // `white-space: pre` and so cannot survive reflowing. `.astro/` is the
-    // docs app's generated content cache.
-    ignorePatterns: ['_static/', '.astro/', 'dist/', 'node_modules/'],
+    // docs app's generated content cache. `prototype/` mirrors the generator's
+    // own output, so reflowing it would stop it matching what Shinro writes.
+    ignorePatterns: [
+      '_static/',
+      '.astro/',
+      'dist/',
+      'node_modules/',
+      'prototype/',
+    ],
   },
 });
