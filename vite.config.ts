@@ -15,7 +15,6 @@ export default defineConfig({
       typeCheck: true,
       typeAware: true,
     },
-    // The docs app's generated content cache is Astro's output, not ours.
     ignorePatterns: ['.astro/'],
   },
   fmt: {
