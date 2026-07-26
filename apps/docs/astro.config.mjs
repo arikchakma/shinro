@@ -6,6 +6,12 @@ export default defineConfig({
   trailingSlash: 'never',
   output: 'static',
 
+  markdown: {
+    shikiConfig: {
+      theme: 'github-light',
+    },
+  },
+
   vite: {
     plugins: [tailwindcss()],
   },

@@ -1,25 +1,59 @@
 ---
 import '../styles/global.css';
 
-import TopBlur from '../components/TopBlur.astro';
+import BrandMark from '../components/BrandMark.astro';
+import DocsSidebar from '../components/DocsSidebar.astro';
+import TableOfContents from '../components/TableOfContents.astro';
 import { siteConfig } from '../lib/config';
+import { navItems, normalizePath } from '../lib/navigation';
 
-type Props = {
+type Heading = {
+  depth: number;
+  slug: string;
+  text: string;
+};
+
+type Frontmatter = {
   title?: string;
   description?: string;
   noIndex?: boolean;
 };
 
+type Props = Frontmatter & {
+  frontmatter?: Frontmatter;
+  headings?: Heading[];
+  standalone?: boolean;
+};
+
 const {
-  title = siteConfig.title,
-  description = siteConfig.description,
-  noIndex = false,
+  frontmatter,
+  title: titleProp,
+  description: descriptionProp,
+  noIndex: noIndexProp,
+  headings = [],
+  standalone = false,
 } = Astro.props;
 
+const pageTitle = titleProp ?? frontmatter?.title ?? siteConfig.title;
+const title =
+  pageTitle === siteConfig.title ? pageTitle : `${pageTitle} · ${siteConfig.name}`;
+const description =
+  descriptionProp ?? frontmatter?.description ?? siteConfig.description;
+const noIndex = noIndexProp ?? frontmatter?.noIndex ?? false;
 const canonicalUrl = new URL(Astro.url.pathname, siteConfig.url).href.replace(
   /\/$/,
   ''
 );
+
+const currentPath = normalizePath(Astro.url.pathname);
+const currentIndex = navItems.findIndex(
+  (item) => normalizePath(item.href) === currentPath
+);
+const previous = currentIndex > 0 ? navItems[currentIndex - 1] : undefined;
+const next =
+  currentIndex >= 0 && currentIndex < navItems.length - 1
+    ? navItems[currentIndex + 1]
+    : undefined;
 ---
 
 <!doctype html>
@@ -37,26 +71,10 @@ const canonicalUrl = new URL(Astro.url.pathname, siteConfig.url).href.replace(
     {noIndex && <meta name="robots" content="noindex" />}
     <link rel="canonical" href={canonicalUrl} />
 
-    <link
-      rel="preload"
-      href="/fonts/geist-variable.woff2"
-      as="font"
-      type="font/woff2"
-      crossorigin
-    />
-    <link
-      rel="preload"
-      href="/fonts/geist-mono-variable.woff2"
-      as="font"
-      type="font/woff2"
-      crossorigin
-    />
-
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:creator" content={siteConfig.twitter} />
     <meta property="twitter:title" content={title} />
     <meta property="twitter:description" content={description} />
-
     <meta property="og:site_name" content={siteConfig.name} />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
@@ -67,17 +85,209 @@ const canonicalUrl = new URL(Astro.url.pathname, siteConfig.url).href.replace(
     <meta name="theme-color" content="#ffffff" />
   </head>
 
-  <body class="font-sans antialiased">
-    <TopBlur />
+  <body>
+    <div class="docs-scroll">
+      <header class="site-header">
+        <div class="site-header-inner">
+          <a class="site-brand" href="/" aria-label="Shinro docs home">
+            <BrandMark class="brand-mark" />
+            <span class="brand-name">Shinro</span>
+            <span class="brand-separator" aria-hidden="true">/</span>
+            <span class="brand-context">Docs</span>
+          </a>
 
-    <main class="mx-auto mt-10 mb-16 max-w-xl px-4">
-      <slot />
-    </main>
+          <div class="header-actions">
+            <a
+              class="header-github"
+              href={siteConfig.repository}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              View on GitHub <span aria-hidden="true">→</span>
+            </a>
+            <button
+              class="mobile-menu-button"
+              type="button"
+              aria-label="Documentation menu"
+              aria-expanded="false"
+              aria-controls="mobile-docs-menu"
+              data-mobile-menu-button
+            >
+              <svg
+                class="menu-open-icon"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.75"
+                stroke-linecap="round"
+              >
+                <path d="M4 6h16M4 12h16M4 18h16"></path>
+              </svg>
+              <svg
+                class="menu-close-icon"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.75"
+                stroke-linecap="round"
+              >
+                <path d="M6 6l12 12M18 6L6 18"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <div class="mobile-docs-menu" id="mobile-docs-menu" hidden>
+        <DocsSidebar mobile />
+        <a
+          class="mobile-github"
+          href={siteConfig.repository}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          View Shinro on GitHub <span aria-hidden="true">→</span>
+        </a>
+      </div>
+
+      {
+        standalone ? (
+          <main class="standalone-content">
+            <slot />
+          </main>
+        ) : (
+          <div class="docs-layout">
+            <aside class="docs-sidebar">
+              <DocsSidebar />
+            </aside>
+
+            <main class="docs-main">
+              <article class="docs-content">
+                <slot />
+              </article>
+
+              {(previous || next) && (
+                <nav class="page-navigation" aria-label="Documentation pages">
+                  {previous ? (
+                    <a href={previous.href} class="previous-page">
+                      <span>← Previous</span>
+                      <strong>{previous.title}</strong>
+                    </a>
+                  ) : (
+                    <span />
+                  )}
+                  {next ? (
+                    <a href={next.href} class="next-page">
+                      <span>Next →</span>
+                      <strong>{next.title}</strong>
+                    </a>
+                  ) : (
+                    <span />
+                  )}
+                </nav>
+              )}
+
+              <footer class="docs-footer">
+                Shinro keeps routing explicit: generated files stay readable,
+                and your Hono application remains yours.{' '}
+                <a
+                  href={siteConfig.repository}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  View the source
+                </a>{' '}
+                on GitHub.
+              </footer>
+            </main>
+
+            <aside class="toc-sidebar">
+              <TableOfContents headings={headings} />
+            </aside>
+          </div>
+        )
+      }
+    </div>
 
     <script>
-      import { initCodeFaders } from '../lib/code-fader';
+      function initializeDocs() {
+        const shell = document.querySelector<HTMLElement>('.docs-scroll');
+        const button = document.querySelector<HTMLButtonElement>(
+          '[data-mobile-menu-button]'
+        );
+        const menu = document.querySelector<HTMLElement>('#mobile-docs-menu');
+        const setMenuOpen = (open: boolean) => {
+          if (!button || !menu) {
+            return;
+          }
 
-      initCodeFaders();
+          button.setAttribute('aria-expanded', String(open));
+          menu.hidden = !open;
+          shell?.classList.toggle('menu-is-open', open);
+        };
+
+        button?.addEventListener('click', () => {
+          setMenuOpen(button.getAttribute('aria-expanded') !== 'true');
+        });
+
+        menu
+          ?.querySelectorAll<HTMLElement>('[data-mobile-nav-link]')
+          .forEach((link) => {
+            link.addEventListener('click', () => setMenuOpen(false));
+          });
+
+        document
+          .querySelectorAll<HTMLElement>('.docs-content pre')
+          .forEach((pre) => {
+            if (pre.closest('.code-block')) {
+              return;
+            }
+            if (pre.dataset.copyEnhanced) {
+              return;
+            }
+            pre.dataset.copyEnhanced = 'true';
+
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'markdown-copy-button';
+            button.setAttribute('aria-label', 'Copy code');
+            button.innerHTML =
+              '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2.5"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg><span>Copy</span>';
+            button.addEventListener('click', async () => {
+              const value = pre.querySelector('code')?.textContent ?? '';
+              await navigator.clipboard.writeText(value);
+              button.dataset.copied = 'true';
+              button.querySelector('span')!.textContent = 'Copied';
+              window.setTimeout(() => {
+                delete button.dataset.copied;
+                button.querySelector('span')!.textContent = 'Copy';
+              }, 1800);
+            });
+            pre.append(button);
+          });
+
+        document
+          .querySelectorAll<HTMLTableElement>(
+            '.docs-content table:not(.data-table)'
+          )
+          .forEach((table) => {
+            if (table.parentElement?.classList.contains('table-wrapper')) {
+              return;
+            }
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'table-wrapper';
+            table.before(wrapper);
+            wrapper.append(table);
+          });
+      }
+
+      initializeDocs();
+      document.addEventListener('astro:page-load', initializeDocs);
     </script>
   </body>
 </html>

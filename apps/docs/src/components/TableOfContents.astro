@@ -1,0 +1,28 @@
+---
+type Heading = {
+  depth: number;
+  slug: string;
+  text: string;
+};
+
+type Props = {
+  headings?: Heading[];
+};
+
+const headings = (Astro.props.headings ?? []).filter(
+  (heading) => heading.depth === 2
+);
+---
+
+{
+  headings.length > 0 && (
+    <nav aria-label="On this page" class="toc">
+      <p>On this page</p>
+      <div>
+        {headings.map((heading) => (
+          <a href={`#${heading.slug}`}>{heading.text}</a>
+        ))}
+      </div>
+    </nav>
+  )
+}

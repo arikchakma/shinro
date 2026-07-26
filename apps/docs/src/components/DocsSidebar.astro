@@ -1,0 +1,35 @@
+---
+import { navigation, normalizePath } from '../lib/navigation';
+
+type Props = {
+  mobile?: boolean;
+};
+
+const { mobile = false } = Astro.props;
+const currentPath = normalizePath(Astro.url.pathname);
+---
+
+<nav aria-label="Documentation" class="docs-nav">
+  {
+    navigation.map((section) => (
+      <section class="docs-nav-section">
+        <p>{section.title}</p>
+        <div>
+          {section.items.map((item) => {
+            const active = normalizePath(item.href) === currentPath;
+
+            return (
+              <a
+                href={item.href}
+                aria-current={active ? 'page' : undefined}
+                data-mobile-nav-link={mobile ? '' : undefined}
+              >
+                {item.title}
+              </a>
+            );
+          })}
+        </div>
+      </section>
+    ))
+  }
+</nav>
