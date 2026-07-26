@@ -25,8 +25,7 @@ Bun applications can use `Bun.serve()` directly.
 
 Add `shinro()` to the Vite config. This is the only routing integration; there is no separate Node, Bun, RPC, or lifecycle plugin.
 
-```ts
-// vite.config.ts
+```ts title="vite.config.ts"
 import { shinro } from 'shinro';
 import { defineConfig } from 'vite';
 
@@ -41,7 +40,7 @@ The plugin discovers routes, writes generated declarations and router code, refr
 
 Extend the base config shipped with Shinro:
 
-```json
+```json title="tsconfig.json"
 {
   "extends": "shinro/tsconfig",
   "compilerOptions": {
@@ -58,7 +57,7 @@ The base config sets `moduleResolution`, import-extension behavior, `rootDirs`, 
 
 Shinro writes its working files to `.shinro` by default. Keep generated and build output out of version control:
 
-```text
+```text title=".gitignore"
 .shinro/
 dist/
 ```

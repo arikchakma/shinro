@@ -8,8 +8,7 @@ description: Apply deterministic, typed middleware to a subtree of Shinro routes
 
 `_middleware.ts` applies to the route at its directory URL and every descendant. A file can export one or more Hono middleware handlers.
 
-```ts
-// src/routes/api/_middleware.ts
+```ts title="src/routes/api/_middleware.ts"
 import { defineMiddleware } from 'shinro/app';
 import type { Route } from './+types/api/_middleware.ts';
 
@@ -43,7 +42,7 @@ Directory middleware runs only when a route matches. A request to `/api/does-not
 
 Cross-cutting concerns that must cover every request belong on the base Hono app:
 
-```ts
+```ts title="src/app.ts"
 app.use('*', cors());
 app.use('*', requestId());
 app.route('/', routes());

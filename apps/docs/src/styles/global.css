@@ -506,16 +506,16 @@ select {
 
 .markdown-code-header {
   display: flex;
-  min-height: 36px;
   align-items: center;
   justify-content: space-between;
-  padding: 0.35rem 0.35rem 0.35rem 1rem;
+  padding-right: 0.35rem;
   border-bottom: 1px solid var(--chrome-divider);
   background: var(--chrome-hover);
 }
 
 .markdown-code-title {
   overflow: hidden;
+  padding: 0.65rem 1rem;
   color: var(--chrome-fg-700);
   font-family:
     'Geist Mono', 'Geist Mono Fallback', ui-monospace, SFMono-Regular,

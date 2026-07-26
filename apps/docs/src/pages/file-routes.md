@@ -10,8 +10,7 @@ Files under `src/routes` become Hono routes. Directories and filenames contribut
 
 Each route module exports one handler tuple per HTTP method:
 
-```ts
-// src/routes/health.ts
+```ts title="src/routes/health.ts"
 import { defineHandler } from 'shinro/app';
 
 export const GET = defineHandler((c) => {
@@ -37,8 +36,7 @@ Supported exports are `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS`, and `A
 
 A `$` prefix declares a required parameter. Parameter names must match `[A-Za-z_][A-Za-z0-9_]*` and be unique within the route.
 
-```ts
-// src/routes/users/$id.ts
+```ts title="src/routes/users/$id.ts"
 export const GET = defineHandler((c) => {
   return c.json({ id: c.req.param('id') }, 200);
 });

@@ -18,7 +18,7 @@ shinro typegen
 
 In a workspace where the package itself must build first:
 
-```json
+```json title="package.json"
 {
   "scripts": {
     "typegen": "vp run shinro#build && shinro typegen",

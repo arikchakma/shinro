@@ -268,13 +268,6 @@ const next =
             }
             pre.dataset.copyEnhanced = 'true';
 
-            const code = pre.querySelector('code');
-            const firstLine = code?.querySelector<HTMLElement>('.line');
-            const firstLineText = firstLine?.textContent?.trim() ?? '';
-            const filename = firstLineText.match(
-              /^\/\/\s+(.+\.(?:ts|tsx|js|jsx|mjs|cjs|json|jsonc))$/
-            )?.[1];
-
             const button = document.createElement('button');
             button.type = 'button';
             button.className = 'markdown-copy-button';
@@ -301,31 +294,10 @@ const next =
               }, 1800);
             });
 
-            if (filename && firstLine) {
-              const wrapper = document.createElement('div');
-              wrapper.className = 'markdown-code-block';
-
-              const header = document.createElement('div');
-              header.className = 'markdown-code-header';
-
-              const title = document.createElement('span');
-              title.className = 'markdown-code-title';
-              title.textContent = filename;
-
-              firstLine.remove();
-              while (
-                code?.firstChild?.nodeType === 3 &&
-                !code.firstChild.textContent?.trim()
-              ) {
-                code.firstChild.remove();
-              }
-              pre.before(wrapper);
-              wrapper.append(header, pre);
-              header.append(title, button);
-              return;
-            }
-
-            pre.append(button);
+            const header = pre
+              .closest('.markdown-code-block')
+              ?.querySelector<HTMLElement>('.markdown-code-header');
+            (header ?? pre).append(button);
           });
 
         document

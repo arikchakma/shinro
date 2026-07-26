@@ -21,6 +21,7 @@
   "devDependencies": {
     "@astrojs/check": "^0.9.9",
     "@shikijs/core": "^4.2.0",
+    "@types/hast": "catalog:",
     "typescript": "catalog:"
   },
   "engines": {

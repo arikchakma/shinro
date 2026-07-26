@@ -12,8 +12,7 @@ Shinro derives runtime registration and RPC types from the same normalized route
 
 Generated `+types` imports are optional. Use one when a handler needs strict filename-derived parameter and path types:
 
-```ts
-// src/routes/users/$id.ts
+```ts title="src/routes/users/$id.ts"
 import { defineHandler } from 'shinro/app';
 import type { Route } from './+types/users/$id.ts';
 
@@ -28,7 +27,7 @@ The import repeats the whole route path below `src/routes`, including any `(grou
 
 Augment `ShinroEnv` once to share bindings and variables across the app, route handlers, and directory middleware:
 
-```ts
+```ts title="src/env.d.ts"
 declare module 'shinro/app' {
   interface ShinroEnv {
     Variables: {
@@ -44,7 +43,7 @@ You can also use Hono's native `ContextVariableMap` augmentation in the module t
 
 Export the generated client factory from the API package:
 
-```json
+```json title="package.json"
 {
   "exports": {
     "./client": "./.shinro/client.ts",
@@ -55,7 +54,7 @@ Export the generated client factory from the API package:
 
 Consumers receive Hono's typed RPC client:
 
-```ts
+```ts title="src/api.ts"
 import { defineClient } from '@acme/api/client';
 
 const client = defineClient('http://localhost:3000');

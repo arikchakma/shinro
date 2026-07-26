@@ -8,8 +8,7 @@ description: Create a Hono app, mount Shinro's generated router, and start a Nod
 
 `defineApp()` creates a regular Hono instance with the project environment already applied. Mount the generated router with Hono's native `route()` method.
 
-```ts
-// src/app.ts
+```ts title="src/app.ts"
 import { logger } from 'hono/logger';
 import { defineApp } from 'shinro/app';
 import { routes } from 'shinro/routes';
@@ -31,7 +30,7 @@ export default app;
 
 Mount generated routes after global middleware. Hono composes handlers in registration order, so middleware registered after `routes()` does not wrap file routes.
 
-```ts
+```ts title="src/app.ts"
 const app = defineApp()
   .use('*', logger()) // wraps file routes
   .route('/', routes())
@@ -44,8 +43,7 @@ Shinro warns when it detects this common mistake or when an app never mounts `ro
 
 Server lifecycle stays in application code:
 
-```ts
-// src/server.ts
+```ts title="src/server.ts"
 import { serve } from '@hono/node-server';
 import app from './app.ts';
 
@@ -63,8 +61,7 @@ Keeping the native server handle means your application can drain requests, clos
 
 Bun can serve the same Hono application directly:
 
-```ts
-// src/server.ts
+```ts title="src/server.ts"
 import app from './app.ts';
 
 Bun.serve({

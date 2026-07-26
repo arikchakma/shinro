@@ -8,7 +8,7 @@ description: Configure Shinro's app, route tree, build, base path, and generated
 
 Pass options to the single `shinro()` Vite plugin. Defaults are deliberately small and suit a conventional `src` directory.
 
-```ts
+```ts title="vite.config.ts"
 import { shinro } from 'shinro';
 import { defineConfig } from 'vite';
 
@@ -34,7 +34,7 @@ export default defineConfig({
 
 Additional exclusions apply to both route modules and directory middleware:
 
-```ts
+```ts title="vite.config.ts"
 shinro({
   ignoredRouteFiles: ['internal/**', '**/*.draft.ts'],
 });
@@ -56,7 +56,7 @@ The default unbundled build keeps dependencies external and produces output that
 
 RPC generation is enabled by default:
 
-```ts
+```ts title="vite.config.ts"
 shinro({
   rpc: {
     enabled: true,
