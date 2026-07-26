@@ -1,0 +1,36 @@
+{
+  "name": "@shinro/prototype-api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "imports": {
+    "#shinro/routes": "./.shinro/routes.ts",
+    "#shinro/client": "./.shinro/client.ts",
+    "#shinro/rpc": "./.shinro/rpc.ts"
+  },
+  "exports": {
+    "./client": "./.shinro/client.ts",
+    "./rpc": "./.shinro/rpc.ts"
+  },
+  "scripts": {
+    "typegen": "shinro typegen",
+    "dev": "shinro typegen && concurrently -k -n shinro,server \"shinro typegen --watch\" \"tsx watch src/server.ts\"",
+    "build": "tsdown",
+    "start": "node dist/server.mjs",
+    "check": "shinro typegen && tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "catalog:",
+    "@hono/zod-validator": "catalog:",
+    "hono": "^4.10.0",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "concurrently": "^9.2.0",
+    "shinro": "workspace:*",
+    "tsdown": "^0.15.0",
+    "tsx": "^4.20.0",
+    "typescript": "^7.0.2"
+  }
+}

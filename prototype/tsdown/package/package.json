@@ -1,0 +1,31 @@
+{
+  "name": "shinro",
+  "version": "0.1.0",
+  "description": "Opinionated file-based routing for Hono with end-to-end type safety.",
+  "type": "module",
+  "bin": {
+    "shinro": "./dist/cli.mjs"
+  },
+  "files": ["dist", "tsconfig.base.json", "schema.json"],
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./app": "./dist/app.mjs",
+    "./tsdown": "./dist/adapters/tsdown.mjs",
+    "./vite": "./dist/adapters/vite.mjs",
+    "./tsconfig": "./tsconfig.base.json",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "oxc-parser": "^0.90.0"
+  },
+  "peerDependencies": {
+    "hono": "^4.0.0",
+    "tsdown": "^0.15.0",
+    "vite": "^8.0.0"
+  },
+  "peerDependenciesMeta": {
+    "tsdown": { "optional": true },
+    "vite": { "optional": true }
+  },
+  "engines": { "node": ">=22.12.0" }
+}
