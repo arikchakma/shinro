@@ -1,0 +1,103 @@
+---
+type Props = {
+  value: string;
+  label?: string;
+};
+
+const { value, label = 'Copy code' } = Astro.props;
+---
+
+<button
+  type="button"
+  class="group relative grid size-7 shrink-0 place-items-center rounded-lg text-zinc-400 outline-none transition-[color,background-color,opacity] duration-150 hover:bg-zinc-200/60 hover:text-zinc-700 focus-visible:bg-zinc-200/60 focus-visible:text-zinc-700 focus-visible:ring-1 focus-visible:ring-zinc-400 focus-visible:ring-inset"
+  data-copy-text={value}
+  aria-label={label}
+  title={label}
+>
+  <span
+    class="relative grid size-4 place-items-center"
+    aria-hidden="true"
+  >
+    <svg
+      class="absolute size-4 transition-opacity duration-150 [button[data-copied]_&]:opacity-0"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.8"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <rect x="9" y="9" width="12" height="12" rx="2.5"></rect>
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+    </svg>
+
+    <svg
+      class="absolute size-4 text-emerald-600 opacity-0 transition-opacity duration-150 [button[data-copied]_&]:opacity-100"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2.2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <path d="m4 12.5 5 5L20 6.5"></path>
+    </svg>
+  </span>
+
+  <span class="sr-only" data-copy-status role="status"></span>
+</button>
+
+<script>
+  function setupCopyButton(button: HTMLElement) {
+    if (button.dataset.copyInit) {
+      return;
+    }
+    button.dataset.copyInit = 'true';
+
+    const text = button.dataset.copyText;
+    const label = button.getAttribute('aria-label') ?? 'Copy code';
+    const status = button.querySelector<HTMLElement>('[data-copy-status]');
+    if (!text) {
+      return;
+    }
+
+    let resetTimer: ReturnType<typeof setTimeout>;
+
+    button.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        if (status) {
+          status.textContent = 'Could not copy code';
+        }
+        return;
+      }
+
+      button.dataset.copied = 'true';
+      button.setAttribute('aria-label', 'Copied');
+      button.setAttribute('title', 'Copied');
+      if (status) {
+        status.textContent = 'Code copied to clipboard';
+      }
+
+      clearTimeout(resetTimer);
+      resetTimer = setTimeout(() => {
+        delete button.dataset.copied;
+        button.setAttribute('aria-label', label);
+        button.setAttribute('title', label);
+        if (status) {
+          status.textContent = '';
+        }
+      }, 2500);
+    });
+  }
+
+  function init() {
+    document
+      .querySelectorAll<HTMLElement>('[data-copy-text]')
+      .forEach(setupCopyButton);
+  }
+
+  init();
+  document.addEventListener('astro:page-load', init);
+</script>

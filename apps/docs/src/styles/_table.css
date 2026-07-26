@@ -1,0 +1,25 @@
+.table-block {
+  @apply overflow-hidden rounded-xl border border-zinc-200;
+}
+
+.data-table {
+  @apply w-full border-collapse text-sm;
+
+  th,
+  td {
+    @apply px-3 py-1.5 text-left;
+  }
+
+  thead th {
+    @apply border-b border-zinc-200 bg-zinc-50 font-medium;
+  }
+
+  th:not(:last-child),
+  td:not(:last-child) {
+    @apply border-r border-zinc-200;
+  }
+
+  tbody tr:not(:last-child) td {
+    @apply border-b border-zinc-200;
+  }
+}

@@ -1,0 +1,105 @@
+.code-block {
+  @apply overflow-hidden rounded-xl border border-zinc-200;
+
+  --code-gutter: 2.25rem;
+
+  &:has(.line:nth-child(10)) {
+    --code-gutter: 2.85rem;
+  }
+
+  &:has(.line:nth-child(100)) {
+    --code-gutter: 3.45rem;
+  }
+}
+
+.code-header {
+  @apply flex items-center justify-between border-b border-zinc-200 bg-zinc-50 pr-0.5;
+}
+
+.code-title {
+  @apply px-4 py-2 font-mono text-xs font-medium text-zinc-700;
+}
+
+.code-body {
+  @apply relative;
+}
+
+.code-copy {
+  @apply absolute top-2 right-2 z-30 rounded-md bg-white;
+}
+
+@media (hover: hover) {
+  .code-block [data-copy-text] {
+    @apply opacity-0;
+  }
+
+  .code-block:hover [data-copy-text],
+  .code-block:focus-within [data-copy-text],
+  .code-block [data-copy-text][data-copied] {
+    @apply opacity-100;
+  }
+}
+
+.code-fader {
+  @apply pointer-events-none absolute top-0 z-20 h-full w-12 opacity-0 select-none;
+}
+
+.code-block[data-fader-ready] .code-fader {
+  transition: opacity 150ms ease;
+}
+
+.code-fader-left {
+  left: var(--code-gutter, 2.25rem);
+  background: linear-gradient(to right, var(--color-white), transparent);
+}
+
+.code-fader-right {
+  @apply right-0;
+  background: linear-gradient(to left, var(--color-white), transparent);
+}
+
+.code-block pre {
+  --shiki-background: var(--color-white);
+  --shiki-foreground: hsla(0, 0%, 9%, 1);
+  --shiki-token-constant: oklch(53.18% 0.2399 256.9900584162342);
+  --shiki-token-string: oklch(51.75% 0.1453 147.65);
+  --shiki-token-comment: hsla(0, 0%, 40%, 1);
+  --shiki-token-keyword: oklch(53.5% 0.2058 2.84);
+  --shiki-token-parameter: oklch(52.79% 0.1496 54.65);
+  --shiki-token-function: oklch(47.18% 0.2579 304);
+  --shiki-token-string-expression: oklch(51.75% 0.1453 147.65);
+  --shiki-token-punctuation: hsla(0, 0%, 9%, 1);
+  --shiki-token-link: oklch(51.75% 0.1453 147.65);
+  --shiki-token-number: #111111;
+  --shiki-token-property: oklch(53.18% 0.2399 256.9900584162342);
+  --shiki-token-object-literal: hsla(0, 0%, 9%, 1);
+
+  @apply scrollbar-none overflow-x-auto overscroll-x-none py-3 font-mono text-sm leading-6;
+
+  code {
+    @apply grid font-mono;
+    width: max-content;
+    min-width: 100%;
+    counter-reset: line;
+
+    .line {
+      @apply pr-4;
+      counter-increment: line;
+
+      &::before {
+        @apply sticky left-0 z-10 inline-block border-l-2 border-transparent bg-white pr-4 text-right text-zinc-400 tabular-nums select-none;
+        width: var(--code-gutter, 2.25rem);
+        content: counter(line);
+      }
+
+      &:last-child:empty {
+        @apply hidden;
+      }
+    }
+  }
+}
+
+.code-block[data-lang='sh'] pre {
+  --shiki-token-function: var(--shiki-foreground);
+  --shiki-token-string: var(--color-zinc-500);
+}

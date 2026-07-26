@@ -1,0 +1,38 @@
+---
+import { Code } from 'astro:components';
+
+import { shinroTheme } from '../lib/shiki';
+import CopyCommand from './CopyCommand.astro';
+
+type Props = {
+  code: string;
+  lang?: 'ts' | 'json' | 'sh';
+  title?: string;
+};
+
+const { code, lang = 'ts', title } = Astro.props;
+const value = code.trim();
+---
+
+<div class="code-block" data-lang={lang}>
+  {
+    title && (
+      <div class="code-header">
+        <div class="code-title">{title}</div>
+        <CopyCommand value={value} label={`Copy ${title}`} />
+      </div>
+    )
+  }
+  <div class="code-body">
+    {
+      !title && (
+        <div class="code-copy">
+          <CopyCommand value={value} />
+        </div>
+      )
+    }
+    <span class="code-fader code-fader-left" aria-hidden="true"></span>
+    <span class="code-fader code-fader-right" aria-hidden="true"></span>
+    <Code code={value} lang={lang} theme={shinroTheme} />
+  </div>
+</div>

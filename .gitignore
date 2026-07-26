@@ -10,6 +10,7 @@ lerna-debug.log*
 node_modules
 .shinro
 .generated
+.astro
 dist
 dist-ssr
 *.local

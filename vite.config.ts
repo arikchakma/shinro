@@ -15,6 +15,8 @@ export default defineConfig({
       typeCheck: true,
       typeAware: true,
     },
+    // The docs app's generated content cache is Astro's output, not ours.
+    ignorePatterns: ['.astro/'],
   },
   fmt: {
     endOfLine: 'lf',
@@ -27,7 +29,8 @@ export default defineConfig({
     },
     sortImports: {},
     // `_static/` holds the readme cover source, whose code panel relies on
-    // `white-space: pre` and so cannot survive reflowing.
-    ignorePatterns: ['_static/', 'dist/', 'node_modules/'],
+    // `white-space: pre` and so cannot survive reflowing. `.astro/` is the
+    // docs app's generated content cache.
+    ignorePatterns: ['_static/', '.astro/', 'dist/', 'node_modules/'],
   },
 });

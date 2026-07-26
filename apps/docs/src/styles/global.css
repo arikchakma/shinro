@@ -1,0 +1,129 @@
+@import 'tailwindcss';
+@import './_code.css';
+@import './_table.css';
+
+@font-face {
+  font-family: 'Geist';
+  src: url('/fonts/geist-variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Geist Fallback';
+  src: local('Arial');
+  size-adjust: 103.26%;
+  ascent-override: 97.33%;
+  descent-override: 28.57%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: 'Geist Mono';
+  src: url('/fonts/geist-mono-variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Geist Mono Fallback';
+  src: local('Courier New'), local('CourierNewPSMT');
+  size-adjust: 99.98%;
+  ascent-override: 100.52%;
+  descent-override: 29.5%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: 'Newsreader';
+  src: url('/fonts/newsreader.woff2') format('woff2');
+  font-weight: 200 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Newsreader';
+  src: url('/fonts/newsreader-italic.woff2') format('woff2');
+  font-weight: 200 800;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Newsreader Fallback';
+  src: local('Georgia');
+  size-adjust: 91.75%;
+  ascent-override: 80.11%;
+  descent-override: 28.88%;
+  line-gap-override: 0%;
+}
+
+@theme {
+  --color-selection: #a9a9a940;
+
+  --font-sans:
+    'Geist', 'Geist Fallback', ui-sans-serif, system-ui, -apple-system,
+    sans-serif;
+  --font-serif:
+    'Newsreader', 'Newsreader Fallback', ui-serif, Georgia, 'Times New Roman',
+    serif;
+  --font-mono:
+    'Geist Mono', 'Geist Mono Fallback', ui-monospace, SFMono-Regular,
+    'SF Mono', Menlo, Consolas, monospace;
+}
+
+@layer base {
+  html {
+    scrollbar-gutter: stable;
+  }
+
+  body {
+    @apply text-zinc-800 selection:bg-selection;
+    font-weight: 430;
+  }
+
+  a,
+  button,
+  [role='button'] {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  em,
+  i,
+  cite {
+    @apply font-serif font-medium text-black;
+    font-style: italic;
+    font-optical-sizing: auto;
+    letter-spacing: -0.01rem;
+    font-variation-settings: 'opsz' 10;
+  }
+
+  strong {
+    @apply font-medium text-black;
+  }
+
+  :not(pre) > code {
+    @apply rounded-md bg-zinc-100 px-1 py-0.5 font-mono text-[0.85em] text-zinc-700;
+  }
+}
+
+@utility top-blur {
+  -webkit-mask-image: linear-gradient(to bottom, #000 25%, transparent);
+  mask-image: linear-gradient(to bottom, #000 25%, transparent);
+}
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility link {
+  @apply underline decoration-zinc-300 underline-offset-2 hover:no-underline;
+}
