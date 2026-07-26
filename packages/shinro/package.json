@@ -1,6 +1,6 @@
 {
   "name": "shinro",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Opinionated file-based routing for Hono with end-to-end type safety.",
   "keywords": [
     "api",
