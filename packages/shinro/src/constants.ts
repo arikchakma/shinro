@@ -4,7 +4,13 @@ export const CLIENT_ID = 'shinro/client';
 export const CLIENT_FILE = 'client.ts';
 export const RPC_ID = 'shinro/rpc';
 export const RPC_FILE = 'rpc.ts';
-export const MODULES_FILE = 'shinro.d.ts';
+export const MODULE_DECLARATIONS_FILE = 'shinro.d.ts';
+/**
+ * Leads the module specifier a route imports its own types from, and names the
+ * directory those declarations are written under, which is why it is a prefix
+ * rather than a whole id like `ROUTES_ID`.
+ */
+export const TYPE_DECLARATION_PREFIX = '+types';
 /**
  * Order matters: routes register in this order, and Hono runs the first
  * matching handler. `ALL` is last so a file exporting both `GET` and `ALL`
@@ -44,7 +50,7 @@ export const LEGACY_FILES = ['entry.ts', 'modules.d.ts'] as const;
 export const GENERATED_ENTRIES = [
   '.lock',
   CLIENT_FILE,
-  MODULES_FILE,
+  MODULE_DECLARATIONS_FILE,
   ROUTES_FILE,
   RPC_FILE,
   'manifest.json',

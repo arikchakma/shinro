@@ -3,14 +3,13 @@ import { readFile } from 'node:fs/promises';
 import { ROUTES_ID } from '../constants.ts';
 import type { NodeView } from './ast.ts';
 import {
-  asNode,
   containsCallTo,
-  importedAs,
-  importedFrom,
   isHonoExpression,
   isTransparentExpression,
+  localNamesForImport,
   parseModule,
   specifierNames,
+  toNodeView,
 } from './ast.ts';
 
 export type AppModuleAnalysis = {
@@ -24,11 +23,11 @@ export async function validateAppModule(
 ): Promise<AppModuleAnalysis> {
   const source = await readFile(file, 'utf8');
   const ast = parseModule(file, source, 'app module');
-  const routers = importedFrom(ast, ROUTES_ID, 'routes');
-  const factories = importedAs(ast, 'defineApp');
+  const routers = localNamesForImport(ast, 'routes', ROUTES_ID);
+  const factories = localNamesForImport(ast, 'defineApp');
   // `defineApp()` only calls `new Hono()`, so an app module that reaches for
   // Hono directly is just as valid an application root.
-  const constructors = importedAs(ast, 'Hono');
+  const constructors = localNamesForImport(ast, 'Hono');
   const apps = new Set<string>();
   const scope: AppScope = { apps, constructors, factories };
 
@@ -141,7 +140,7 @@ function registersMiddlewareAfterMount(
 type ChainCall = { mountsRoutes: boolean; name: string };
 
 function appChains(value: unknown, routers: Set<string>): ChainCall[][] {
-  const node = asNode(value);
+  const node = toNodeView(value);
   if (!node) {
     return [];
   }
@@ -168,7 +167,7 @@ function appChains(value: unknown, routers: Set<string>): ChainCall[][] {
 }
 
 function chainCalls(value: unknown, routers: Set<string>): ChainCall[] {
-  const node = asNode(value);
+  const node = toNodeView(value);
   if (!node) {
     return [];
   }
@@ -179,12 +178,12 @@ function chainCalls(value: unknown, routers: Set<string>): ChainCall[] {
     return [];
   }
 
-  const callee = asNode(node.callee);
+  const callee = toNodeView(node.callee);
   if (callee?.type !== 'MemberExpression') {
     return [];
   }
 
-  const property = asNode(callee.property);
+  const property = toNodeView(callee.property);
 
   return [
     ...chainCalls(callee.object, routers),
@@ -201,15 +200,15 @@ function chainCalls(value: unknown, routers: Set<string>): ChainCall[] {
 }
 
 function isUseStatement(value: unknown, apps: Set<string>): boolean {
-  const statement = asNode(value);
+  const statement = toNodeView(value);
   if (statement?.type !== 'ExpressionStatement') {
     return false;
   }
 
-  const expression = asNode(statement.expression);
-  const callee = asNode(expression?.callee);
-  const object = asNode(callee?.object);
-  const property = asNode(callee?.property);
+  const expression = toNodeView(statement.expression);
+  const callee = toNodeView(expression?.callee);
+  const object = toNodeView(callee?.object);
+  const property = toNodeView(callee?.property);
 
   return (
     expression?.type === 'CallExpression' &&
@@ -232,13 +231,13 @@ type AppScope = {
 // root. The chained case must recurse through here rather than delegating, so
 // `defineApp().get(...).onError(...)` still resolves to the factory at its base.
 function isAppExpression(value: unknown, scope: AppScope): boolean {
-  const node = asNode(value);
+  const node = toNodeView(value);
   if (!node) {
     return false;
   }
 
   if (node.type === 'CallExpression') {
-    const callee = asNode(node.callee);
+    const callee = toNodeView(node.callee);
     if (callee?.type === 'Identifier') {
       return callee.name !== undefined && scope.factories.has(callee.name);
     }
@@ -257,19 +256,19 @@ function isEarlyResponseUseStatement(
   value: unknown,
   apps: Set<string>
 ): boolean {
-  const statement = asNode(value);
+  const statement = toNodeView(value);
   if (statement?.type !== 'ExpressionStatement') {
     return false;
   }
 
-  const expression = asNode(statement.expression);
+  const expression = toNodeView(statement.expression);
   if (expression?.type !== 'CallExpression') {
     return false;
   }
 
-  const callee = asNode(expression.callee);
-  const object = asNode(callee?.object);
-  const property = asNode(callee?.property);
+  const callee = toNodeView(expression.callee);
+  const object = toNodeView(callee?.object);
+  const property = toNodeView(callee?.property);
   if (
     callee?.type !== 'MemberExpression' ||
     object?.type !== 'Identifier' ||
@@ -285,7 +284,7 @@ function isEarlyResponseUseStatement(
 }
 
 function middlewareReturnsResponse(value: unknown): boolean {
-  const middleware = asNode(value);
+  const middleware = toNodeView(value);
   if (
     middleware?.type !== 'ArrowFunctionExpression' &&
     middleware?.type !== 'FunctionExpression'
@@ -297,7 +296,7 @@ function middlewareReturnsResponse(value: unknown): boolean {
 }
 
 function containsResponseReturn(value: unknown): boolean {
-  const node = asNode(value);
+  const node = toNodeView(value);
   if (!node) {
     return false;
   }
@@ -335,8 +334,8 @@ const CONTEXT_RESPONSE_METHODS = new Set([
 ]);
 
 function isContextResponseCall(value: NodeView): boolean {
-  const callee = asNode(value.callee);
-  const property = asNode(callee?.property);
+  const callee = toNodeView(value.callee);
+  const property = toNodeView(callee?.property);
 
   return (
     callee?.type === 'MemberExpression' &&

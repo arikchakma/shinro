@@ -14,9 +14,10 @@ import {
   CLIENT_FILE,
   GENERATED_NOTICE_PATTERN,
   LEGACY_FILES,
-  MODULES_FILE,
+  MODULE_DECLARATIONS_FILE,
   ROUTES_FILE,
   RPC_FILE,
+  TYPE_DECLARATION_PREFIX,
 } from '../constants.ts';
 import type { GeneratedSources } from './codegen.ts';
 
@@ -24,7 +25,7 @@ let temporaryFileCounter = 0;
 
 const RPC_FILES = [RPC_FILE, CLIENT_FILE];
 
-export async function writeGeneratedTypes(
+export async function writeGeneratedOutput(
   outputDirectory: string,
   sources: GeneratedSources,
   options: { rpcEnabled: boolean }
@@ -32,7 +33,7 @@ export async function writeGeneratedTypes(
   await mkdir(resolve(outputDirectory, 'types'), { recursive: true });
 
   await withGenerationLock(outputDirectory, async () => {
-    await writeGeneratedFiles(outputDirectory, sources, options);
+    await writeSources(outputDirectory, sources, options);
   });
 }
 
@@ -40,14 +41,14 @@ export async function writeGeneratedTypes(
 // whose contents already match are left untouched. Swapping the whole directory
 // would make the generated tree briefly disappear, which editors observe as the
 // project's types vanishing on each save.
-async function writeGeneratedFiles(
+async function writeSources(
   outputDirectory: string,
   sources: GeneratedSources,
   options: { rpcEnabled: boolean }
 ): Promise<void> {
-  const companions = sources.companions.map((companion) => ({
-    file: assertWithinOutput(outputDirectory, companion.file),
-    source: companion.source,
+  const typeDeclarations = sources.typeDeclarations.map((declaration) => ({
+    file: resolveWithinOutput(outputDirectory, declaration.file),
+    source: declaration.source,
   }));
   // `manifest.json` is written last so it doubles as the commit marker: once a
   // watcher observes a new manifest, every other generated file it describes is
@@ -56,10 +57,13 @@ async function writeGeneratedFiles(
   const files = new Map<string, string>([
     // Routing is not an RPC feature: the router and the declaration that types
     // its specifier are written whether or not the client is.
-    [resolve(outputDirectory, MODULES_FILE), sources.modules],
+    [
+      resolve(outputDirectory, MODULE_DECLARATIONS_FILE),
+      sources.moduleDeclarations,
+    ],
     [resolve(outputDirectory, ROUTES_FILE), sources.routes],
-    ...companions.map(
-      (companion) => [companion.file, companion.source] as const
+    ...typeDeclarations.map(
+      (declaration) => [declaration.file, declaration.source] as const
     ),
     ...(options.rpcEnabled
       ? ([
@@ -70,10 +74,10 @@ async function writeGeneratedFiles(
     [resolve(outputDirectory, 'manifest.json'), sources.manifest],
   ]);
 
-  await assertFileTargets([...files.keys()]);
-  await removeStaleCompanions(
+  await assertNotDirectories([...files.keys()]);
+  await removeStaleTypeDeclarations(
     resolve(outputDirectory, 'types'),
-    new Set(companions.map((companion) => companion.file))
+    new Set(typeDeclarations.map((declaration) => declaration.file))
   );
 
   // `.shinro` is not checked in, so an upgraded project starts here with the
@@ -94,7 +98,7 @@ async function writeGeneratedFiles(
   }
 
   for (const [file, source] of files) {
-    await writeGeneratedFile(file, source);
+    await writeFileIfChanged(file, source);
   }
 }
 
@@ -181,7 +185,7 @@ async function removeStaleLock(lockFile: string): Promise<boolean> {
   return true;
 }
 
-async function assertFileTargets(files: string[]): Promise<void> {
+async function assertNotDirectories(files: string[]): Promise<void> {
   for (const file of files) {
     try {
       if ((await lstat(file)).isDirectory()) {
@@ -197,7 +201,7 @@ async function assertFileTargets(files: string[]): Promise<void> {
   }
 }
 
-function assertWithinOutput(outputDirectory: string, file: string): string {
+function resolveWithinOutput(outputDirectory: string, file: string): string {
   const path = relative(outputDirectory, file);
   if (path === '..' || path.startsWith(`..${sep}`)) {
     throw new Error(
@@ -208,9 +212,9 @@ function assertWithinOutput(outputDirectory: string, file: string): string {
   return resolve(outputDirectory, path);
 }
 
-async function removeStaleCompanions(
+async function removeStaleTypeDeclarations(
   typesDirectory: string,
-  currentCompanions: Set<string>
+  currentDeclarations: Set<string>
 ): Promise<void> {
   const entries = await readdir(typesDirectory, {
     recursive: true,
@@ -224,7 +228,10 @@ async function removeStaleCompanions(
       }
 
       const file = resolve(entry.parentPath, entry.name);
-      if (!file.split(sep).includes('+types') || currentCompanions.has(file)) {
+      if (
+        !file.split(sep).includes(TYPE_DECLARATION_PREFIX) ||
+        currentDeclarations.has(file)
+      ) {
         return;
       }
 
@@ -235,7 +242,7 @@ async function removeStaleCompanions(
   );
 }
 
-async function writeGeneratedFile(file: string, source: string): Promise<void> {
+async function writeFileIfChanged(file: string, source: string): Promise<void> {
   try {
     if ((await readFile(file, 'utf8')) === source) {
       return;

@@ -19,7 +19,7 @@ configured `/v1` base path.
 - route-local and inherited directory middleware;
 - a `(authed)` group directory that scopes middleware to `/v1/orders`, plus an
   escaped `[sitemap.xml].ts` route serving `/v1/sitemap.xml`;
-- optional generated route and middleware companions;
+- optional generated route and middleware type declarations;
 - a chained Hono sub-router and a chained manual route;
 - generated Hono RPC and client exports;
 - a one-file Node build with application-owned graceful shutdown.

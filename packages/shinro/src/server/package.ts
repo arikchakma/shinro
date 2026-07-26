@@ -37,12 +37,12 @@ export async function warnForMissingClientExport(options: {
   }
 
   const exports = packageJson.exports as Record<string, unknown>;
-  const rpcTarget = generatedTarget(
+  const rpcTarget = packageExportTarget(
     options.root,
     options.outputDirectory,
     'rpc.ts'
   );
-  const clientTarget = generatedTarget(
+  const clientTarget = packageExportTarget(
     options.root,
     options.outputDirectory,
     'client.ts'
@@ -61,7 +61,7 @@ export async function warnForMissingClientExport(options: {
   );
 }
 
-function generatedTarget(
+function packageExportTarget(
   root: string,
   outputDirectory: string,
   name: string

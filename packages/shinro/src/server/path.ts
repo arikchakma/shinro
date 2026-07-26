@@ -1,5 +1,7 @@
 import { dirname, relative, resolve, sep } from 'node:path';
 
+import { TYPE_DECLARATION_PREFIX } from '../constants.ts';
+
 export function normalizeBasePath(basePath: string): string {
   if (!basePath.startsWith('/')) {
     throw new Error(
@@ -53,27 +55,28 @@ export function toProjectPath(root: string, file: string): string {
   return relative(root, file).split(sep).join('/');
 }
 
-export function generatedImport(outputDirectory: string, file: string): string {
+export function generatedSpecifier(
+  outputDirectory: string,
+  file: string
+): string {
   const path = relative(outputDirectory, file).split(sep).join('/');
   return path.startsWith('.') ? path : `./${path}`;
 }
 
-export function companionFile(
+export function getTypeDeclarationPath(
   root: string,
+  routesDirectory: string,
   outputDirectory: string,
-  routeFile: string
+  sourceFile: string
 ): string {
-  const relativeFile = relative(root, routeFile);
-  const name =
-    relativeFile
-      .replace(/\.[^.]+$/, '')
-      .split(sep)
-      .at(-1) ?? 'index';
+  const path = relative(routesDirectory, sourceFile).split(sep).join('/');
+  const resolved = resolve(
+    dirname(sourceFile),
+    `./${TYPE_DECLARATION_PREFIX}/${path.replace(/\.[^.]+$/, '.ts')}`
+  );
   return resolve(
     outputDirectory,
     'types',
-    dirname(relativeFile),
-    '+types',
-    `${name}.d.ts`
+    relative(root, resolved).replace(/\.ts$/, '.d.ts')
   );
 }

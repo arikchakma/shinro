@@ -410,19 +410,19 @@ test('generation writes a project-relative normalized manifest', async () => {
   });
 });
 
-test('an optional route companion provides exact filename parameter types', async () => {
+test('an optional route type declaration provides exact filename parameter types', async () => {
   const response = await client.api.users[':id'].$get({
     param: { id: 'usr_123' },
   });
 
-  // @ts-expect-error Pending the strict companion API decision: an explicit
+  // @ts-expect-error Pending the strict type declaration API decision: an explicit
   // Route generic currently widens the handler response status.
   expectTypeOf(response.status).toEqualTypeOf<200>();
   await expect(response.json()).resolves.toEqual({ id: 'usr_123' });
 });
 
-test('a route companion exposes its contract through Route.Handler', async () => {
-  const root = await mkdtemp(`${tmpdir()}/shinro-route-handler-companion-`);
+test('a route type declaration exposes its contract through Route.Handler', async () => {
+  const root = await mkdtemp(`${tmpdir()}/shinro-route-handler-declaration-`);
 
   await mkdir(`${root}/src/routes/users`, { recursive: true });
   await writeFile(`${root}/src/app.ts`, temporaryAppSource);
@@ -437,7 +437,7 @@ test('a route companion exposes its contract through Route.Handler', async () =>
       'serve'
     );
     const source = await readFile(
-      `${root}/.shinro/types/src/routes/users/+types/$id.d.ts`,
+      `${root}/.shinro/types/src/routes/users/+types/users/$id.d.ts`,
       'utf8'
     );
 
@@ -450,7 +450,7 @@ test('a route companion exposes its contract through Route.Handler', async () =>
   }
 });
 
-test('route companions are generated correctly when the project path contains spaces', async () => {
+test('route declarations are generated correctly when the project path contains spaces', async () => {
   const root = await mkdtemp(`${tmpdir()}/shinro route types `);
   await mkdir(`${root}/src/routes`, { recursive: true });
   await writeFile(`${root}/src/app.ts`, temporaryAppSource);
@@ -1076,7 +1076,7 @@ test('adding a route during development regenerates every route-derived artifact
   const routeFile = `${routesDirectory}/notes.ts`;
   const manifestFile = `${root}/.shinro/manifest.json`;
   const routesFile = `${root}/.shinro/routes.ts`;
-  const companionFile = `${root}/.shinro/types/src/routes/+types/notes.d.ts`;
+  const declarationFile = `${root}/.shinro/types/src/routes/+types/notes.d.ts`;
 
   await mkdir(routesDirectory, { recursive: true });
   await writeFile(`${root}/src/app.ts`, temporaryAppSource);
@@ -1112,7 +1112,7 @@ test('adding a route during development regenerates every route-derived artifact
     await expect(readFile(routesFile, 'utf8')).resolves.toContain(
       '.get("/notes"'
     );
-    await expect(readFile(companionFile, 'utf8')).resolves.toContain(
+    await expect(readFile(declarationFile, 'utf8')).resolves.toContain(
       'path: "/notes"'
     );
     await expect(
@@ -1148,7 +1148,7 @@ test('only route-tree files are treated as regeneration triggers', () => {
   expect(affects('internal/_middleware.ts', ['internal/**'])).toBe(false);
 });
 
-test('removing a route during development deletes its stale companion and registrations', async () => {
+test('removing a route during development deletes its stale type declaration and registrations', async () => {
   const root = await mkdtemp(
     fileURLToPath(new URL('../.shinro-route-remove-', import.meta.url))
   );
@@ -1156,7 +1156,7 @@ test('removing a route during development deletes its stale companion and regist
   const routeFile = `${routesDirectory}/notes.ts`;
   const manifestFile = `${root}/.shinro/manifest.json`;
   const routesFile = `${root}/.shinro/routes.ts`;
-  const companionFile = `${root}/.shinro/types/src/routes/+types/notes.d.ts`;
+  const declarationFile = `${root}/.shinro/types/src/routes/+types/notes.d.ts`;
 
   await mkdir(routesDirectory, { recursive: true });
   await writeFile(`${root}/src/app.ts`, temporaryAppSource);
@@ -1173,7 +1173,7 @@ test('removing a route during development deletes its stale companion and regist
   });
 
   try {
-    await expect(readFile(companionFile, 'utf8')).resolves.toContain(
+    await expect(readFile(declarationFile, 'utf8')).resolves.toContain(
       'path: "/notes"'
     );
     await expect
@@ -1200,7 +1200,7 @@ test('removing a route during development deletes its stale companion and regist
     await expect(readFile(routesFile, 'utf8')).resolves.not.toContain(
       '.get("/notes"'
     );
-    await expect(readFile(companionFile, 'utf8')).rejects.toMatchObject({
+    await expect(readFile(declarationFile, 'utf8')).rejects.toMatchObject({
       code: 'ENOENT',
     });
     await expect(
@@ -1375,8 +1375,8 @@ test('a named method exported through an export list is discovered', async () =>
   }
 });
 
-test('directory middleware receives an optional generated companion type', async () => {
-  const root = await mkdtemp(`${tmpdir()}/shinro-middleware-companion-`);
+test('directory middleware receives an optional generated type declaration', async () => {
+  const root = await mkdtemp(`${tmpdir()}/shinro-middleware-declaration-`);
   const helper = JSON.stringify(
     fileURLToPath(new URL('../src/app.ts', import.meta.url))
   );
@@ -1405,7 +1405,7 @@ test('directory middleware receives an optional generated companion type', async
       'serve'
     );
     const source = await readFile(
-      `${root}/.shinro/types/src/routes/api/+types/_middleware.d.ts`,
+      `${root}/.shinro/types/src/routes/api/+types/api/_middleware.d.ts`,
       'utf8'
     );
 
@@ -3414,8 +3414,8 @@ test('routes that collapse onto one URL through a group explain the collapse', a
   }
 });
 
-test('a route inside a group keeps its companion type on disk and its URL in the type', async () => {
-  const root = await mkdtemp(`${tmpdir()}/shinro-group-companion-`);
+test('a route inside a group keeps its type declaration on disk and its URL in the type', async () => {
+  const root = await mkdtemp(`${tmpdir()}/shinro-group-declaration-`);
 
   await mkdir(`${root}/src/routes/(authed)`, { recursive: true });
   await writeFile(`${root}/src/app.ts`, temporaryAppSource);
@@ -3429,14 +3429,98 @@ test('a route inside a group keeps its companion type on disk and its URL in the
       { configFile: false, plugins: [shinro()], root },
       'serve'
     );
-    // The companion mirrors the source path so `./+types/orders.ts` resolves
-    // through `rootDirs`, while the type it declares carries the served URL.
+    // A group contributes middleware but no URL segment, which is where the
+    // specifier and the path have to disagree: `./+types/(authed)/orders.ts`
+    // names the file, so the group survives in it, while the type the
+    // declaration exports carries the served URL.
     const source = await readFile(
-      `${root}/.shinro/types/src/routes/(authed)/+types/orders.d.ts`,
+      `${root}/.shinro/types/src/routes/(authed)/+types/(authed)/orders.d.ts`,
       'utf8'
     );
 
     expect(source).toMatch(/path: "\/orders"/);
+  } finally {
+    await rm(root, { recursive: true });
+  }
+});
+
+test('a type declaration lands where its full-path specifier resolves', async () => {
+  const root = await mkdtemp(`${tmpdir()}/shinro-declaration-specifiers-`);
+
+  await mkdir(`${root}/src/routes/teams/$teamId/members`, { recursive: true });
+  await mkdir(`${root}/src/routes/files`, { recursive: true });
+  await writeFile(`${root}/src/app.ts`, temporaryAppSource);
+
+  // Every specifier carries the whole path below the routes directory, so a
+  // nested route's own directories appear on both sides of `+types`: once
+  // locating the importer, once inside the specifier it writes.
+  const declarations = {
+    'index.ts': 'src/routes/+types/index.d.ts',
+    '[sitemap.xml].ts': 'src/routes/+types/[sitemap.xml].d.ts',
+    'files/$...path.ts': 'src/routes/files/+types/files/$...path.d.ts',
+    'teams/$teamId/members/$memberId.ts':
+      'src/routes/teams/$teamId/members/+types/teams/$teamId/members/$memberId.d.ts',
+  };
+
+  for (const file of Object.keys(declarations)) {
+    await writeFile(
+      `${root}/src/routes/${file}`,
+      'export const GET = [(c: any) => c.json({ ok: true })] as const;\n'
+    );
+  }
+
+  try {
+    await resolveConfig(
+      { configFile: false, plugins: [shinro()], root },
+      'serve'
+    );
+
+    for (const declaration of Object.values(declarations)) {
+      await expect(
+        readFile(`${root}/.shinro/types/${declaration}`, 'utf8')
+      ).resolves.toContain('export namespace Route {');
+    }
+  } finally {
+    await rm(root, { recursive: true });
+  }
+});
+
+test('a type declaration left by the basename-only layout is removed', async () => {
+  const root = await mkdtemp(`${tmpdir()}/shinro-declaration-migration-`);
+  // Where a release that specified declarations by basename alone put this one.
+  // An older format number is deliberate: cleanup keys off the notice, not the
+  // version in it, so output from any earlier release has to be recognised.
+  const stale = `${root}/.shinro/types/src/routes/api/+types/health.d.ts`;
+
+  await mkdir(`${root}/src/routes/api`, { recursive: true });
+  await mkdir(`${root}/.shinro/types/src/routes/api/+types`, {
+    recursive: true,
+  });
+  await writeFile(`${root}/src/app.ts`, temporaryAppSource);
+  await writeFile(
+    `${root}/src/routes/api/health.ts`,
+    'export const GET = [(c: any) => c.json({ ok: true })] as const;\n'
+  );
+  await writeFile(
+    stale,
+    '// Generated by Shinro (format 1). Do not edit.\nexport namespace Route {}\n'
+  );
+
+  try {
+    await resolveConfig(
+      { configFile: false, plugins: [shinro()], root },
+      'serve'
+    );
+
+    await expect(readFile(stale, 'utf8')).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+    await expect(
+      readFile(
+        `${root}/.shinro/types/src/routes/api/+types/api/health.d.ts`,
+        'utf8'
+      )
+    ).resolves.toContain('export namespace Route {');
   } finally {
     await rm(root, { recursive: true });
   }

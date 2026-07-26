@@ -12,13 +12,13 @@ import {
   RPC_FILE,
   RPC_ID,
 } from '../constants.ts';
-import { createSources } from './codegen.ts';
+import { generateSources } from './codegen.ts';
 import { validateTypeScriptConfig } from './config.ts';
 import { DevelopmentProcess } from './dev.ts';
 import { warnForMissingClientExport } from './package.ts';
 import { isAtOrWithin } from './path.ts';
 import { affectsRouteTree } from './scanner.ts';
-import { writeGeneratedTypes } from './typegen.ts';
+import { writeGeneratedOutput } from './typegen.ts';
 
 export type ShinroOptions = {
   app?: string;
@@ -58,12 +58,12 @@ export function shinro(options: ShinroOptions = {}): Plugin {
       return undefined;
     }
 
-    const sources = await createSources(
+    const sources = await generateSources(
       resolvedConfig,
       options,
       outputDirectory
     );
-    await writeGeneratedTypes(outputDirectory, sources, {
+    await writeGeneratedOutput(outputDirectory, sources, {
       rpcEnabled: options.rpc?.enabled !== false,
     });
 
@@ -143,7 +143,7 @@ export function shinro(options: ShinroOptions = {}): Plugin {
       // user's entry. The parent already generated `.shinro` and reported its
       // diagnostics before spawning it, so repeating that work here would print
       // every warning twice and contend on the generation lock for nothing.
-      if (isDevelopmentChild()) {
+      if (inDevelopmentChildProcess()) {
         return;
       }
 
@@ -177,7 +177,7 @@ export function shinro(options: ShinroOptions = {}): Plugin {
         options.entry ?? 'src/server.ts'
       );
       const runsUserEntry =
-        !server.config.server.middlewareMode && !isDevelopmentChild();
+        !server.config.server.middlewareMode && !inDevelopmentChildProcess();
       if (runsUserEntry) {
         await assertServerEntry(entryFile);
       }
@@ -339,7 +339,7 @@ function isSourceModule(file: string): boolean {
   return SOURCE_MODULE_EXTENSIONS.has(extname(file));
 }
 
-function isDevelopmentChild(): boolean {
+function inDevelopmentChildProcess(): boolean {
   return process.env.SHINRO_DEV_CHILD === '1';
 }
 

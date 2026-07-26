@@ -263,7 +263,7 @@ descendant. It can export multiple middleware handlers:
 ```ts
 // app/routes/api/_middleware.ts
 import { defineMiddleware } from 'shinro/app';
-import type { Route } from './+types/_middleware.ts';
+import type { Route } from './+types/api/_middleware.ts';
 
 export default defineMiddleware<Route.Middleware>(
   async (c, next) => {
@@ -366,7 +366,7 @@ export const POST = defineHandler(
 );
 ```
 
-## Parameters and optional companions
+## Parameters and optional type declarations
 
 Routes do not need generated imports. For runtime-validated input, prefer a
 Hono validator:
@@ -381,11 +381,11 @@ export const GET = defineHandler(zValidator('param', params), (c) => {
 });
 ```
 
-Shinro also generates an optional filename companion:
+Shinro also generates an optional filename type declaration:
 
 ```ts
 import { defineHandler } from 'shinro/app';
-import type { Route } from './+types/$id.ts';
+import type { Route } from './+types/users/$id.ts';
 
 export const GET = defineHandler<Route.Handler>((c) => {
   const id = c.req.param('id');
@@ -393,12 +393,18 @@ export const GET = defineHandler<Route.Handler>((c) => {
 });
 ```
 
-The companion supplies the filename-derived path and parameter names. It does
+The specifier carries the route's whole path below the routes directory, so it
+names one route rather than a basename like `$id.ts` that recurs across the tree.
+It follows the file, not the URL: a `(group)` directory stays in the specifier
+while contributing no URL segment.
+
+The declaration supplies the filename-derived path and parameter names. It does
 not validate requests at runtime; use a validator when validation is required.
 Middleware and validators can still precede the handler, but an explicit type
-argument stops TypeScript inferring what follows it, so under the companion a
-validator runs without typing `c.req.valid()`. Read validated input from the
-inferred form instead.
+argument stops TypeScript inferring what follows it: under the declaration a
+validator rejects bad requests without typing `c.req.valid()` or contributing
+its input to the generated client. Read validated input from the inferred form
+instead.
 Shinro cross-checks `"param"` schemas against filename parameters for any Hono
 validator. The validators from `hono/validator` and `@hono/*-validator`
 packages (`zValidator`, `vValidator`, `sValidator`, and others) share the same

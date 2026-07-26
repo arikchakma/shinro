@@ -19,7 +19,7 @@ export type NodeView = {
   type: string;
 };
 
-export function asNode(value: unknown): NodeView | undefined {
+export function toNodeView(value: unknown): NodeView | undefined {
   if (typeof value !== 'object' || value === null || !('type' in value)) {
     return undefined;
   }
@@ -48,7 +48,7 @@ export function isHonoExpression(
   constructors: Set<string>,
   instances: Set<string>
 ): boolean {
-  const node = asNode(value);
+  const node = toNodeView(value);
   if (!node) {
     return false;
   }
@@ -57,7 +57,7 @@ export function isHonoExpression(
     return node.name !== undefined && instances.has(node.name);
   }
   if (node.type === 'NewExpression') {
-    const callee = asNode(node.callee);
+    const callee = toNodeView(node.callee);
     return (
       callee?.type === 'Identifier' &&
       callee.name !== undefined &&
@@ -65,7 +65,7 @@ export function isHonoExpression(
     );
   }
   if (node.type === 'CallExpression') {
-    const callee = asNode(node.callee);
+    const callee = toNodeView(node.callee);
     return callee?.type === 'MemberExpression'
       ? isHonoExpression(callee.object, constructors, instances)
       : false;
@@ -78,21 +78,21 @@ export function isHonoExpression(
 }
 
 /**
- * Collects the local names bound to a named import from one specific module.
- * Unlike `importedAs`, the source is part of the match, so an unrelated local
- * that happens to share a name cannot be mistaken for the real binding.
+ * Collects the local names bound to a named import. Passing `source` makes the
+ * module part of the match, so an unrelated local that happens to share a name
+ * cannot be mistaken for the real binding.
  */
-export function importedFrom(
+export function localNamesForImport(
   ast: ReturnType<typeof parseModule>,
-  source: string,
-  importedName: string
+  importedName: string,
+  source?: string
 ): Set<string> {
   const locals = new Set<string>();
 
   for (const statement of ast.body) {
     if (
       statement.type !== 'ImportDeclaration' ||
-      statement.source.value !== source
+      (source !== undefined && statement.source.value !== source)
     ) {
       continue;
     }
@@ -112,13 +112,13 @@ export function importedFrom(
 }
 
 export function containsCallTo(value: unknown, names: Set<string>): boolean {
-  const node = asNode(value);
+  const node = toNodeView(value);
   if (!node || names.size === 0) {
     return false;
   }
 
   if (node.type === 'CallExpression') {
-    const callee = asNode(node.callee);
+    const callee = toNodeView(node.callee);
     if (
       callee?.type === 'Identifier' &&
       callee.name !== undefined &&
@@ -135,31 +135,6 @@ export function containsCallTo(value: unknown, names: Set<string>): boolean {
         ? child.some((item) => containsCallTo(item, names))
         : containsCallTo(child, names))
   );
-}
-
-export function importedAs(
-  ast: ReturnType<typeof parseModule>,
-  importedName: string
-): Set<string> {
-  const locals = new Set<string>();
-
-  for (const statement of ast.body) {
-    if (statement.type !== 'ImportDeclaration') {
-      continue;
-    }
-
-    for (const specifier of statement.specifiers) {
-      if (
-        specifier.type === 'ImportSpecifier' &&
-        specifier.imported.type === 'Identifier' &&
-        specifier.imported.name === importedName
-      ) {
-        locals.add(specifier.local.name);
-      }
-    }
-  }
-
-  return locals;
 }
 
 export function specifierNames(specifier: {

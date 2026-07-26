@@ -11,11 +11,11 @@ import {
 import { HTTP_METHODS } from '../constants.ts';
 import type { NodeView } from './ast.ts';
 import {
-  asNode,
   isHonoExpression,
   isTransparentExpression,
   parseModule,
   specifierNames,
+  toNodeView,
 } from './ast.ts';
 import {
   isStrictlyWithin,
@@ -41,12 +41,12 @@ type SegmentPart = {
   text: string;
 };
 
-type PathSegment = {
+type ResolvedSegment = {
   escaped: boolean;
   literal: string;
 };
 
-type RouteManifest = {
+type DiscoveredRoutes = {
   middleware: DirectoryMiddleware[];
   routes: Route[];
 };
@@ -57,7 +57,7 @@ export async function discoverRoutes(
     ignoredRouteFiles?: string[];
     warn?: (message: string) => void;
   } = {}
-): Promise<RouteManifest> {
+): Promise<DiscoveredRoutes> {
   let entries;
   try {
     entries = await readdir(routesDirectory, {
@@ -153,7 +153,7 @@ export async function discoverRoutes(
 
     const filenameParameters = routeParameterNames(path);
     for (const schemaParameters of routeExports.parameterSchemas) {
-      if (!sameStringSet(filenameParameters, schemaParameters)) {
+      if (!isSameStrings(filenameParameters, schemaParameters)) {
         options.warn?.(
           `[shinro] ${file} has a parameter schema declaring [${schemaParameters.join(
             ', '
@@ -213,7 +213,7 @@ async function settleInOrder<T>(work: Promise<T>[]): Promise<T[]> {
 async function validateMiddlewareModule(file: string): Promise<void> {
   const source = await readFile(file, 'utf8');
   const ast = parseModule(file, source, 'route module');
-  const middlewareBundles = new Set<string>();
+  const middlewareStacks = new Set<string>();
   const middlewareFactories = new Set<string>();
   let hasValidDefault = false;
 
@@ -245,23 +245,23 @@ async function validateMiddlewareModule(file: string): Promise<void> {
     for (const declaration of statementDeclaration.declarations) {
       if (
         declaration.id.type === 'Identifier' &&
-        isHandlerBundleExpression(
+        isHandlerStackExpression(
           declaration.init,
           middlewareFactories,
-          middlewareBundles
+          middlewareStacks
         )
       ) {
-        middlewareBundles.add(declaration.id.name);
+        middlewareStacks.add(declaration.id.name);
       }
     }
   }
 
   for (const statement of ast.body) {
     if (statement.type === 'ExportDefaultDeclaration') {
-      hasValidDefault = isHandlerBundleExpression(
+      hasValidDefault = isHandlerStackExpression(
         statement.declaration,
         middlewareFactories,
-        middlewareBundles
+        middlewareStacks
       );
       break;
     }
@@ -275,7 +275,7 @@ async function validateMiddlewareModule(file: string): Promise<void> {
 
     for (const specifier of statement.specifiers) {
       const names = specifierNames(specifier);
-      if (names.exported === 'default' && middlewareBundles.has(names.local)) {
+      if (names.exported === 'default' && middlewareStacks.has(names.local)) {
         hasValidDefault = true;
       }
     }
@@ -430,10 +430,10 @@ async function readRouteExports(file: string): Promise<{
   const source = await readFile(file, 'utf8');
   const ast = parseModule(file, source, 'route module');
   const exports = new Set<string>();
-  const handlerBundles = new Set<string>();
+  const handlerStacks = new Set<string>();
   const handlerFactories = new Set<string>();
-  const methodBundleNames = new Map<Route['methods'][number], string>();
-  const parameterSchemasByBundle = new Map<string, string[][]>();
+  const methodStackNames = new Map<Route['methods'][number], string>();
+  const parameterSchemasByStack = new Map<string, string[][]>();
   const parameterSchemaShapes = new Map<string, string[]>();
   const validatorFactories = new Set<string>();
   const honoConstructors = new Set<string>();
@@ -498,10 +498,10 @@ async function readRouteExports(file: string): Promise<{
       }
       if (
         declaration.id.type === 'Identifier' &&
-        !isRejectedHandlerBundle(declaration.init, handlerFactories)
+        !isRejectedHandlerStack(declaration.init, handlerFactories)
       ) {
-        handlerBundles.add(declaration.id.name);
-        parameterSchemasByBundle.set(
+        handlerStacks.add(declaration.id.name);
+        parameterSchemasByStack.set(
           declaration.id.name,
           parameterSchemasInExpression(
             declaration.init,
@@ -559,8 +559,8 @@ async function readRouteExports(file: string): Promise<{
         continue;
       }
 
-      methodBundleNames.set(method, localName);
-      if (!handlerBundles.has(localName)) {
+      methodStackNames.set(method, localName);
+      if (!handlerStacks.has(localName)) {
         invalidMethods.add(method);
       }
     }
@@ -585,7 +585,7 @@ async function readRouteExports(file: string): Promise<{
             HTTP_METHODS.includes(
               declaration.id.name as Route['methods'][number]
             ) &&
-            !handlerBundles.has(declaration.id.name)
+            !handlerStacks.has(declaration.id.name)
           ) {
             invalidMethods.add(declaration.id.name as Route['methods'][number]);
           }
@@ -594,7 +594,7 @@ async function readRouteExports(file: string): Promise<{
               declaration.id.name as Route['methods'][number]
             )
           ) {
-            methodBundleNames.set(
+            methodStackNames.set(
               declaration.id.name as Route['methods'][number],
               declaration.id.name
             );
@@ -616,8 +616,8 @@ async function readRouteExports(file: string): Promise<{
     methods: HTTP_METHODS.filter((method) => exports.has(method)),
     parameterSchemas: HTTP_METHODS.flatMap((method) =>
       exports.has(method)
-        ? (parameterSchemasByBundle.get(
-            methodBundleNames.get(method) ?? method
+        ? (parameterSchemasByStack.get(
+            methodStackNames.get(method) ?? method
           ) ?? [])
         : []
     ),
@@ -652,15 +652,15 @@ const HONO_ROUTE_METHODS = new Set([
 ]);
 
 function isUnchainedRouteMutation(value: unknown, honoName: string): boolean {
-  const statement = asNode(value);
+  const statement = toNodeView(value);
   if (statement?.type !== 'ExpressionStatement') {
     return false;
   }
 
-  const expression = asNode(statement.expression);
-  const callee = asNode(expression?.callee);
-  const object = asNode(callee?.object);
-  const property = asNode(callee?.property);
+  const expression = toNodeView(statement.expression);
+  const callee = toNodeView(expression?.callee);
+  const object = toNodeView(callee?.object);
+  const property = toNodeView(callee?.property);
 
   return (
     expression?.type === 'CallExpression' &&
@@ -673,18 +673,18 @@ function isUnchainedRouteMutation(value: unknown, honoName: string): boolean {
   );
 }
 
-function isHandlerBundleExpression(
+function isHandlerStackExpression(
   value: unknown,
   factories: Set<string>,
-  bundles: Set<string>
+  stacks: Set<string>
 ): boolean {
-  const node = asNode(value);
+  const node = toNodeView(value);
   if (!node) {
     return false;
   }
 
   if (node.type === 'Identifier') {
-    return node.name !== undefined && bundles.has(node.name);
+    return node.name !== undefined && stacks.has(node.name);
   }
   if (node.type === 'ArrayExpression') {
     const elements =
@@ -692,7 +692,7 @@ function isHandlerBundleExpression(
     return elements.length > 0 && elements.every(isHandlerValue);
   }
   if (node.type === 'CallExpression') {
-    const callee = asNode(node.callee);
+    const callee = toNodeView(node.callee);
     const arguments_ =
       (node as NodeView & { arguments?: unknown[] }).arguments ?? [];
     return (
@@ -704,7 +704,7 @@ function isHandlerBundleExpression(
     );
   }
   if (isTransparentExpression(node)) {
-    return isHandlerBundleExpression(node.expression, factories, bundles);
+    return isHandlerStackExpression(node.expression, factories, stacks);
   }
 
   return false;
@@ -715,17 +715,17 @@ function isHandlerBundleExpression(
 // else — a project wrapper, a shared tuple, a helper call — is left to
 // TypeScript, which checks spreadability exactly and reports it against the
 // user's own source rather than against generated code.
-function isRejectedHandlerBundle(
+function isRejectedHandlerStack(
   value: unknown,
   factories: Set<string>
 ): boolean {
-  const node = asNode(value);
+  const node = toNodeView(value);
   if (!node) {
     return true;
   }
 
   if (isTransparentExpression(node)) {
-    return isRejectedHandlerBundle(node.expression, factories);
+    return isRejectedHandlerStack(node.expression, factories);
   }
 
   if (node.type === 'ArrayExpression') {
@@ -734,7 +734,7 @@ function isRejectedHandlerBundle(
     return elements.length === 0 || !elements.every(isHandlerValue);
   }
   if (node.type === 'CallExpression') {
-    const callee = asNode(node.callee);
+    const callee = toNodeView(node.callee);
     const arguments_ =
       (node as NodeView & { arguments?: unknown[] }).arguments ?? [];
     return (
@@ -757,7 +757,7 @@ function isRejectedHandlerBundle(
 }
 
 function isHandlerValue(value: unknown): boolean {
-  const node = asNode(value);
+  const node = toNodeView(value);
   if (!node) {
     return false;
   }
@@ -793,10 +793,10 @@ function parameterSchemasInExpression(
       return;
     }
 
-    const callee = asNode(node.callee);
+    const callee = toNodeView(node.callee);
     const arguments_ =
       (node as NodeView & { arguments?: unknown[] }).arguments ?? [];
-    const target = asNode(arguments_[0]) as
+    const target = toNodeView(arguments_[0]) as
       | (NodeView & { value?: unknown })
       | undefined;
     if (
@@ -822,7 +822,7 @@ function objectSchemaKeys(
   value: unknown,
   namedSchemas: Map<string, string[]>
 ): string[] | undefined {
-  const schema = asNode(value);
+  const schema = toNodeView(value);
   if (schema?.type === 'Identifier' && schema.name !== undefined) {
     return namedSchemas.get(schema.name);
   }
@@ -830,11 +830,11 @@ function objectSchemaKeys(
     return undefined;
   }
 
-  const callee = asNode(schema.callee);
-  const property = asNode(callee?.property);
+  const callee = toNodeView(schema.callee);
+  const property = toNodeView(callee?.property);
   const arguments_ =
     (schema as NodeView & { arguments?: unknown[] }).arguments ?? [];
-  const shape = asNode(arguments_[0]) as
+  const shape = toNodeView(arguments_[0]) as
     | (NodeView & { properties?: unknown[] })
     | undefined;
   if (
@@ -848,10 +848,10 @@ function objectSchemaKeys(
 
   const keys: string[] = [];
   for (const value of shape.properties ?? []) {
-    const field = asNode(value) as
+    const field = toNodeView(value) as
       | (NodeView & { computed?: boolean; key?: unknown })
       | undefined;
-    const key = asNode(field?.key) as
+    const key = toNodeView(field?.key) as
       | (NodeView & { value?: unknown })
       | undefined;
     if (field?.type !== 'Property' || field.computed || !key) {
@@ -870,7 +870,7 @@ function objectSchemaKeys(
 }
 
 function visitNode(value: unknown, visitor: (node: NodeView) => void): void {
-  const node = asNode(value);
+  const node = toNodeView(value);
   if (!node) {
     return;
   }
@@ -890,7 +890,7 @@ function visitNode(value: unknown, visitor: (node: NodeView) => void): void {
   }
 }
 
-function sameStringSet(left: string[], right: string[]): boolean {
+function isSameStrings(left: string[], right: string[]): boolean {
   return (
     left.length === right.length &&
     left.every((value) => right.includes(value)) &&
@@ -913,13 +913,13 @@ function routePath(
   const relativeFile = relative(routesDirectory, file).split(sep).join('/');
   const pathSegments = relativeFile.replace(/\.[^.]+$/, '').split('/');
   const lastIndex = pathSegments.length - 1;
-  const segments: PathSegment[] = [];
+  const segments: ResolvedSegment[] = [];
 
   for (const [index, segment] of pathSegments.entries()) {
-    const parts = segmentParts(segment);
+    const parts = splitSegmentEscapes(segment);
 
     if (parts.some((part) => part.escaped) || !isGroupSegment(segment)) {
-      segments.push(pathSegment(reportedFile, parts, segment));
+      segments.push(resolvePathSegment(reportedFile, parts, segment));
       continue;
     }
 
@@ -989,7 +989,7 @@ function routePath(
 
   const path = segments
     .map((segment) =>
-      segment.escaped ? segment.literal : routeSegment(segment.literal)
+      segment.escaped ? segment.literal : toHonoSegment(segment.literal)
     )
     .join('/');
   return path ? `/${path}` : '/';
@@ -1004,7 +1004,7 @@ function routePath(
  * `[weird]` on its own, and leaves an unmatched `[` as an ordinary character, so
  * escaping never needs a diagnostic of its own.
  */
-function segmentParts(segment: string): SegmentPart[] {
+function splitSegmentEscapes(segment: string): SegmentPart[] {
   const parts: SegmentPart[] = [];
   let index = 0;
 
@@ -1032,11 +1032,11 @@ function segmentParts(segment: string): SegmentPart[] {
  * An escape makes a segment static: its text reaches the URL verbatim rather
  * than being read as a parameter or a group.
  */
-function pathSegment(
+function resolvePathSegment(
   file: string,
   parts: SegmentPart[],
   segment: string
-): PathSegment {
+): ResolvedSegment {
   const escaped = parts.some((part) => part.escaped);
   const unescaped = parts
     .filter((part) => !part.escaped)
@@ -1106,7 +1106,7 @@ function assertGroupName(file: string, segment: string): void {
   }
 }
 
-function routeSegment(segment: string): string {
+function toHonoSegment(segment: string): string {
   if (segment.startsWith('$...')) {
     return `:${segment.slice(4)}{.+}`;
   }

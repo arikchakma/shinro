@@ -99,13 +99,18 @@ A parameter name must match `[A-Za-z_][A-Za-z0-9_]*` and must be unique within
 one route, so `users/$id/posts/$id.ts` is rejected.
 
 For a typed `params` object and the route's own path type, import the
-generated companion:
+generated type declaration:
 
 ```ts
-import type { Route } from './+types/$id.ts';
+import type { Route } from './+types/users/$id.ts';
 
 export const GET = defineHandler<Route.Handler>((c) => /* ... */);
 ```
+
+The specifier repeats the route's whole path below `src/routes`, which is what
+makes it unambiguous — every `$id.ts` in the tree would otherwise import from an
+identical-looking path. A `(group)` directory stays in the specifier even though
+it contributes nothing to the URL.
 
 ### Catch-all segments
 

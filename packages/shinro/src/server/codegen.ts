@@ -13,8 +13,8 @@ import {
 } from '../constants.ts';
 import { validateAppModule } from './app.ts';
 import {
-  companionFile,
-  generatedImport,
+  generatedSpecifier,
+  getTypeDeclarationPath,
   normalizeBasePath,
   routeParameterNames,
   toProjectPath,
@@ -26,14 +26,14 @@ import type { Route } from './scanner.ts';
 
 export type GeneratedSources = {
   client: string;
-  companions: Array<{ file: string; source: string }>;
   manifest: string;
-  modules: string;
+  moduleDeclarations: string;
   routes: string;
   rpc: string;
+  typeDeclarations: Array<{ file: string; source: string }>;
 };
 
-export async function createSources(
+export async function generateSources(
   config: ResolvedConfig,
   options: ShinroOptions,
   outputDirectory: string
@@ -116,20 +116,20 @@ export async function createSources(
       ...(route.kind === 'sub-router'
         ? [
             `import route${index}Default from ${JSON.stringify(
-              generatedImport(outputDirectory, route.file)
+              generatedSpecifier(outputDirectory, route.file)
             )};`,
           ]
         : []),
       ...route.methods.map(
         (method) =>
           `import { ${method} as route${index}${method} } from ${JSON.stringify(
-            generatedImport(outputDirectory, route.file)
+            generatedSpecifier(outputDirectory, route.file)
           )};`
       ),
       ...route.middleware.map(
         (file, middlewareIndex) =>
           `import route${index}Middleware${middlewareIndex} from ${JSON.stringify(
-            generatedImport(outputDirectory, file)
+            generatedSpecifier(outputDirectory, file)
           )};`
       ),
     ]),
@@ -142,7 +142,7 @@ export async function createSources(
     route.kind === 'sub-router' && route.middleware.length > 0
       ? [
           `  const route${index}Mounted = new Hono<ProjectEnv>()`,
-          `    .use("*", ${middlewareSpreads(route, index).join(', ')})`,
+          `    .use("*", ${spreadMiddleware(route, index).join(', ')})`,
           `    .route("/", route${index}Default);`,
         ]
       : []
@@ -162,7 +162,7 @@ export async function createSources(
         `    .${method.toLowerCase()}(`,
         [
           JSON.stringify(route.path),
-          ...middlewareSpreads(route, index),
+          ...spreadMiddleware(route, index),
           `...route${index}${method}`,
         ].join(', '),
         ')',
@@ -180,7 +180,7 @@ export async function createSources(
       'import { hc } from "hono/client";',
       '',
       `import type app from ${JSON.stringify(
-        generatedImport(outputDirectory, appFile)
+        generatedSpecifier(outputDirectory, appFile)
       )};`,
       '',
       'type AppType = typeof app;',
@@ -196,9 +196,14 @@ export async function createSources(
       'export type { InferRequestType, InferResponseType } from "hono/client";',
       '',
     ].join('\n'),
-    companions: [
+    typeDeclarations: [
       ...routes.map((route) => ({
-        file: companionFile(config.root, outputDirectory, route.file),
+        file: getTypeDeclarationPath(
+          config.root,
+          routesDirectory,
+          outputDirectory,
+          route.file
+        ),
         source: [
           GENERATED_NOTICE,
           'import type { ShinroRoute, ProjectEnv } from "shinro/app";',
@@ -206,7 +211,7 @@ export async function createSources(
           'export namespace Route {',
           '  export type Handler = ShinroRoute<{',
           `    path: ${JSON.stringify(route.path)};`,
-          `    params: ${routeParamsSource(route.path)};`,
+          `    params: ${routeParamsType(route.path)};`,
           '    env: ProjectEnv;',
           '  }>;',
           '}',
@@ -214,7 +219,12 @@ export async function createSources(
         ].join('\n'),
       })),
       ...directoryMiddleware.map((middleware) => ({
-        file: companionFile(config.root, outputDirectory, middleware.file),
+        file: getTypeDeclarationPath(
+          config.root,
+          routesDirectory,
+          outputDirectory,
+          middleware.file
+        ),
         source: [
           GENERATED_NOTICE,
           'import type { ShinroMiddleware, ProjectEnv } from "shinro/app";',
@@ -262,7 +272,7 @@ export async function createSources(
     // the only way in, and they stay stable when `rpc.outDir` moves. Each one
     // indirects through the real file via `import(...)`, which is what keeps the
     // chained route schema intact.
-    modules: [
+    moduleDeclarations: [
       GENERATED_NOTICE,
       `declare module "${ROUTES_ID}" {`,
       `  export const routes: typeof import("./${ROUTES_FILE}").routes;`,
@@ -315,13 +325,13 @@ export async function createSources(
   };
 }
 
-function middlewareSpreads(route: Route, routeIndex: number): string[] {
+function spreadMiddleware(route: Route, routeIndex: number): string[] {
   return route.middleware.map(
     (_, middlewareIndex) => `...route${routeIndex}Middleware${middlewareIndex}`
   );
 }
 
-function routeParamsSource(path: string): string {
+function routeParamsType(path: string): string {
   const params = routeParameterNames(path);
 
   if (params.length === 0) {
