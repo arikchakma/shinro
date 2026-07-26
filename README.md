@@ -29,9 +29,9 @@ contract in `typeof app` — generated and hand-written routes included.
 
 ## Why Shinro
 
-Shinro keeps its scope deliberately narrow. Other file-routing frameworks hand
-you an application; Shinro hands you routes and leaves the application under
-your control.
+Shinro turns a folder of route modules into a Hono router and a typed client.
+Add, move, or remove a route, and both update together—no route registry or
+client types to maintain by hand.
 
 - **One plugin.** `shinro()` handles routing, RPC types, and development
   integration.
