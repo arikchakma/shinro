@@ -18,10 +18,8 @@ import { createReporter } from './report.ts';
  * `shinro init [--dry-run]`
  *
  * The whole of onboarding, which is why it is a command rather than a
- * parenthetical in the docs. It writes the `imports` block, the tsconfig
- * `extends`, and the three scripts — the boilerplate the redesign adds in
- * exchange for deleting the plugin, the child process, and the ambient module
- * declarations.
+ * parenthetical in the docs: it writes the `imports` block, the tsconfig
+ * `extends`, and the three scripts.
  *
  * Idempotent, and it says what it changed. It merges into an existing `imports`
  * block rather than refusing, and it never overwrites a script the project

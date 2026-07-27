@@ -12,10 +12,9 @@ import type { ShinroLogger } from './logger.ts';
 import { toRelativeSpecifier } from './path.ts';
 
 /**
- * Was `validateTypeScriptConfig` — six conditions, an extends-chain reader, a
- * JSONC stripper, and a 30-line warning. `${configDir}` in the shipped base
- * config now carries `rootDirs` and `include` correctly, so this collapses to
- * one question: does this project's tsconfig know about the generated types?
+ * Warns unless the project's tsconfig knows about the generated types, which is
+ * the one question worth asking: `${configDir}` in the shipped base config
+ * carries `rootDirs` and `include` for everyone who extends it.
  */
 export async function validateTypeScriptConfig(options: {
   logger: ShinroLogger;
@@ -35,9 +34,9 @@ export async function validateTypeScriptConfig(options: {
     return;
   }
 
-  // Read as text rather than parsed: tsconfig is JSONC, and pulling a JSONC
-  // parser and an extends-chain resolver back in to answer one question the
-  // string already answers is the kind of dependency this refactor removed.
+  // Read as text rather than parsed: tsconfig is JSONC, and a JSONC parser plus
+  // an extends-chain resolver is a lot of dependency for a question the string
+  // already answers.
   //
   // Two spellings pass. Extending the shipped base is the recommended one. Naming
   // the generated types directory yourself is the other — a project that wired
@@ -57,11 +56,10 @@ export async function validateTypeScriptConfig(options: {
 }
 
 /**
- * The one piece of user boilerplate the redesign adds: `#shinro/*` has to be
- * declared in the app's package.json `imports`. Warn with the exact snippet when
- * it is missing or points somewhere other than `.shinro`. `shinro init` writes
- * the block, so this warning is for hand-wired projects and for someone who
- * edited it by hand.
+ * `#shinro/*` has to be declared in the app's package.json `imports`, so warn
+ * with the exact snippet when it is missing or points somewhere other than
+ * `.shinro`. `shinro init` writes the block, so this warning is for hand-wired
+ * projects and for someone who edited it by hand.
  *
  * A relative import is NOT a mistake and must never warn. `import { routes } from
  * '../.shinro/routes.ts'` needs no package.json at all and resolves in every

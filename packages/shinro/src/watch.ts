@@ -22,8 +22,6 @@ import { runPreload } from './preload.ts';
  * on their own.
  *
  * This is only a watcher. It spawns nothing, restarts nothing, and installs no
- * signal handler — Node still owns the process. Which is the reason there is no
- * `shinro dev`: anything that spawned the runner would be a supervisor, and a
- * supervisor owes you SIGTERM semantics within a release.
+ * signal handler — Node still owns the process.
  */
 await runPreload({ watch: true });

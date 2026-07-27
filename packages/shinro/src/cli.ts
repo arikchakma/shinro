@@ -7,8 +7,8 @@ import { createReporter } from './cli/report.ts';
 
 // `shinro generate [--watch] [--check]` is the whole CLI, plus `shinro init` to
 // write the boilerplate once. There is no `shinro dev`: `node --watch` plus the
-// `shinro/watch` preload covers dev in one process, and anything that spawns the
-// runner is the old DevelopmentProcess with a friendlier name.
+// `shinro/watch` preload covers dev in one process, and anything that spawned the
+// runner would owe you a supervisor's signal handling.
 //
 // `typegen` is registered as a hidden command rather than a citty alias, because
 // an alias would list it in `--help` — and the point of keeping it is that old

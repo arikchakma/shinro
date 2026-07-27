@@ -9,8 +9,8 @@ test('the generated router imports route modules by relative path with .ts intac
     await project.generate();
 
     const routes = await project.generated('routes.ts');
-    // The whole point of the redesign: a real file on disk, which every runner
-    // resolves without a plugin, an alias, or a compiler option.
+    // A real file on disk, which every runner resolves without a plugin, an
+    // alias, or a compiler option.
     expect(routes).toContain('from "../src/routes/health.ts"');
     expect(routes).not.toContain('shinro/routes');
   });

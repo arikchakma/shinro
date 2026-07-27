@@ -1,13 +1,9 @@
 import { parseSync } from 'oxc-parser';
 
 /**
- * The subset of an oxc AST node the scanner reads. Route and app modules are
+ * The subset of an oxc AST node the scan reads. Route and app modules are
  * inspected structurally rather than type checked, so a narrow structural view
  * keeps the traversal helpers independent of the parser's full node types.
- *
- * Moved from `server/ast.ts`. One change, and it is the point of the refactor:
- * `parseSync` comes from `oxc-parser` directly instead of being re-exported
- * through `vite`, so nothing in the core imports a bundler.
  */
 export type NodeView = {
   argument?: unknown;

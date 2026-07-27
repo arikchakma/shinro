@@ -18,13 +18,9 @@ import { routeTree } from './tree.ts';
 /**
  * `shinro generate [--watch] [--check]`
  *
- * The product. No `resolveConfig` from Vite, no plugin lookup, no dev server:
- * load config, generate, exit.
- *
- * Named for the core function it calls. The old name, `typegen`, described a
- * third of the output — `.shinro/routes.ts` is runtime code, and telling people
- * the router is a type artifact is the one belief this design can't afford.
- * `typegen` still resolves, undocumented, so existing scripts keep running.
+ * Load config, generate, exit. Named for the core function it calls rather than
+ * for its output, because `.shinro/routes.ts` is runtime code and a name like
+ * `typegen` describes a third of it.
  *
  * `--watch` debounces a watcher on the routes directory and regenerates. It
  * spawns nothing and restarts nothing; the runner is the user's business. It
@@ -35,9 +31,8 @@ import { routeTree } from './tree.ts';
  *
  * `--check` generates into memory and compares against disk. Exits non-zero on
  * a route conflict, an invalid module, or a stale artifact, and writes nothing.
- * Once no bundler is guaranteed to run this is the only place a conflict can be
- * caught, so it is the CI gate — and it is what makes committing `.shinro/` a
- * supported choice rather than a trap.
+ * No bundler is guaranteed to run, so this is the CI gate — and what makes
+ * committing `.shinro/` a supported choice rather than a trap.
  */
 export const generate = defineCommand({
   args: {
@@ -79,10 +74,10 @@ export const generate = defineCommand({
 });
 
 /**
- * `generate` under its pre-0.1 name, resolved but never listed. The fields are
- * restated rather than spread, because citty types `meta` and `args` as
- * `Resolvable` — possibly a promise — and spreading one of those is a bug in
- * every case but this one.
+ * `generate` under its former name, resolved but never listed, so existing
+ * scripts keep running. The fields are restated rather than spread, because citty
+ * types `meta` and `args` as `Resolvable` — possibly a promise — and spreading
+ * one of those is a bug in every case but this one.
  */
 export const typegen = defineCommand({
   args: generate.args,

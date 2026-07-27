@@ -28,9 +28,8 @@ export type EmitResult = {
 let stagingCounter = 0;
 
 /**
- * Every write goes through here, and here is where the new design earns its
- * keep: the user's runner is watching the filesystem, so an unconditional write
- * is a server restart.
+ * Every write goes through here, because the user's runner is watching the
+ * filesystem and an unconditional write is a server restart.
  *
  * The whole generation is assembled in a staging directory first, then promoted
  * file by file with `rename`:
@@ -43,9 +42,8 @@ let stagingCounter = 0;
  * Skipping identical content is not an optimisation, it is load-bearing. With
  * `shinro/generate` as a `--import` preload, generation runs on every restart,
  * so an unconditional write bumps the mtime of a file the runner is watching,
- * which triggers a restart, which regenerates, which writes again. Verified in
- * both directions: unconditional writes restart forever, compare-then-skip
- * settles at exactly one restart per real change.
+ * which triggers a restart, which regenerates, which writes again — a loop that
+ * only compare-then-skip settles.
  *
  * `dry` performs the comparison and reports what would change without touching
  * anything, which is all `generate --check` is. One code path decides both what
@@ -108,8 +106,7 @@ export async function emit(
  *
  * There is no lock file. Two processes generating at once — a `tsdown` build
  * beside a dev server — each stage their own tree and promote by rename, and
- * because codegen is deterministic they are promoting identical bytes. The
- * previous design needed a lock precisely because it wrote in place.
+ * because codegen is deterministic they are promoting identical bytes.
  */
 async function promote(
   outputDirectory: string,

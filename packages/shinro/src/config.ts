@@ -5,15 +5,13 @@ import { OUTPUT_DIRECTORY } from './constants.ts';
 import type { ShinroLogger } from './core/logger.ts';
 
 /**
- * Everything left after tsdown took over `entry` and `build`. All of it is
+ * Where the app and its routes live, and nothing else. All of it is
  * JSON-serializable, so there is no config loader and no jiti/unconfig
  * dependency — `shinro.config.json` or `package.json#shinro`.
  *
- * `basePath` is gone. It was a second prefix mechanism, applying to file routes
- * but not to the app, so an app with a base path hand-wrote the prefix on its
- * manual routes and nothing checked the two halves agreed.
- * `defineApp().basePath('/v1')` is Hono's own, covers both, and stays in the
- * schema so the generated client follows it for free.
+ * There is no `basePath`: `defineApp().basePath('/v1')` is Hono's own, it covers
+ * the app's manual routes as well as the file routes, and it stays in the schema
+ * so the generated client follows it for free.
  */
 export type ShinroConfig = {
   app?: string;
@@ -22,16 +20,9 @@ export type ShinroConfig = {
 };
 
 /**
- * `rpc` is gone, and nothing replaced it.
- *
- * `enabled` was a toggle on `client.ts`, which is one small type-only file that
- * costs nothing to emit and is the reason most people are here. Off is not a
- * state worth supporting.
- *
- * `outDir` was never configurable in practice: `shinro/tsconfig` hardcodes
+ * The output directory is not configurable: `shinro/tsconfig` hardcodes
  * `${configDir}/.shinro` in both `rootDirs` and `include`, so any other value
- * type-checks against declarations TypeScript can't find. A knob that has one
- * working setting is not a knob.
+ * type-checks against declarations TypeScript cannot find.
  */
 export type ResolvedShinroConfig = Required<ShinroConfig> & {
   root: string;

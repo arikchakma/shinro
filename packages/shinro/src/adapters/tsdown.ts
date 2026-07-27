@@ -15,7 +15,7 @@ import { createLogger } from '../core/logger.ts';
  *
  * Never load-bearing. An app that deletes this plugin and runs `shinro generate`
  * in a package script gets byte-identical output — the plugin only removes a
- * manual step. If that stops being true, a capability leaked out of the core.
+ * manual step.
  *
  * `config` is passed to `loadConfig` as overrides, so config-in-code works here
  * for anyone who would rather not keep a `shinro.config.json`.

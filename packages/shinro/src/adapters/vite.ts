@@ -21,16 +21,11 @@ type ResolvedViteConfig = {
 };
 
 /**
- * The same ~40 lines for anyone already on Vite/vp. Generates in
- * `configResolved` and watches the route tree in dev. `vp dev` projects keep
- * working; Vite is demoted from the integration to one adapter among several.
+ * Generation for anyone already on Vite/vp: `configResolved` generates, and dev
+ * watches the route tree.
  *
- * Gone from the old plugin: `config()` build coercion (rolldownOptions,
- * preserveModules, ssr.external), `generateBundle` single-artifact assertions,
- * DevelopmentProcess, SHINRO_DEV_CHILD, and the double watcher.
- *
- * Never load-bearing: an app that deletes this plugin and runs
- * `shinro generate` in a script gets byte-identical output.
+ * Never load-bearing. An app that deletes this plugin and runs `shinro generate`
+ * in a script gets byte-identical output.
  */
 export function shinro(config?: ShinroConfig & { cwd?: string }): {
   buildEnd: () => Promise<void>;
@@ -68,11 +63,9 @@ export function shinro(config?: ShinroConfig & { cwd?: string }): {
     },
     /**
      * The bare specifiers, kept working. `#shinro/routes` is the documented form
-     * because it resolves in every runner; this alias exists so a project that
-     * already wrote `shinro/routes` against the old plugin keeps building while
-     * it migrates. It resolves nothing new — the file is the same file — and no
-     * other adapter offers it, which is the point: a project relying on this is
-     * relying on Vite.
+     * because it resolves in every runner; these aliases point at the same files
+     * and only this adapter offers them, so a project relying on them is relying
+     * on Vite.
      */
     resolveId: (id) => {
       if (!outputDirectory) {

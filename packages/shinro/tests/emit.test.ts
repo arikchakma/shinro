@@ -172,7 +172,7 @@ test('--check reports drift without repairing it', async () => {
     expect(result.written).toContain(
       resolve(project.outputDirectory, 'routes.ts')
     );
-    // Still the old router on disk: the CI gate reports, the developer decides.
+    // The router on disk is untouched: the CI gate reports, the developer decides.
     expect(await project.generated('routes.ts')).not.toContain('/extra');
   });
 });

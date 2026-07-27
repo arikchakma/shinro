@@ -16,9 +16,8 @@ import { runPreload } from './preload.ts';
  * loads an entire graph before evaluating any of it, so a `src/dev.ts` that did
  * `import 'shinro/generate'; import './server.ts';` would have `#shinro/routes`
  * resolved before generation ran — fine once `.shinro` exists, broken on a cold
- * clone, which is the worst shape a bug can take. `--import` modules are a
- * separate graph, evaluated to completion before the entry is resolved. That is
- * the same guarantee loader hooks rely on.
+ * clone. `--import` modules are a separate graph, evaluated to completion before
+ * the entry is resolved.
  *
  * This is also the form that passes through `NODE_OPTIONS` for a runner with its
  * own watcher:

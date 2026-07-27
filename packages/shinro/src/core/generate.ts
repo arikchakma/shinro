@@ -28,10 +28,6 @@ export type GenerateResult = {
 /**
  * The single entry point for everything Shinro does: scan, validate, emit.
  *
- * Was `generateSources(resolvedConfig, options, outDir)` in server/codegen.ts —
- * the only things it ever read off Vite's ResolvedConfig were `root` and
- * `logger`, so it takes them directly.
- *
  * `check` compares the generation against disk and writes nothing. It is the
  * same code path, one flag deep, which is the only way the CI gate and the build
  * can be guaranteed to agree.

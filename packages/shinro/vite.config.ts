@@ -4,10 +4,9 @@ import { defineConfig } from 'vite-plus';
 
 const packageRoot = fileURLToPath(new URL('.', import.meta.url));
 
-// No `shinro()` here any more, and that absence is the headline of the redesign:
-// generating the test fixture's routes is a package script (`vp run generate`,
-// via `pretest`), not a side effect of resolving a Vite config. What is left is
-// the toolchain this package needs to test and pack itself.
+// No `shinro()` plugin here: generating the test fixture's routes is a package
+// script (`vp run generate`, via `pretest`), not a side effect of resolving a Vite
+// config. What is left is the toolchain this package needs to test and pack itself.
 export default defineConfig({
   root: packageRoot,
   resolve: {

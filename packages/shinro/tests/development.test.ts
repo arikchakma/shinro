@@ -158,8 +158,8 @@ test('the preload refuses to start a server it could not generate for', async ()
     expect(result.code).not.toBe(0);
     expect(result.output).toContain('Route conflict');
     expect(result.output).toContain('Nothing has been generated yet');
-    // The failure a cold clone used to hit was Node's, about a file Shinro was
-    // supposed to write.
+    // Without this the cold clone would fail as Node's error about a missing
+    // module, which says nothing about the route conflict that caused it.
     expect(result.output).not.toContain('ERR_MODULE_NOT_FOUND');
   } finally {
     await rm(root, { force: true, recursive: true });

@@ -1,7 +1,3 @@
-/**
- * Replaces Vite's `Logger` across the core. Three methods is the whole surface
- * the scanner, codegen, and validators ever used.
- */
 export type ShinroLogger = {
   error: (message: string) => void;
   info: (message: string) => void;
@@ -10,9 +6,8 @@ export type ShinroLogger = {
 
 /**
  * Writes to the console. Messages already carry the `[shinro]` prefix from
- * wherever they were raised, so the logger adds nothing and stays a pass-through
- * — one prefix, applied at the source, survives being forwarded into a host's
- * logger by `fromHost`.
+ * wherever they were raised, so the logger stays a pass-through — one prefix,
+ * applied at the source, survives being forwarded into a host's logger.
  */
 export function createLogger(): ShinroLogger {
   return {
@@ -22,7 +17,6 @@ export function createLogger(): ShinroLogger {
   };
 }
 
-/** Wraps a host logger so adapters can forward into Vite/tsdown output. */
 export function fromHost(host: Partial<ShinroLogger>): ShinroLogger {
   const fallback = createLogger();
 
