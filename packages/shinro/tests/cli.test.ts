@@ -151,7 +151,7 @@ test('init writes the imports block, the tsconfig, and the scripts', async () =>
       '#shinro/routes': './.shinro/routes.ts',
     });
     expect(packageJson.scripts.dev).toBe(
-      'node --watch --import shinro/watch src/server.ts'
+      'node --watch --watch-preserve-output --import shinro/watch src/server.ts'
     );
     expect(packageJson.scripts.prepare).toBe('shinro generate');
     await expect(readFile(`${root}/tsconfig.json`, 'utf8')).resolves.toContain(

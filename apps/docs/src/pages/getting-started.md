@@ -37,7 +37,7 @@ shinro init
     "#shinro/client": "./.shinro/client.ts"
   },
   "scripts": {
-    "dev": "node --watch --import shinro/watch src/server.ts",
+    "dev": "node --watch --watch-preserve-output --import shinro/watch src/server.ts",
     "prepare": "shinro generate",
     "check": "shinro generate --check && tsc --noEmit"
   }
@@ -79,7 +79,7 @@ dist/
 With that in place, start the dev loop:
 
 ```sh
-node --watch --import shinro/watch src/server.ts
+node --watch --watch-preserve-output --import shinro/watch src/server.ts
 ```
 
 One process, no supervisor. The [CLI](/cli) page covers the rest of the commands.

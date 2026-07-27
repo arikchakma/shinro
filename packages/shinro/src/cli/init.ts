@@ -147,9 +147,12 @@ async function updatePackageJson(
   return changes;
 }
 
+// `--watch-preserve-output` because Node resets the terminal on every restart
+// without it, wiping whatever the last generation printed — a route conflict, a
+// warning, or the stack trace the restart was meant to fix.
 const SCRIPTS = {
   check: 'shinro generate --check && tsc --noEmit',
-  dev: 'node --watch --import shinro/watch src/server.ts',
+  dev: 'node --watch --watch-preserve-output --import shinro/watch src/server.ts',
   prepare: 'shinro generate',
 };
 

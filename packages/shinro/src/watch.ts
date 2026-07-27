@@ -3,7 +3,7 @@ import { runPreload } from './preload.ts';
 /**
  * `shinro/watch` — the documented dev loop, and the whole of it:
  *
- *   node --watch --import shinro/watch src/server.ts
+ *   node --watch --watch-preserve-output --import shinro/watch src/server.ts
  *
  * Generates once before the entry resolves, then keeps one debounced watcher on
  * the routes directory for the life of the process. Plain `--watch` is graph

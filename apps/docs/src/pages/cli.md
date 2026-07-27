@@ -52,10 +52,12 @@ Generation is atomic: files are assembled in a staging directory and promoted wi
 ## Development
 
 ```sh
-node --watch --import shinro/watch src/server.ts
+node --watch --watch-preserve-output --import shinro/watch src/server.ts
 ```
 
 That is the whole dev loop, in one process. `shinro/watch` is a side-effecting subpath for `node --import`: it generates once — before the entry is resolved, which is why it must be `--import` and not an import inside a dev entry — and then keeps one debounced watcher on the routes directory.
+
+`--watch-preserve-output` is Node's own flag, and it earns its place: without it Node resets the terminal on every restart, wiping the generation output, the route conflict, or the stack trace you were reading. Drop it if you would rather have a clean screen per restart.
 
 Plain `--watch` is graph watching, and the graph is enough because the one thing it cannot see funnels through a file it can. A brand-new route file is invisible to a graph watcher, since nothing imports it yet; the watcher regenerates, `routes.ts` changes, and `routes.ts` _is_ in the graph through `#shinro/routes`, so Node restarts. One restart per real change.
 
@@ -64,7 +66,7 @@ Two alternatives, both one line:
 ```sh
 # a directory restart instead of a resident watcher (macOS and Windows only:
 # Node restricts --watch-path to those platforms)
-node --watch --watch-path=src --import shinro/generate src/server.ts
+node --watch --watch-preserve-output --watch-path=src --import shinro/generate src/server.ts
 
 # a runner with its own watcher
 NODE_OPTIONS="--import shinro/generate" tsx watch --include "src/routes/**" src/server.ts

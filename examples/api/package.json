@@ -14,7 +14,7 @@
   "scripts": {
     "build": "vp pack",
     "check": "vp run generate && vp check",
-    "dev": "node --watch --import shinro/watch src/server.ts",
+    "dev": "node --watch --watch-preserve-output --import shinro/watch src/server.ts",
     "generate": "vp run shinro#build && shinro generate",
     "prepare": "vp run generate",
     "start": "node dist/server.mjs",

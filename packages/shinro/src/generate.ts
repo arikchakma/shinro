@@ -4,7 +4,7 @@ import { runPreload } from './preload.ts';
  * `shinro/generate` — a side-effecting module for `node --import`. Generates
  * once and returns.
  *
- *   node --watch --watch-path=src --import shinro/generate src/server.ts
+ *   node --watch --watch-preserve-output --watch-path=src --import shinro/generate src/server.ts
  *
  * This is the preload for a runner that watches a *directory*: the restart
  * re-runs it, so a brand-new route file is picked up by the next boot.
