@@ -3,7 +3,7 @@ import type { ShinroMiddleware, ProjectEnv } from "shinro/app";
 
 export namespace Route {
   export type Middleware = ShinroMiddleware<{
-    path: "/v1";
+    path: "/";
     env: ProjectEnv;
   }>;
 }

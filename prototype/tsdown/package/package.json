@@ -6,13 +6,15 @@
   "bin": {
     "shinro": "./dist/cli.mjs"
   },
-  "files": ["dist", "tsconfig.base.json", "schema.json"],
+  "files": ["dist", "tsconfig.base.json", "tsconfig.emit.json", "schema.json"],
   "exports": {
     ".": "./dist/index.mjs",
     "./app": "./dist/app.mjs",
+    "./generate": "./dist/generate.mjs",
     "./tsdown": "./dist/adapters/tsdown.mjs",
     "./vite": "./dist/adapters/vite.mjs",
     "./tsconfig": "./tsconfig.base.json",
+    "./tsconfig/emit": "./tsconfig.emit.json",
     "./package.json": "./package.json"
   },
   "dependencies": {

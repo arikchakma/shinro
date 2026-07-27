@@ -3,7 +3,7 @@ import type { ShinroRoute, ProjectEnv } from "shinro/app";
 
 export namespace Route {
   export type Handler = ShinroRoute<{
-    path: "/v1/users/:id";
+    path: "/users/:id";
     params: { "id": string };
     env: ProjectEnv;
   }>;

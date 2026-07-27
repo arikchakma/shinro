@@ -13,11 +13,11 @@ import route3Middleware0 from "../src/routes/_middleware.ts";
 
 export function routes() {
   return new Hono<ProjectEnv>()
-    .get("/v1", ...route0Middleware0, ...route0GET)
-    .get("/v1/health", ...route1Middleware0, ...route1GET)
-    .get("/v1/users", ...route2Middleware0, ...route2GET)
-    .post("/v1/users", ...route2Middleware0, ...route2POST)
-    .get("/v1/users/:id", ...route3Middleware0, ...route3GET);
+    .get("/", ...route0Middleware0, ...route0GET)
+    .get("/health", ...route1Middleware0, ...route1GET)
+    .get("/users", ...route2Middleware0, ...route2GET)
+    .post("/users", ...route2Middleware0, ...route2POST)
+    .get("/users/:id", ...route3Middleware0, ...route3GET);
 }
 
 export type Routes = ReturnType<typeof routes>;

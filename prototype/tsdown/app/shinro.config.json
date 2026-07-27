@@ -1,11 +1,6 @@
 {
   "$schema": "./node_modules/shinro/schema.json",
-  "basePath": "/v1",
   "routes": "src/routes",
   "app": "src/app.ts",
-  "ignoredRouteFiles": ["**/*.spec.ts"],
-  "rpc": {
-    "enabled": true,
-    "outDir": ".shinro"
-  }
+  "ignoredRouteFiles": ["**/*.spec.ts"]
 }

@@ -5,19 +5,19 @@
   "type": "module",
   "imports": {
     "#shinro/routes": "./.shinro/routes.ts",
-    "#shinro/client": "./.shinro/client.ts",
-    "#shinro/rpc": "./.shinro/rpc.ts"
+    "#shinro/client": "./.shinro/client.ts"
   },
   "exports": {
-    "./client": "./.shinro/client.ts",
-    "./rpc": "./.shinro/rpc.ts"
+    "./client": "./.shinro/client.ts"
   },
   "scripts": {
-    "typegen": "shinro typegen",
-    "dev": "shinro typegen && concurrently -k -n shinro,server \"shinro typegen --watch\" \"tsx watch src/server.ts\"",
+    "generate": "shinro generate",
+    "prepare": "shinro generate",
+    "dev": "node --watch --watch-path=src --import shinro/generate src/server.ts",
+    "dev:tsx": "NODE_OPTIONS=\"--import shinro/generate\" tsx watch --include \"src/routes/**\" src/server.ts",
     "build": "tsdown",
     "start": "node dist/server.mjs",
-    "check": "shinro typegen && tsc --noEmit"
+    "check": "shinro generate --check && tsc --noEmit"
   },
   "dependencies": {
     "@hono/node-server": "catalog:",
@@ -27,10 +27,12 @@
   },
   "devDependencies": {
     "@types/node": "^26.1.1",
-    "concurrently": "^9.2.0",
     "shinro": "workspace:*",
     "tsdown": "^0.15.0",
     "tsx": "^4.20.0",
     "typescript": "^7.0.2"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   }
 }
