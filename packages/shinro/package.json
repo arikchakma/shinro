@@ -89,6 +89,7 @@
     "test": "vp test"
   },
   "dependencies": {
+    "citty": "^0.2.2",
     "oxc-parser": "^0.90.0"
   },
   "devDependencies": {

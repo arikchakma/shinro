@@ -1,10 +1,19 @@
-import { relative } from 'node:path';
+import { readFile } from 'node:fs/promises';
+import { relative, resolve } from 'node:path';
 
+import { defineCommand } from 'citty';
+
+import type { ResolvedShinroConfig } from '../config.ts';
 import { findProjectRoot, loadConfig } from '../config.ts';
-import { GENERATED_FORMAT } from '../constants.ts';
+import { GENERATED_FORMAT, MANIFEST_FILE } from '../constants.ts';
 import { generate as generateCore } from '../core/generate.ts';
-import { createLogger } from '../core/logger.ts';
+import type { ShinroLogger } from '../core/logger.ts';
 import { watch } from '../core/watch.ts';
+import { unknownOptions } from './args.ts';
+import { createReporter } from './report.ts';
+import { dim, green } from './style.ts';
+import type { ManifestRoute } from './tree.ts';
+import { routeTree } from './tree.ts';
 
 /**
  * `shinro generate [--watch] [--check]`
@@ -30,21 +39,60 @@ import { watch } from '../core/watch.ts';
  * caught, so it is the CI gate — and it is what makes committing `.shinro/` a
  * supported choice rather than a trap.
  */
-export async function generate(argv: string[]): Promise<number> {
-  const logger = createLogger();
-  const flags = new Set(argv.filter((argument) => argument.startsWith('-')));
-  const unknown = [...flags].filter(
-    (flag) => flag !== '--watch' && flag !== '--check'
-  );
+export const generate = defineCommand({
+  args: {
+    check: {
+      description:
+        'Compare against disk, write nothing, exit non-zero if stale',
+      type: 'boolean',
+    },
+    watch: {
+      description: 'Regenerate whenever the route tree changes',
+      type: 'boolean',
+    },
+  },
+  meta: {
+    description: 'Write .shinro from the route tree',
+    name: 'generate',
+  },
+  async run({ args, rawArgs }) {
+    const unknown = unknownOptions(rawArgs, ['--check', '--watch']);
 
-  if (unknown.length > 0) {
-    logger.error(
-      `[shinro] Unknown option ${unknown.join(', ')}.\nUsage: shinro generate [--watch] [--check]`
-    );
-    return 1;
-  }
+    if (unknown.length > 0) {
+      createReporter().error(
+        `[shinro] Unknown option ${unknown.join(', ')}.\nUsage: shinro generate [--watch] [--check]`
+      );
+      process.exitCode = 1;
+      return;
+    }
 
-  if (flags.has('--watch') && flags.has('--check')) {
+    process.exitCode = await run({ check: args.check, watch: args.watch });
+  },
+});
+
+/**
+ * `generate` under its pre-0.1 name, resolved but never listed. The fields are
+ * restated rather than spread, because citty types `meta` and `args` as
+ * `Resolvable` — possibly a promise — and spreading one of those is a bug in
+ * every case but this one.
+ */
+export const typegen = defineCommand({
+  args: generate.args,
+  meta: {
+    description: 'Deprecated alias for generate',
+    hidden: true,
+    name: 'typegen',
+  },
+  run: generate.run,
+});
+
+async function run(flags: {
+  check?: boolean;
+  watch?: boolean;
+}): Promise<number> {
+  const logger = createReporter();
+
+  if (flags.watch === true && flags.check === true) {
     logger.error(
       '[shinro] --watch and --check are mutually exclusive: one writes whenever the tree changes, the other never writes.'
     );
@@ -56,44 +104,24 @@ export async function generate(argv: string[]): Promise<number> {
   try {
     const config = await loadConfig(root, logger);
 
-    if (flags.has('--watch')) {
-      await watch({
-        config,
-        // A watcher that exits on the typo it was started to catch is a worse
-        // tool than one that prints it and stays up.
-        initial: 'report',
-        // The one place the watcher may hold the event loop open: here it is the
-        // whole process, rather than a passenger in someone's server.
-        keepAlive: true,
-        logger,
-        onGenerate: (result) => {
-          for (const file of result.written) {
-            logger.info(`[shinro] wrote ${relative(root, file)}`);
-          }
-          for (const file of result.removed) {
-            logger.info(`[shinro] removed ${relative(root, file)}`);
-          }
-        },
-      });
-      logger.info(`[shinro] watching ${config.routes}`);
-      // Never resolves; the watcher holds the event loop open. Nothing here
-      // installs a signal handler, so Ctrl-C behaves the way Ctrl-C behaves.
-      return await new Promise<number>(() => {});
+    if (flags.watch === true) {
+      return await watchLines(config, logger, root);
     }
 
     const result = await generateCore({
-      check: flags.has('--check'),
+      check: flags.check === true,
       config,
       logger,
     });
     const drifted = [...result.written, ...result.removed];
 
-    if (!flags.has('--check')) {
+    if (flags.check !== true) {
       logger.info(
         drifted.length === 0
           ? `[shinro] ${relative(root, result.outputDirectory)} is up to date`
           : `[shinro] wrote ${relative(root, result.outputDirectory)}`
       );
+      await printTree(config);
       return 0;
     }
 
@@ -121,4 +149,153 @@ export async function generate(argv: string[]): Promise<number> {
     logger.error(error instanceof Error ? error.message : String(error));
     return 1;
   }
+}
+
+async function watchLines(
+  config: ResolvedShinroConfig,
+  logger: ShinroLogger,
+  root: string
+): Promise<number> {
+  // The first generation runs inside `watch`, before the line below has been
+  // printed. Its writes are worth announcing; its "nothing changed" is not,
+  // because nothing has told the user a watcher exists yet.
+  let started = false;
+  const base = resolve(root, config.routes);
+  // Named relative to the routes directory, which the `watching …` line above
+  // already spelled out in full. Repeating `tests/fixtures/basic/src/routes/`
+  // on every save was most of the line and none of the information.
+  const trigger = (changed: string[]): string => {
+    const names = changed.map((file) => relative(base, file));
+
+    if (names.length === 0) {
+      return '';
+    }
+
+    return `${names.slice(0, 2).join(', ')}${
+      names.length > 2 ? ` +${names.length - 2} more` : ''
+    }  `;
+  };
+
+  await watch({
+    config,
+    initial: 'report',
+    keepAlive: true,
+    logger,
+    onGenerate: (result, changed) => {
+      const drifted = result.written.length + result.removed.length;
+
+      // Most edits change a handler body without changing the route tree, so
+      // `.shinro` is already correct and nothing is written. Saying nothing
+      // then is indistinguishable from a dead watcher — but announcing it
+      // before `watching …` has printed would announce a watcher the user has
+      // not been told about.
+      if (drifted === 0) {
+        if (started) {
+          logger.info(`[shinro] ${trigger(changed)}${dim('up to date')}`);
+        }
+        return;
+      }
+
+      // One line per action rather than one per file. A single new route
+      // touches three artifacts, and three lines that each say `wrote` are
+      // three copies of the same fact. Written past the reporter because the
+      // hanging indent is a layout the `- item` convention cannot express.
+      for (const line of [
+        ...action('wrote', result.written, root),
+        ...action('removed', result.removed, root),
+      ]) {
+        console.info(line);
+      }
+    },
+  });
+  logger.info(`[shinro] watching ${config.routes}`);
+  started = true;
+  // No tree here. A watcher prints once per edit and the tree is fifteen lines;
+  // reprinting it on every save buries the one line that says what changed, and
+  // the tree you want is the one `shinro generate` already showed you.
+  //
+  // Never resolves; the watcher holds the event loop open. Nothing here installs
+  // a signal handler, so Ctrl-C behaves the way Ctrl-C behaves.
+  return await new Promise<number>(() => {});
+}
+
+/**
+ * Read back what was written and draw it. The manifest is the record of the
+ * generation, so printing from it says what is actually on disk rather than
+ * what the scan believed a moment earlier.
+ *
+ * Written straight to the console rather than through the reporter: the tree is
+ * presentation, and a `✓` in front of every branch would be noise.
+ *
+ * `--check` deliberately never calls this: it is a gate, and its output is an
+ * exit code plus the one line that explains it.
+ */
+async function printTree(config: ResolvedShinroConfig): Promise<void> {
+  let routes: ManifestRoute[];
+
+  try {
+    const manifest = JSON.parse(
+      await readFile(resolve(config.outputDirectory, MANIFEST_FILE), 'utf8')
+    ) as { routes?: ManifestRoute[] };
+    routes = manifest.routes ?? [];
+  } catch {
+    // No manifest, or one nobody can parse. The generation it describes either
+    // failed or never ran, and both already said so.
+    return;
+  }
+
+  if (routes.length === 0) {
+    return;
+  }
+
+  console.info(
+    ['', ...routeTree(routes), '', dim(`  ${count(routes.length)}`), ''].join(
+      '\n'
+    )
+  );
+}
+
+function count(routes: number): string {
+  return `${routes} route${routes === 1 ? '' : 's'}`;
+}
+
+/** Width of the widest verb, so `wrote` and `removed` share a column. */
+const LABEL = 'removed'.length;
+/** `✓ ` plus the label column plus its trailing space. */
+const HANGING = 2 + LABEL + 1;
+
+/**
+ * One `wrote`/`removed` line, its file list filled to the terminal width and
+ * wrapped under a hanging indent so continuations line up with the first name
+ * instead of the symbol.
+ */
+function action(label: string, paths: string[], root: string): string[] {
+  if (paths.length === 0) {
+    return [];
+  }
+
+  const width = Math.max(process.stdout.columns ?? 80, HANGING + 20);
+  const names = paths.map((file) => relative(root, file)).sort();
+  const rows: string[] = [];
+  let row = '';
+
+  for (const [index, name] of names.entries()) {
+    const piece = index === names.length - 1 ? name : `${name},`;
+
+    if (row === '') {
+      row = piece;
+    } else if (HANGING + row.length + 1 + piece.length <= width) {
+      row += ` ${piece}`;
+    } else {
+      rows.push(row);
+      row = piece;
+    }
+  }
+  rows.push(row);
+
+  return rows.map((line, index) =>
+    index === 0
+      ? `${green('✓')} ${label.padEnd(LABEL)} ${dim(line)}`
+      : `${' '.repeat(HANGING)}${dim(line)}`
+  );
 }

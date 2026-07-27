@@ -639,7 +639,56 @@ A `.ts` entry needs Node ≥23.6 for unflagged type stripping, or 22.12 with
 shinro generate           # write .shinro from the route tree
 shinro generate --watch   # for a runner that can do neither half itself
 shinro generate --check   # compare against disk, write nothing, exit non-zero on drift
+shinro init               # add the imports block, tsconfig, and scripts
 ```
+
+Run any of them with `--help` for the flags.
+
+`generate` prints what it wrote as a tree:
+
+```
+✓ wrote .shinro
+
+  /
+  ├─ api                 GET
+  │  └─ users            GET
+  │     └─ :id           GET PATCH
+  ├─ health              GET POST
+  └─ teams
+     └─ :teamId
+        └─ members
+           └─ :memberId  GET
+
+  6 routes
+```
+
+Only on a one-shot run. `--watch` prints one line per save and no tree —
+fifteen lines on every keystroke would bury the thing you are watching for:
+
+```
+✓ watching src/routes
+✓ health.ts  up to date
+✓ wrote   .shinro/manifest.json, .shinro/routes.ts,
+          .shinro/types/src/routes/+types/users/$id.d.ts
+✓ removed .shinro/types/src/routes/+types/users/$id.d.ts
+```
+
+One line per action rather than per file, wrapped under a hanging indent. `up
+to date` is the common case — editing a handler body does not change the route
+tree, so nothing is written, and the triggering file is named relative to the
+routes directory the line above already spelled out.
+
+`--check` prints no tree either: it is a gate, and its output is an exit code
+plus the line that explains it.
+
+```
+✗ Route conflict at "/api/users/:id"
+    src/routes/api/users/$id.ts
+    src/routes/api/users/$id/index.ts
+```
+
+Plain lines throughout, so it reads the same in a terminal, a pipe, and a CI
+log — colour is dropped when stdout is not a TTY or `NO_COLOR` is set.
 
 `--check` is the CI gate. Because no bundler is guaranteed to run, `generate` is
 the only moment a route conflict can be caught, and `--check` is how CI fails on

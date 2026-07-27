@@ -1,41 +1,37 @@
 #!/usr/bin/env node
-import { generate } from './cli/generate.ts';
+import { defineCommand, renderUsage, runMain } from 'citty';
+
+import { generate, typegen } from './cli/generate.ts';
 import { init } from './cli/init.ts';
+import { createReporter } from './cli/report.ts';
 
 // `shinro generate [--watch] [--check]` is the whole CLI, plus `shinro init` to
 // write the boilerplate once. There is no `shinro dev`: `node --watch` plus the
 // `shinro/watch` preload covers dev in one process, and anything that spawns the
 // runner is the old DevelopmentProcess with a friendlier name.
 //
-// `typegen` is kept as an undocumented alias for `generate`.
-const USAGE = [
-  'Usage: shinro <command> [options]',
-  '',
-  'Commands:',
-  '  generate [--watch] [--check]  Write .shinro from the route tree',
-  '  init [--dry-run]              Add the imports block, tsconfig, and scripts',
-].join('\n');
+// `typegen` is registered as a hidden command rather than a citty alias, because
+// an alias would list it in `--help` — and the point of keeping it is that old
+// scripts run, not that anyone writes it again.
+const main = defineCommand({
+  meta: {
+    description:
+      'Opinionated file-based routing for Hono with end-to-end type safety.',
+    name: 'shinro',
+  },
+  subCommands: { generate, init, typegen },
+});
 
-const [command, ...argv] = process.argv.slice(2);
+// citty reports an unknown command after printing usage, unquoted. The quotes
+// are the difference between "we did not recognise this word" and a sentence
+// that happens to contain the word, so the check lives here instead.
+const COMMANDS = new Set(['generate', 'init', 'typegen']);
+const [first] = process.argv.slice(2);
 
-switch (command) {
-  case 'generate':
-  case 'typegen': {
-    process.exitCode = await generate(argv);
-    break;
-  }
-  case 'init': {
-    process.exitCode = await init(argv);
-    break;
-  }
-  case '--help':
-  case '-h':
-  case undefined: {
-    console.info(USAGE);
-    break;
-  }
-  default: {
-    console.error(`[shinro] Unknown command "${command}".\n${USAGE}`);
-    process.exitCode = 1;
-  }
+if (first !== undefined && !first.startsWith('-') && !COMMANDS.has(first)) {
+  createReporter().error(`[shinro] Unknown command "${first}".`);
+  console.error(`\n${await renderUsage(main)}`);
+  process.exitCode = 1;
+} else {
+  await runMain(main);
 }

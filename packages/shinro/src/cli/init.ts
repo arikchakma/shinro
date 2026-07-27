@@ -1,6 +1,8 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { relative, resolve } from 'node:path';
 
+import { defineCommand } from 'citty';
+
 import { findProjectRoot } from '../config.ts';
 import {
   CLIENT_FILE,
@@ -9,7 +11,8 @@ import {
   ROUTES_FILE,
   ROUTES_SPECIFIER,
 } from '../constants.ts';
-import { createLogger } from '../core/logger.ts';
+import { unknownOptions } from './args.ts';
+import { createReporter } from './report.ts';
 
 /**
  * `shinro init [--dry-run]`
@@ -25,9 +28,34 @@ import { createLogger } from '../core/logger.ts';
  * already defines: a project that runs `bun --watch` has made a decision, and
  * `init` is not the place to overrule it.
  */
-export async function init(argv: string[]): Promise<number> {
-  const logger = createLogger();
-  const dryRun = argv.includes('--dry-run');
+export const init = defineCommand({
+  args: {
+    'dry-run': {
+      description: 'Report the changes without writing them',
+      type: 'boolean',
+    },
+  },
+  meta: {
+    description: 'Add the imports block, tsconfig, and scripts',
+    name: 'init',
+  },
+  async run({ args, rawArgs }) {
+    const unknown = unknownOptions(rawArgs, ['--dry-run']);
+
+    if (unknown.length > 0) {
+      createReporter().error(
+        `[shinro] Unknown option ${unknown.join(', ')}.\nUsage: shinro init [--dry-run]`
+      );
+      process.exitCode = 1;
+      return;
+    }
+
+    process.exitCode = await run(args['dry-run'] === true);
+  },
+});
+
+async function run(dryRun: boolean): Promise<number> {
+  const logger = createReporter();
   const root = await findProjectRoot();
   const changes: string[] = [];
 
