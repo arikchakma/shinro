@@ -37,6 +37,23 @@ test('generate writes the artifacts and reports where', async () => {
   });
 });
 
+test('generate summarises rather than listing every route', async () => {
+  await withCliProject('cli-summary', async (root) => {
+    const quiet = await run(['generate'], root);
+
+    // `generate` runs from `prepare`, so it lands in every install and every CI
+    // job. A few hundred routes must not become a few hundred lines there.
+    expect(quiet.stdout).toContain('1 route');
+    expect(quiet.stdout).not.toContain('└─');
+    expect(quiet.stdout.trimEnd().split('\n')).toHaveLength(1);
+
+    const asked = await run(['generate', '--tree'], root);
+
+    expect(asked.code).toBe(0);
+    expect(asked.stdout).toContain('└─ health');
+  });
+});
+
 test('generate says so when there was nothing to write', async () => {
   await withCliProject('cli-idempotent', async (root) => {
     await run(['generate'], root);

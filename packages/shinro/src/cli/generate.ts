@@ -46,6 +46,10 @@ export const generate = defineCommand({
         'Compare against disk, write nothing, exit non-zero if stale',
       type: 'boolean',
     },
+    tree: {
+      description: 'Print the route tree instead of just the count',
+      type: 'boolean',
+    },
     watch: {
       description: 'Regenerate whenever the route tree changes',
       type: 'boolean',
@@ -56,17 +60,21 @@ export const generate = defineCommand({
     name: 'generate',
   },
   async run({ args, rawArgs }) {
-    const unknown = unknownOptions(rawArgs, ['--check', '--watch']);
+    const unknown = unknownOptions(rawArgs, ['--check', '--tree', '--watch']);
 
     if (unknown.length > 0) {
       createReporter().error(
-        `[shinro] Unknown option ${unknown.join(', ')}.\nUsage: shinro generate [--watch] [--check]`
+        `[shinro] Unknown option ${unknown.join(', ')}.\nUsage: shinro generate [--watch] [--check] [--tree]`
       );
       process.exitCode = 1;
       return;
     }
 
-    process.exitCode = await run({ check: args.check, watch: args.watch });
+    process.exitCode = await run({
+      check: args.check,
+      tree: args.tree,
+      watch: args.watch,
+    });
   },
 });
 
@@ -88,6 +96,7 @@ export const typegen = defineCommand({
 
 async function run(flags: {
   check?: boolean;
+  tree?: boolean;
   watch?: boolean;
 }): Promise<number> {
   const logger = createReporter();
@@ -116,12 +125,20 @@ async function run(flags: {
     const drifted = [...result.written, ...result.removed];
 
     if (flags.check !== true) {
+      const routes = await readManifest(config);
+      const where = relative(root, result.outputDirectory);
+
       logger.info(
-        drifted.length === 0
-          ? `[shinro] ${relative(root, result.outputDirectory)} is up to date`
-          : `[shinro] wrote ${relative(root, result.outputDirectory)}`
+        `${
+          drifted.length === 0
+            ? `[shinro] ${where} is up to date`
+            : `[shinro] wrote ${where}`
+        }${dim(` · ${count(routes.length)}`)}`
       );
-      await printTree(config);
+
+      if (flags.tree === true) {
+        console.info(['', ...routeTree(routes), ''].join('\n'));
+      }
       return 0;
     }
 
@@ -220,39 +237,24 @@ async function watchLines(
 }
 
 /**
- * Read back what was written and draw it. The manifest is the record of the
- * generation, so printing from it says what is actually on disk rather than
- * what the scan believed a moment earlier.
- *
- * Written straight to the console rather than through the reporter: the tree is
- * presentation, and a `✓` in front of every branch would be noise.
- *
- * `--check` deliberately never calls this: it is a gate, and its output is an
- * exit code plus the one line that explains it.
+ * What was actually written, read back from the manifest rather than from the
+ * scan — the manifest is the record of the generation, so it describes what is
+ * on disk instead of what the scanner believed a moment earlier.
  */
-async function printTree(config: ResolvedShinroConfig): Promise<void> {
-  let routes: ManifestRoute[];
-
+async function readManifest(
+  config: ResolvedShinroConfig
+): Promise<ManifestRoute[]> {
   try {
     const manifest = JSON.parse(
       await readFile(resolve(config.outputDirectory, MANIFEST_FILE), 'utf8')
     ) as { routes?: ManifestRoute[] };
-    routes = manifest.routes ?? [];
+
+    return manifest.routes ?? [];
   } catch {
     // No manifest, or one nobody can parse. The generation it describes either
     // failed or never ran, and both already said so.
-    return;
+    return [];
   }
-
-  if (routes.length === 0) {
-    return;
-  }
-
-  console.info(
-    ['', ...routeTree(routes), '', dim(`  ${count(routes.length)}`), ''].join(
-      '\n'
-    )
-  );
 }
 
 function count(routes: number): string {

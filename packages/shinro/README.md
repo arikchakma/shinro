@@ -639,15 +639,25 @@ A `.ts` entry needs Node ≥23.6 for unflagged type stripping, or 22.12 with
 shinro generate           # write .shinro from the route tree
 shinro generate --watch   # for a runner that can do neither half itself
 shinro generate --check   # compare against disk, write nothing, exit non-zero on drift
+shinro generate --tree    # print the route tree as well
 shinro init               # add the imports block, tsconfig, and scripts
 ```
 
 Run any of them with `--help` for the flags.
 
-`generate` prints what it wrote as a tree:
+`generate` prints one line:
 
 ```
-✓ wrote .shinro
+✓ wrote .shinro · 142 routes
+```
+
+That is the whole of it, because `generate` runs from `prepare` — on every
+install, in every CI job — and a project with a few hundred routes would print
+a few hundred lines nobody asked for. Ask for the tree when you want it:
+
+```
+$ shinro generate --tree
+✓ wrote .shinro · 6 routes
 
   /
   ├─ api                 GET
@@ -658,12 +668,10 @@ Run any of them with `--help` for the flags.
      └─ :teamId
         └─ members
            └─ :memberId  GET
-
-  6 routes
 ```
 
-Only on a one-shot run. `--watch` prints one line per save and no tree —
-fifteen lines on every keystroke would bury the thing you are watching for:
+`--watch` prints one line per save and never a tree — reprinting it on every
+keystroke would bury the thing you are watching for:
 
 ```
 ✓ watching src/routes
@@ -678,8 +686,7 @@ to date` is the common case — editing a handler body does not change the route
 tree, so nothing is written, and the triggering file is named relative to the
 routes directory the line above already spelled out.
 
-`--check` prints no tree either: it is a gate, and its output is an exit code
-plus the line that explains it.
+`--check` stays a gate: an exit code plus the line that explains it.
 
 ```
 ✗ Route conflict at "/api/users/:id"
