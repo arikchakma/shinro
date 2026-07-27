@@ -1,0 +1,1526 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+      html {
+        -webkit-text-size-adjust: 100%;
+      }
+      body {
+        margin: 0;
+      }
+      h1,
+      h2,
+      h3,
+      h4,
+      p,
+      figure,
+      blockquote,
+      dl,
+      dd,
+      pre {
+        margin: 0;
+      }
+      ul,
+      ol {
+        margin: 0;
+      }
+      img,
+      svg,
+      video,
+      canvas {
+        display: block;
+        max-width: 100%;
+      }
+      button,
+      input,
+      select,
+      textarea {
+        font: inherit;
+        color: inherit;
+      }
+      table {
+        border-collapse: collapse;
+      }
+    </style>
+  </head>
+  <body>
+    <title>Shinro: architecture review</title>
+
+    <style>
+      :root {
+        color-scheme: light;
+        --ground: #f6f8f7;
+        --surface: #ffffff;
+        --surface-sunk: #eef1f0;
+        --ink: #171c1c;
+        --ink-soft: #3c4746;
+        --muted: #5f6d6b;
+        --faint: #8a9694;
+        --rule: #d9e0de;
+        --rule-strong: #c2cbc9;
+        --accent: #0d6960;
+        --accent-soft: #e2efec;
+        --accent-ink: #0a534c;
+        --warn: #8a5a15;
+        --warn-soft: #f6ecda;
+        --cut: #93362e;
+        --cut-soft: #f8e8e5;
+        --code-bg: #f1f4f3;
+
+        --display:
+          'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua',
+          Georgia, serif;
+        --body:
+          ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Helvetica, Arial,
+          sans-serif;
+        --mono:
+          ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas,
+          'Liberation Mono', monospace;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          color-scheme: dark;
+          --ground: #0e1212;
+          --surface: #141a19;
+          --surface-sunk: #1a2120;
+          --ink: #e7ece9;
+          --ink-soft: #c3ccc9;
+          --muted: #8e9c99;
+          --faint: #6b7876;
+          --rule: #26302e;
+          --rule-strong: #33403d;
+          --accent: #47baa9;
+          --accent-soft: #16302c;
+          --accent-ink: #74d1c1;
+          --warn: #d3a05a;
+          --warn-soft: #2c2317;
+          --cut: #dd8377;
+          --cut-soft: #331e1b;
+          --code-bg: #101615;
+        }
+      }
+
+      :root[data-theme='dark'] {
+        color-scheme: dark;
+        --ground: #0e1212;
+        --surface: #141a19;
+        --surface-sunk: #1a2120;
+        --ink: #e7ece9;
+        --ink-soft: #c3ccc9;
+        --muted: #8e9c99;
+        --faint: #6b7876;
+        --rule: #26302e;
+        --rule-strong: #33403d;
+        --accent: #47baa9;
+        --accent-soft: #16302c;
+        --accent-ink: #74d1c1;
+        --warn: #d3a05a;
+        --warn-soft: #2c2317;
+        --cut: #dd8377;
+        --cut-soft: #331e1b;
+        --code-bg: #101615;
+      }
+
+      :root[data-theme='light'] {
+        color-scheme: light;
+        --ground: #f6f8f7;
+        --surface: #ffffff;
+        --surface-sunk: #eef1f0;
+        --ink: #171c1c;
+        --ink-soft: #3c4746;
+        --muted: #5f6d6b;
+        --faint: #8a9694;
+        --rule: #d9e0de;
+        --rule-strong: #c2cbc9;
+        --accent: #0d6960;
+        --accent-soft: #e2efec;
+        --accent-ink: #0a534c;
+        --warn: #8a5a15;
+        --warn-soft: #f6ecda;
+        --cut: #93362e;
+        --cut-soft: #f8e8e5;
+        --code-bg: #f1f4f3;
+      }
+
+      body {
+        background: var(--ground);
+        color: var(--ink);
+        font-family: var(--body);
+        font-size: 16.5px;
+        line-height: 1.65;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .doc {
+        display: grid;
+        grid-template-columns:
+          minmax(1.25rem, 1fr) min(68ch, calc(100% - 2.5rem))
+          minmax(1.25rem, 1fr);
+        row-gap: 1.15rem;
+        padding: 0 0 6rem;
+      }
+
+      .doc > * {
+        grid-column: 2;
+        margin: 0;
+      }
+
+      .doc > .wide {
+        grid-column: 1 / -1;
+        width: min(104ch, calc(100% - 2.5rem));
+        margin-inline: auto;
+      }
+
+      /* ---------- masthead ---------- */
+
+      .masthead {
+        grid-column: 1 / -1;
+        border-bottom: 1px solid var(--rule);
+        background: var(--surface);
+        padding: 3.5rem 1.25rem 2.25rem;
+        margin-bottom: 1.5rem;
+      }
+
+      .masthead-inner {
+        width: min(68ch, 100%);
+        margin-inline: auto;
+        display: grid;
+        gap: 1.1rem;
+      }
+
+      .eyebrow {
+        font-family: var(--mono);
+        font-size: 0.7rem;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      h1 {
+        font-family: var(--display);
+        font-weight: 600;
+        font-size: clamp(2.1rem, 5.4vw, 3.1rem);
+        line-height: 1.05;
+        letter-spacing: -0.015em;
+        text-wrap: balance;
+        max-width: 30ch;
+      }
+
+      h1 em {
+        font-style: italic;
+        color: var(--accent);
+      }
+
+      .standfirst {
+        font-size: 1.1rem;
+        color: var(--ink-soft);
+        max-width: 62ch;
+      }
+
+      .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem 1.5rem;
+        font-family: var(--mono);
+        font-size: 0.74rem;
+        color: var(--faint);
+        border-top: 1px solid var(--rule);
+        padding-top: 1rem;
+      }
+
+      .meta b {
+        color: var(--muted);
+        font-weight: 500;
+      }
+
+      /* ---------- headings ---------- */
+
+      h2 {
+        font-family: var(--display);
+        font-weight: 600;
+        font-size: 1.62rem;
+        line-height: 1.2;
+        letter-spacing: -0.01em;
+        text-wrap: balance;
+        margin-top: 2.6rem;
+        padding-top: 1.4rem;
+        border-top: 1px solid var(--rule);
+        display: flex;
+        align-items: baseline;
+        gap: 0.85rem;
+      }
+
+      h2 .num {
+        font-family: var(--mono);
+        font-size: 0.72rem;
+        letter-spacing: 0.08em;
+        color: var(--accent);
+        padding-top: 0.35rem;
+        flex: none;
+      }
+
+      h3 {
+        font-family: var(--body);
+        font-weight: 620;
+        font-size: 0.95rem;
+        letter-spacing: 0.005em;
+        margin-top: 1.5rem;
+        color: var(--ink);
+      }
+
+      h3.label {
+        font-family: var(--mono);
+        font-weight: 500;
+        font-size: 0.72rem;
+        letter-spacing: 0.13em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      p {
+        max-width: 68ch;
+      }
+
+      a {
+        color: var(--accent-ink);
+        text-decoration-thickness: 1px;
+        text-underline-offset: 0.18em;
+      }
+
+      a:focus-visible,
+      summary:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 3px;
+        border-radius: 2px;
+      }
+
+      strong {
+        font-weight: 620;
+      }
+
+      code {
+        font-family: var(--mono);
+        font-size: 0.86em;
+        background: var(--code-bg);
+        border: 1px solid var(--rule);
+        border-radius: 3px;
+        padding: 0.06em 0.32em;
+        word-break: break-word;
+      }
+
+      ul,
+      ol {
+        max-width: 68ch;
+        padding-left: 1.15rem;
+        display: grid;
+        gap: 0.4rem;
+      }
+
+      li::marker {
+        color: var(--faint);
+      }
+
+      /* ---------- thesis ---------- */
+
+      .thesis {
+        background: var(--accent-soft);
+        border: 1px solid var(--rule-strong);
+        border-left: 3px solid var(--accent);
+        padding: 1.4rem 1.5rem;
+        display: grid;
+        gap: 0.7rem;
+      }
+
+      .thesis p {
+        margin: 0;
+      }
+
+      .thesis .lede {
+        font-family: var(--display);
+        font-size: 1.28rem;
+        line-height: 1.35;
+        color: var(--ink);
+        text-wrap: balance;
+      }
+
+      /* ---------- code ---------- */
+
+      figure.code {
+        border: 1px solid var(--rule);
+        background: var(--surface);
+        overflow: hidden;
+      }
+
+      figure.code figcaption {
+        font-family: var(--mono);
+        font-size: 0.7rem;
+        letter-spacing: 0.05em;
+        color: var(--muted);
+        background: var(--surface-sunk);
+        border-bottom: 1px solid var(--rule);
+        padding: 0.45rem 0.85rem;
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+      }
+
+      figure.code figcaption span:last-child {
+        color: var(--faint);
+      }
+
+      pre {
+        margin: 0;
+        padding: 0.95rem 1rem;
+        overflow-x: auto;
+        background: var(--code-bg);
+      }
+
+      pre code {
+        background: none;
+        border: 0;
+        padding: 0;
+        font-size: 0.815rem;
+        line-height: 1.62;
+        color: var(--ink-soft);
+        display: block;
+        white-space: pre;
+      }
+
+      pre .c {
+        color: var(--faint);
+      }
+
+      pre .k {
+        color: var(--accent);
+      }
+
+      pre .del {
+        color: var(--cut);
+      }
+
+      pre .add {
+        color: var(--accent-ink);
+      }
+
+      /* ---------- verdict chips ---------- */
+
+      .chip {
+        font-family: var(--mono);
+        font-size: 0.66rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        padding: 0.14em 0.5em;
+        border: 1px solid currentColor;
+        border-radius: 2px;
+        white-space: nowrap;
+        font-weight: 500;
+        justify-self: start;
+      }
+
+      .chip.keep {
+        color: var(--accent);
+      }
+      .chip.cut {
+        color: var(--cut);
+      }
+      .chip.change {
+        color: var(--warn);
+      }
+
+      /* ---------- table ---------- */
+
+      .table-wrap {
+        overflow-x: auto;
+        border: 1px solid var(--rule);
+        background: var(--surface);
+      }
+
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 0.86rem;
+      }
+
+      th,
+      td {
+        text-align: left;
+        padding: 0.62rem 0.85rem;
+        border-bottom: 1px solid var(--rule);
+        vertical-align: top;
+      }
+
+      thead th {
+        font-family: var(--mono);
+        font-size: 0.68rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--muted);
+        font-weight: 500;
+        background: var(--surface-sunk);
+        white-space: nowrap;
+      }
+
+      tbody tr:last-child td {
+        border-bottom: 0;
+      }
+
+      td code {
+        white-space: nowrap;
+      }
+
+      td.tick {
+        font-family: var(--mono);
+        color: var(--accent);
+        white-space: nowrap;
+      }
+
+      td.cross {
+        font-family: var(--mono);
+        color: var(--cut);
+        white-space: nowrap;
+      }
+
+      /* ---------- layer diagram ---------- */
+
+      .layers {
+        display: grid;
+        gap: 0.5rem;
+        border: 1px solid var(--rule);
+        background: var(--surface);
+        padding: 1rem;
+      }
+
+      .layer {
+        display: grid;
+        grid-template-columns: minmax(0, 13rem) minmax(0, 1fr);
+        gap: 0.35rem 1.25rem;
+        border: 1px solid var(--rule);
+        border-left: 3px solid var(--accent);
+        background: var(--surface-sunk);
+        padding: 0.85rem 1rem;
+      }
+
+      .layer.optional {
+        border-left-color: var(--warn);
+      }
+
+      .layer-name {
+        font-family: var(--mono);
+        font-size: 0.82rem;
+        color: var(--ink);
+        font-weight: 500;
+      }
+
+      .layer-name small {
+        display: block;
+        font-family: var(--body);
+        font-size: 0.72rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--faint);
+        margin-top: 0.2rem;
+      }
+
+      .layer-body {
+        font-size: 0.87rem;
+        color: var(--ink-soft);
+      }
+
+      .layer-body ul {
+        padding-left: 1rem;
+        gap: 0.15rem;
+        margin-top: 0.35rem;
+      }
+
+      .arrow {
+        font-family: var(--mono);
+        font-size: 0.7rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--faint);
+        text-align: center;
+        padding: 0.1rem 0;
+      }
+
+      /* ---------- callouts ---------- */
+
+      .note {
+        border: 1px solid var(--rule);
+        border-left: 3px solid var(--warn);
+        background: var(--warn-soft);
+        padding: 1rem 1.15rem;
+        display: grid;
+        gap: 0.5rem;
+        font-size: 0.94rem;
+      }
+
+      .note p {
+        margin: 0;
+      }
+
+      .note .note-title,
+      .cost .note-title {
+        font-family: var(--mono);
+        font-size: 0.68rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--warn);
+      }
+
+      .cost {
+        border: 1px solid var(--rule);
+        border-left: 3px solid var(--cut);
+        background: var(--cut-soft);
+        padding: 1rem 1.15rem;
+        display: grid;
+        gap: 0.5rem;
+        font-size: 0.94rem;
+      }
+
+      .cost .note-title {
+        color: var(--cut);
+      }
+
+      .cost p,
+      .cost ul {
+        margin: 0;
+      }
+
+      /* ---------- two-up ---------- */
+
+      .two-up {
+        display: grid;
+        gap: 0.9rem;
+        grid-template-columns: 1fr;
+      }
+
+      @media (min-width: 62rem) {
+        .two-up {
+          grid-template-columns: 1fr 1fr;
+          align-items: start;
+        }
+      }
+
+      /* ---------- cut list ---------- */
+
+      .cutlist {
+        display: grid;
+        gap: 0;
+        border: 1px solid var(--rule);
+        background: var(--surface);
+      }
+
+      .cutlist-row {
+        display: grid;
+        grid-template-columns: 5.4rem minmax(0, 1fr);
+        gap: 0.25rem 1rem;
+        padding: 0.7rem 0.9rem;
+        border-bottom: 1px solid var(--rule);
+        font-size: 0.89rem;
+        align-items: baseline;
+      }
+
+      .cutlist-row:last-child {
+        border-bottom: 0;
+      }
+
+      .cutlist-row .what {
+        color: var(--ink-soft);
+      }
+
+      .cutlist-row .what b {
+        color: var(--ink);
+        font-family: var(--mono);
+        font-size: 0.85em;
+        font-weight: 500;
+      }
+
+      /* ---------- footer ---------- */
+
+      .colophon {
+        grid-column: 1 / -1;
+        width: min(68ch, calc(100% - 2.5rem));
+        margin: 3rem auto 0;
+        border-top: 1px solid var(--rule);
+        padding-top: 1.2rem;
+        font-family: var(--mono);
+        font-size: 0.73rem;
+        color: var(--faint);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem 1.5rem;
+      }
+
+      details {
+        border: 1px solid var(--rule);
+        background: var(--surface);
+        padding: 0.7rem 0.95rem;
+        font-size: 0.92rem;
+      }
+
+      summary {
+        cursor: pointer;
+        font-weight: 600;
+        color: var(--ink);
+      }
+
+      details > *:not(summary) {
+        margin-top: 0.7rem;
+      }
+    </style>
+
+    <div class="doc">
+      <header class="masthead">
+        <div class="masthead-inner">
+          <div class="eyebrow">Architecture review &middot; shinro</div>
+          <h1>A router is a <em>value</em>, not a toolchain</h1>
+          <p class="standfirst">
+            Your four constraints are all one constraint: the Vite plugin has to
+            stop being the product. Everything framework-shaped in the package
+            today — the child process, the build coercion, the ambient module
+            declarations — exists to prop up a bare specifier that a real file
+            on disk resolves for free. <code>prototype/tsdown</code> already
+            gets this right. This is the argument for shipping it, plus the four
+            gaps I found in it.
+          </p>
+          <div class="meta">
+            <span><b>Reviewed</b> packages/shinro @ 612e179</span>
+            <span
+              ><b>Against</b> docs/SPEC.md (2371 lines), prototype/tsdown</span
+            >
+            <span><b>Target</b> v0.1</span>
+          </div>
+        </div>
+      </header>
+
+      <div class="thesis">
+        <p class="lede">
+          Ship the prototype. Delete the dev server, delete the build config,
+          delete the ambient declarations. Then the adapter question you're
+          worried about never arrives — because you never own an entry point,
+          and a Hono instance is already the portable interface every runtime
+          accepts.
+        </p>
+        <p style="font-size: 0.94rem; color: var(--ink-soft)">
+          The rest of this is: where the code contradicts your goals today
+          (&sect;1), the layering that fixes it (&sect;2&ndash;3), the DX end to
+          end (&sect;4&ndash;5), the four things the prototype misses (&sect;6),
+          and what to delete, in what order (&sect;7&ndash;9).
+        </p>
+      </div>
+
+      <h2>
+        <span class="num">§1</span> Your four "don'ts", scored against the code
+        as it stands
+      </h2>
+
+      <p>
+        Two of the four are already violated, and not subtly. Both violations
+        trace to the same root: the only supported integration is a Vite plugin,
+        so the plugin had to grow a dev story and a build story.
+      </p>
+
+      <div class="wide table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Your constraint</th>
+              <th>Today</th>
+              <th>Evidence</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><b>1. Not a framework</b></td>
+              <td class="tick">holds</td>
+              <td>
+                No lifecycle hooks, no
+                <code>onStart</code>/<code>onShutdown</code>, the app module is
+                user-owned. &sect;4.2 of the spec is unusually disciplined about
+                this. Keep that section verbatim.
+              </td>
+            </tr>
+            <tr>
+              <td><b>2. Don't own the server process</b></td>
+              <td class="cross">broken</td>
+              <td>
+                <code>src/server/dev.ts</code> is a 133-line
+                <code>DevelopmentProcess</code> that <code>spawn</code>s a Node
+                child, injects a generated runner that boots Vite in middleware
+                mode, imports your entry through
+                <code>createServerModuleRunner</code>, and restarts it on a
+                debounce with <code>SIGTERM</code>. That is a framework dev
+                server wearing a plugin's clothes. The spec even documents the
+                SIGTERM contract (&sect;31.2) — which is the tell: you only need
+                a termination contract if you're the one terminating.
+              </td>
+            </tr>
+            <tr>
+              <td><b>3. Keep type safety, no weird commands</b></td>
+              <td class="tick">holds</td>
+              <td>
+                The RPC story is sound, the generated client is a real file
+                anyone can import, and the CLI is one verb.
+              </td>
+            </tr>
+            <tr>
+              <td><b>4. Don't own dev/build</b></td>
+              <td class="cross">broken</td>
+              <td>
+                <code>ShinroOptions.build</code> carries <code>outDir</code>,
+                <code>fileName</code>, <code>minify</code>,
+                <code>sourcemap</code>, <code>unbundle</code>; the plugin's
+                <code>config()</code> hook coerces <code>rolldownOptions</code>,
+                <code>preserveModules</code> and <code>ssr.external</code>; and
+                <code>generateBundle</code> fails the build on an unexpected
+                extra chunk. Spec &sect;21 spends a whole section on your
+                bundler modes. None of that is routing.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        Worth saying plainly: this isn't drift, it's gravity. A plugin is loaded
+        <em>by</em> a toolchain, so the cheapest way to make anything happen is
+        to reach for the toolchain's hooks. The fix is structural, not a matter
+        of restraint — make the plugin optional, and the temptation is gone
+        because the hook isn't there.
+      </p>
+
+      <h2>
+        <span class="num">§2</span> The load-bearing decision you already made
+      </h2>
+
+      <p>
+        <code>.shinro/routes.ts</code> is a real file, containing static
+        relative imports and one chained Hono registration per route. That
+        single choice is what makes every one of your goals reachable — and you
+        made it already:
+      </p>
+
+      <figure class="code wide">
+        <figcaption>
+          <span>.shinro/routes.ts</span><span>generated, abridged</span>
+        </figcaption>
+        <pre><code><span class="c">// Generated by Shinro (format 3). Do not edit.</span>
+<span class="k">import</span> { Hono } <span class="k">from</span> "hono";
+<span class="k">import type</span> { ProjectEnv } <span class="k">from</span> "shinro/app";
+<span class="k">import</span> apiMiddleware <span class="k">from</span> "../src/routes/api/_middleware.ts";
+<span class="k">import</span> { GET as usersGET } <span class="k">from</span> "../src/routes/api/users/index.ts";
+
+<span class="k">export function</span> routes() {
+  <span class="k">return new</span> Hono&lt;ProjectEnv&gt;()
+    .get("/api/users", ...apiMiddleware, ...usersGET);
+}</code></pre>
+      </figure>
+
+      <p>
+        There is nothing in that file a bundler is needed for. No
+        <code>import.meta.glob</code>, no virtual module, no
+        <code>require.context</code>, no plugin transform. It is plain ESM that
+        <code>tsc</code> can check, <code>tsx</code>/<code>bun</code>/<code
+          >node --experimental-strip-types</code
+        >
+        can execute, and rolldown, esbuild, or webpack can bundle without
+        knowing Shinro exists.
+      </p>
+
+      <p>
+        So ask what the Vite plugin is actually still <em>for</em>, and the
+        honest answer is two things: calling <code>generate()</code> at the
+        right moment, and <code>resolveId</code>-ing the bare specifier
+        <code>shinro/routes</code> to that file. The first is a 20-line adapter.
+        The second is the whole coupling — and it's self-inflicted, because
+        <code>shinro/routes</code> isn't a package export, it's a fiction
+        maintained by a resolver plus <code>.shinro/shinro.d.ts</code> to keep
+        <code>tsc</code> from noticing.
+      </p>
+
+      <p>
+        Your prototype's answer — <code>#shinro/routes</code> via package.json
+        <code>imports</code> — is correct, and the reasoning in the prototype
+        README is the strongest argument in the repo. I re-derived the table and
+        agree, including the conclusion that <code>paths</code> is the worst
+        option available: it type-checks clean and then crashes under plain
+        Node, because the thing that's wrong is a compiler option no runner
+        reads.
+      </p>
+
+      <div class="note">
+        <span class="note-title">One refinement</span>
+        <p>
+          Keep the relative import working too, and document it.
+          <code>import { routes } from '../.shinro/routes.ts'</code> needs zero
+          package.json boilerplate and resolves in every runner and in
+          <code>tsc</code> by construction. Make <code>#shinro/routes</code> the
+          documented default because it survives moving <code>app.ts</code>, but
+          don't let the generator or the validator treat the relative form as a
+          mistake — it's the escape hatch for anyone whose
+          <code>package.json</code> is generated or locked down.
+        </p>
+      </div>
+
+      <h2>
+        <span class="num">§3</span> The layering, and the one invariant that
+        protects it
+      </h2>
+
+      <p>
+        Three layers, dependencies pointing strictly down. Nothing above the
+        line may be imported by anything below it.
+      </p>
+
+      <div class="wide layers">
+        <div class="layer">
+          <div class="layer-name">
+            shinro/app<small>Runtime · ships in your bundle</small>
+          </div>
+          <div class="layer-body">
+            <code>defineApp</code>, <code>defineHandler</code>,
+            <code>defineMiddleware</code>, <code>ShinroEnv</code>. Peer-depends
+            on <code>hono</code> and nothing else. No
+            <code>node:</code> imports, so it works on Workers, Deno, and in a
+            browser test. This is the only Shinro module a running server loads.
+          </div>
+        </div>
+        <div class="arrow">▲ imported by app code only ▲</div>
+        <div class="layer">
+          <div class="layer-name">
+            shinro<small>Codegen core · dev-time, Node</small>
+          </div>
+          <div class="layer-body">
+            <code>generate()</code>, <code>watch()</code>,
+            <code>loadConfig()</code>, <code>scan()</code>. Owns everything that
+            is genuinely yours:
+            <ul>
+              <li>route discovery, escaping, groups, catch-alls</li>
+              <li>conflict and namespace diagnostics</li>
+              <li>the normalized manifest</li>
+              <li>
+                emitting <code>routes.ts</code>, <code>client.ts</code>,
+                <code>+types</code>
+              </li>
+            </ul>
+            Imports no bundler. Ever. That is the rule that keeps this honest.
+          </div>
+        </div>
+        <div class="arrow">▲ called by ▲</div>
+        <div class="layer optional">
+          <div class="layer-name">
+            shinro/cli · /vite · /tsdown<small
+              >Adapters · optional, ~20 lines each</small
+            >
+          </div>
+          <div class="layer-body">
+            Each one answers exactly one question:
+            <em>when do I call <code>generate()</code>?</em> CLI: now. tsdown:
+            <code>buildStart</code>. Vite: <code>configResolved</code> plus a
+            watcher. Anyone can write the fourth one in an afternoon —
+            <code>unbuild</code>, <code>rspack</code>, a Turbo task, a
+            <code>Makefile</code>.
+          </div>
+        </div>
+      </div>
+
+      <h3 class="label">The invariant to write into the spec</h3>
+
+      <p>
+        <strong>No adapter is ever load-bearing.</strong> If a project can only
+        build, type-check, or run because an adapter ran, that's a bug in the
+        core. Adapters exist to remove a manual step, never to enable a
+        capability.
+      </p>
+
+      <p>
+        Make that testable, or it will rot in a month. Add one fixture app to
+        the matrix that has <em>no</em> adapter at all — its only Shinro
+        touchpoint is <code>shinro generate</code> in a package script, and it
+        builds with plain <code>tsdown</code> (or plain <code>tsc</code>, see
+        &sect;6.1). If that fixture ever needs a plugin added to make CI pass,
+        something crept back into the wrong layer.
+      </p>
+
+      <h2><span class="num">§4</span> What the DX looks like</h2>
+
+      <h3 class="label">Install &amp; wire, once</h3>
+
+      <figure class="code wide">
+        <figcaption>
+          <span>package.json</span><span>the whole integration</span>
+        </figcaption>
+        <pre><code>{
+  "type": "module",
+  <span class="c">// Resolves in tsc, tsx, bun, node, rolldown, esbuild — ESM resolution,</span>
+  <span class="c">// not a compiler option. `shinro init` writes these four lines.</span>
+  "imports": {
+    "#shinro/routes": "./.shinro/routes.ts",
+    "#shinro/client": "./.shinro/client.ts"
+  },
+  <span class="c">// Optional: hand the typed client to your frontend workspace.</span>
+  "exports": {
+    "./client": "./.shinro/client.ts"
+  },
+  "scripts": {
+    "prepare": "shinro generate",
+    "dev": "node --watch --watch-path=src --import shinro/generate src/server.ts",
+    "build": "tsdown",
+    "check": "shinro generate --check &amp;&amp; tsc --noEmit",
+    "start": "node dist/server.mjs"
+  }
+}</code></pre>
+      </figure>
+
+      <figure class="code wide">
+        <figcaption>
+          <span>tsconfig.json</span><span>all of it</span>
+        </figcaption>
+        <pre><code>{ "<span class="k">extends</span>": "shinro/tsconfig" }</code></pre>
+      </figure>
+
+      <p>
+        That's the entire surface: four <code>imports</code> lines, one
+        <code>extends</code>, and a config file if you want to move the routes
+        directory. No plugin required, no <code>vite.config.ts</code> required.
+      </p>
+
+      <h3 class="label">Authoring</h3>
+
+      <div class="two-up wide">
+        <figure class="code">
+          <figcaption><span>src/routes/api/users/$id.ts</span></figcaption>
+          <pre><code><span class="k">import</span> { zValidator } <span class="k">from</span> "@hono/zod-validator";
+<span class="k">import</span> { defineHandler } <span class="k">from</span> "shinro/app";
+<span class="k">import</span> { z } <span class="k">from</span> "zod";
+
+<span class="k">export const</span> GET = defineHandler(
+  zValidator("param", z.object({ id: z.string() })),
+  <span class="k">async</span> (c) =&gt; {
+    <span class="k">const</span> { id } = c.req.valid("param");
+    <span class="k">const</span> user = <span class="k">await</span> findUser(id);
+
+    <span class="k">if</span> (!user) {
+      <span class="k">return</span> c.json({ error: "NOT_FOUND" <span class="k">as const</span> }, 404);
+    }
+
+    <span class="k">return</span> c.json({ user }, 200);
+  },
+);</code></pre>
+        </figure>
+        <figure class="code">
+          <figcaption><span>src/app.ts</span></figcaption>
+          <pre><code><span class="k">import</span> { routes } <span class="k">from</span> "#shinro/routes";
+<span class="k">import</span> { defineApp } <span class="k">from</span> "shinro/app";
+<span class="k">import</span> { logger } <span class="k">from</span> "hono/logger";
+
+<span class="k">declare module</span> "shinro/app" {
+  <span class="k">interface</span> ShinroEnv {
+    Variables: { user: User };
+  }
+}
+
+<span class="k">const</span> app = defineApp()
+  .use("*", logger())
+  <span class="c">// Mount after global middleware.</span>
+  .route("/", routes())
+  .notFound((c) =&gt; c.json({ error: "NOT_FOUND" }, 404));
+
+<span class="k">export default</span> app;</code></pre>
+        </figure>
+      </div>
+
+      <h3 class="label">
+        Running it — four runtimes, one artifact, zero adapters
+      </h3>
+
+      <div class="wide table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Runtime</th>
+              <th>Entry the user writes</th>
+              <th>What Shinro contributes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Node</td>
+              <td><code>serve({ fetch: app.fetch })</code></td>
+              <td class="tick">nothing</td>
+            </tr>
+            <tr>
+              <td>Bun</td>
+              <td><code>Bun.serve({ fetch: app.fetch })</code></td>
+              <td class="tick">nothing</td>
+            </tr>
+            <tr>
+              <td>Workers / Deno</td>
+              <td><code>export default app</code></td>
+              <td class="tick">nothing</td>
+            </tr>
+            <tr>
+              <td>Tests</td>
+              <td><code>testClient(app)</code></td>
+              <td class="tick">nothing</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        This is the direct answer to the adapter fear. A framework needs
+        node/bun/cloudflare adapters because it owns the entry and must
+        <em>produce</em> a listener, so it has to know what a listener is on
+        each platform. You produce a <code>Hono</code>, which is already the
+        portable interface — every runtime story is one line the user writes
+        themselves. Cloudflare support is a docs page, not a code path. That
+        stays true only as long as you don't own the build, which is the
+        strongest argument for deleting <code>build.*</code>.
+      </p>
+
+      <div class="note">
+        <span class="note-title">Invariant that keeps it true</span>
+        <p>
+          Generated artifacts must stay runtime-neutral: no
+          <code>node:</code> specifier, no <code>process</code>, no
+          <code>fs</code>, no dynamic <code>import()</code> may ever appear in
+          <code>.shinro/routes.ts</code> or <code>client.ts</code>. Today they
+          don't. Assert it in a test so a future codegen convenience can't
+          quietly cost you Workers.
+        </p>
+      </div>
+
+      <h2>
+        <span class="num">§5</span> The dev loop: one process, and still no
+        <code>shinro dev</code>
+      </h2>
+
+      <p>
+        I first wrote this section as a list of things you give up — two
+        processes, a cold-start race, split logs — on the assumption that
+        codegen and the runner had to be separate. They don't. One line, no
+        supervisor, no extra dependency:
+      </p>
+
+      <figure class="code wide">
+        <figcaption>
+          <span>package.json</span><span>the whole dev loop</span>
+        </figcaption>
+        <pre><code>"dev": "node --watch --watch-path=src --import shinro/generate src/server.ts"</code></pre>
+      </figure>
+
+      <p>
+        <code>shinro/generate</code> is a side-effecting subpath export: import
+        it, it generates. Three properties make it work, and each is
+        load-bearing:
+      </p>
+
+      <ol>
+        <li>
+          <strong
+            ><code>--import</code> completes before the entry is
+            resolved.</strong
+          >
+          Generation finishes before anything resolves
+          <code>#shinro/routes</code>. It has to be <code>--import</code> rather
+          than an import inside a <code>src/dev.ts</code>: ESM loads a whole
+          graph before evaluating any of it, so an in-graph import would resolve
+          <code>#shinro/routes</code> <em>before</em> codegen ran — fine once
+          <code>.shinro</code> exists, broken on a cold clone. That's the worst
+          shape a bug can take, and it's the same ordering guarantee loader
+          hooks depend on.
+        </li>
+        <li>
+          <strong
+            ><code>--watch-path=src</code> watches the directory, not the
+            graph.</strong
+          >
+          A brand-new route file triggers a restart even though nothing imports
+          it yet. No graph watcher can do that — which is the real reason
+          <code>tsdown --watch</code> can't cover dev, and the reason I assumed
+          a second process was necessary.
+        </li>
+        <li>
+          <strong>The restart re-runs the preload,</strong> so the new route is
+          registered. One restart per change, no coordination between processes.
+        </li>
+      </ol>
+
+      <div class="note">
+        <span class="note-title"
+          >This makes an existing invariant load-bearing</span
+        >
+        <p>
+          Generation now runs on every restart, so an unconditional write bumps
+          the mtime of a file inside the watched tree, which triggers a restart,
+          which regenerates — forever. I tested both directions: unconditional
+          writes restart indefinitely, hash-then-skip settles at exactly one
+          restart per real change. SPEC &sect;25 already requires that unchanged
+          files keep their modification time, filed among the niceties. It is
+          the load-bearing invariant of the whole no-<code>shinro dev</code>
+          design, and it deserves a test asserting mtime is untouched — not
+          merely that the bytes match.
+        </p>
+      </div>
+
+      <div class="cost">
+        <span class="note-title">What it actually costs</span>
+        <ul>
+          <li>
+            <strong>A Node floor.</strong> A <code>.ts</code> entry needs Node
+            ≥23.6 for unflagged type stripping, or 22.12 with
+            <code>--experimental-strip-types</code>.
+          </li>
+          <li>
+            <strong>A platform caveat to verify.</strong> Node's documentation
+            puts <code>--watch-path</code> on macOS and Windows only. If that
+            still holds, Linux and Docker-based dev need the fallback, and this
+            can't be the single documented default. Worth confirming before it's
+            written down.
+          </li>
+          <li>
+            <strong
+              >Graph-only runners need the same preload, indirectly.</strong
+            >
+            <code
+              >NODE_OPTIONS="--import shinro/generate" tsx watch --include
+              "src/routes/**" src/server.ts</code
+            >. Awkward on Windows, and both <code>tsx --include</code> and
+            <code>NODE_OPTIONS</code> pass-through want verifying. If neither
+            holds, two processes is the last resort — with the split logs and
+            the <code>concurrently</code> dependency that I'd previously
+            accepted as the baseline.
+          </li>
+        </ul>
+      </div>
+
+      <p>
+        Keep <code>shinro generate</code> in <code>prepare</code> regardless.
+        It's not about the dev loop any more — it's so a cold clone can run
+        <code>tsc</code>, or open an editor, before anyone starts the server.
+      </p>
+
+      <p>
+        None of this argues for <code>shinro dev</code>. Node owns the watching,
+        the restarting, and the signals; Shinro guarantees only that
+        <code>.shinro</code> matches the route tree by the time the graph loads.
+        A <code>shinro dev</code> that spawns the runner is
+        <code>dev.ts</code> again under a friendlier name, and you'd be back to
+        documenting SIGTERM semantics within a release.
+      </p>
+
+      <h2><span class="num">§6</span> Four gaps in the prototype</h2>
+
+      <h3>
+        6.1 — The shipped tsconfig makes plain <code>tsc</code> impossible
+      </h3>
+
+      <p>
+        You said users should be able to build with "normal tsc". They can't:
+        <code>tsconfig.base.json</code> sets <code>noEmit: true</code> together
+        with <code>allowImportingTsExtensions</code>, and the prototype's copy
+        is identical. A project extending <code>shinro/tsconfig</code> can
+        type-check and can be bundled, but <code>tsc</code> cannot emit — and
+        the reason isn't obvious to the person hitting it, because the blocker
+        is inherited from <code>node_modules</code>.
+      </p>
+
+      <figure class="code wide">
+        <figcaption>
+          <span>tsconfig.base.json</span><span>the fix, TS 5.7+</span>
+        </figcaption>
+        <pre><code>  "allowImportingTsExtensions": <span class="k">true</span>,
+<span class="del">- "noEmit": true</span>
+<span class="add">+ "rewriteRelativeImportExtensions": true   // ./x.ts → ./x.js on emit</span></code></pre>
+      </figure>
+
+      <p>
+        Cleanest shape given the trade-off: keep <code>shinro/tsconfig</code> as
+        the check-only default (it's the common case, and it's what
+        <code>moduleResolution: "bundler"</code> implies anyway), and ship a
+        second export — <code>shinro/tsconfig/emit</code> — with
+        <code>rewriteRelativeImportExtensions</code>,
+        <code>module: "nodenext"</code>, and no <code>noEmit</code>, for the
+        <code>tsc</code>-emit path. Two files, both tiny, and the "build it
+        however you want" claim becomes true. Prove it with a fixture that
+        builds on plain <code>tsc</code> and runs the output.
+      </p>
+
+      <h3>
+        6.2 — <code>.shinro/rpc.ts</code> is vestigial; delete the artifact
+      </h3>
+
+      <p>
+        In the current package it's generated, declared in
+        <code>shinro.d.ts</code>, exported from <code>package.json</code>, and
+        asserted by three tests — while <code>client.ts</code> derives
+        <code>AppType</code> from <code>typeof app</code> and never reads it. In
+        the prototype it has decayed to exactly one line:
+        <code>export type { AppType } from "./client.ts"</code>.
+      </p>
+
+      <p>
+        That's the right thing to notice and the wrong place to stop. Because
+        <code>.route('/', routes())</code> merges the sub-router's schema into
+        the parent, <code>typeof app</code> <em>is</em> the complete contract —
+        which makes the spec's &sect;23 "chained RPC application that
+        re-registers every route" a second, independently-derived source of
+        truth for the same thing. Two derivations of one contract is a
+        divergence bug waiting for its first edge case. Drop
+        <code>rpc.ts</code>, drop <code>#shinro/rpc</code>, and let
+        <code>client.ts</code> be the only place <code>AppType</code> exists. If
+        you want the specifier for back-compat, alias the package export at
+        <code>client.ts</code> rather than emitting a file.
+      </p>
+
+      <h3>6.3 — <code>generate --check</code> for CI</h3>
+
+      <p>
+        Once no bundler is guaranteed to run,
+        <strong
+          ><code>generate</code> is the only moment Shinro can catch
+          anything</strong
+        >
+        — route conflicts, namespace overlap, invalid method exports, all of
+        &sect;26. So it has to be the diagnostic surface, and CI has to be able
+        to fail on it without writing files:
+      </p>
+
+      <figure class="code wide">
+        <figcaption><span>shinro generate --check</span></figcaption>
+        <pre><code>$ shinro generate --check
+<span class="c">[shinro] Route conflict for /api/users</span>
+<span class="c">  - src/routes/api/users.ts</span>
+<span class="c">  - src/routes/api/users/index.ts</span>
+<span class="c">Remove one file or choose a different URL.</span>
+$ echo $?
+1</code></pre>
+      </figure>
+
+      <p>
+        <code>--check</code> should also fail when artifacts on disk differ from
+        what the route tree implies, so a stale committed
+        <code>.shinro/</code> or a forgotten regen is loud instead of
+        mysterious. That's the moral equivalent of <code>fmt --check</code>, and
+        it's the thing that makes committing <code>.shinro/</code> a safe option
+        rather than a trap.
+      </p>
+
+      <h3>6.4 — <code>basePath</code> should be Hono's, not yours</h3>
+
+      <p>
+        The prototype app sets <code>"basePath": "/v1"</code> in config, and
+        then has to hand-write the prefix on its manual route:
+        <code>.get('/v1/manual', …)</code>. That's the seam showing — one prefix
+        mechanism that applies to file routes and not to the app, so the user
+        maintains the other half by hand and nothing checks it.
+      </p>
+
+      <p>
+        Hono already has this: <code>defineApp().basePath('/v1')</code> prefixes
+        manual routes and mounted sub-routers alike, and it's reflected in the
+        schema, so the generated client's URLs stay correct with no work from
+        you. Dropping <code>basePath</code> from the config removes a config
+        key, a manifest field, a class of conflict diagnostics, and that whole
+        seam. The one thing you lose is that <code>Route['path']</code> in
+        <code>+types</code> won't carry the prefix — which costs nothing real,
+        since that string only feeds Hono's path generic for
+        <code>c.req.param</code> typing.
+      </p>
+
+      <h2><span class="num">§7</span> The cut list</h2>
+
+      <p>
+        Roughly 700 of the package's 3,900 lines, and they're the
+        framework-shaped 700. Concretely:
+      </p>
+
+      <div class="wide cutlist">
+        <div class="cutlist-row">
+          <span class="chip cut">cut</span>
+          <span class="what"
+            ><b>src/server/dev.ts</b> — <code>DevelopmentProcess</code>, the
+            spawned child, the injected runner source,
+            <code>SHINRO_DEV_*</code>, debounced restarts, SIGTERM semantics.
+            With it goes spec &sect;20 and &sect;31.2.</span
+          >
+        </div>
+        <div class="cutlist-row">
+          <span class="chip cut">cut</span>
+          <span class="what"
+            ><b>ShinroOptions.build</b> — <code>outDir</code>,
+            <code>fileName</code>, <code>minify</code>, <code>sourcemap</code>,
+            <code>unbundle</code>, and the <code>config()</code> coercion of
+            <code>rolldownOptions</code> / <code>preserveModules</code> /
+            <code>ssr.external</code>. With it, spec &sect;21 entirely.</span
+          >
+        </div>
+        <div class="cutlist-row">
+          <span class="chip cut">cut</span>
+          <span class="what"
+            ><b>ShinroOptions.entry</b> and the
+            <code>generateBundle</code> chunk assertions — plus the two
+            "unexpected extra chunk" / "external runtime assets" diagnostics in
+            &sect;26. Not routing.</span
+          >
+        </div>
+        <div class="cutlist-row">
+          <span class="chip cut">cut</span>
+          <span class="what"
+            ><b>.shinro/shinro.d.ts</b> and <code>resolveId</code> for
+            <code>shinro/routes</code> · <code>shinro/client</code> ·
+            <code>shinro/rpc</code> — package.json <code>imports</code> replaces
+            both halves, and importing without a plugin becomes a real
+            resolution error instead of a silently-empty router.</span
+          >
+        </div>
+        <div class="cutlist-row">
+          <span class="chip cut">cut</span>
+          <span class="what"
+            ><b>.shinro/rpc.ts</b> and the duplicate RPC derivation in &sect;23
+            (see 6.2).</span
+          >
+        </div>
+        <div class="cutlist-row">
+          <span class="chip change">change</span>
+          <span class="what"
+            ><b>validateTypeScriptConfig</b> — six conditions and a 30-line
+            warning collapse to one question, now that
+            <code>${configDir}</code> lets the shipped base config carry
+            <code>rootDirs</code> and <code>include</code> correctly.</span
+          >
+        </div>
+        <div class="cutlist-row">
+          <span class="chip change">change</span>
+          <span class="what"
+            ><b>peerDependencies</b> — <code>vite</code> and
+            <code>tsdown</code> become optional peers; <code>hono</code> stays
+            required. That line in <code>package.json</code> is the
+            machine-readable version of this whole document.</span
+          >
+        </div>
+        <div class="cutlist-row">
+          <span class="chip change">change</span>
+          <span class="what"
+            ><b>shinro typegen</b> → <b>shinro generate</b> — it emits
+            <code>routes.ts</code>, which is runtime code, not types. The core
+            function is already <code>generate()</code>, so the verb should
+            match it; <code>typegen</code> stays as a hidden alias. The old name
+            tells people the router is a type artifact, which is the one thing
+            you don't want them to believe.</span
+          >
+        </div>
+        <div class="cutlist-row">
+          <span class="chip keep">keep</span>
+          <span class="what"
+            ><b>scanner.ts</b> (1,220 lines), <b>ast.ts</b>, <b>codegen.ts</b>,
+            <b>typegen.ts</b>, <b>factory/*</b> — untouched. This is the actual
+            product, and none of it ever needed a bundler.</span
+          >
+        </div>
+      </div>
+
+      <h2><span class="num">§8</span> Where I'd push back on myself</h2>
+
+      <details>
+        <summary>
+          JSON-only config is a small regression, and I'd still take it
+        </summary>
+        <p>
+          No comments, no shared constants, no <code>satisfies</code>. The win —
+          no jiti, no unconfig, a CLI that starts in milliseconds — is worth
+          more, and the <code>$schema</code> you already ship covers most of
+          what <code>defineConfig</code> autocomplete was doing. Give the
+          adapters an inline options argument (<code
+            >shinro({ routes: 'src/api' })</code
+          >) for people who want config in code, with precedence: adapter
+          options &gt; <code>shinro.config.json</code> &gt;
+          <code>package.json#shinro</code> &gt; defaults. Both idioms supported;
+          neither requires a loader.
+        </p>
+      </details>
+
+      <details>
+        <summary>Should <code>.shinro/</code> be committed?</summary>
+        <p>
+          Gitignored today, and the <code>prepare</code> script makes that work.
+          But once the artifacts are plain files with no bundler in the loop,
+          committing them has real appeal: a consumer of your
+          <code>./client</code> export doesn't need your dev toolchain, and
+          <code>tsc</code> on a fresh clone just works. I'd keep gitignore as
+          the default and make committing a supported, documented choice — which
+          it only is once <code>--check</code> (6.3) exists to catch staleness.
+        </p>
+      </details>
+
+      <details>
+        <summary>
+          The ShinroEnv augmentation is unusual, and it's still the right call
+        </summary>
+        <p>
+          Application code augmenting a library's interface reads backwards, and
+          it hard-limits you to one app per TypeScript program. But your
+          &sect;17.1 reasoning is airtight: inferring the env from
+          <code>typeof app</code> when <code>app.ts</code> imports the generated
+          router that is built on the env is a cycle. A declared env has no
+          inference step to fail, which is worth more than the aesthetics. Keep
+          it, keep the separate-tsconfig note for monorepos.
+        </p>
+      </details>
+
+      <h2><span class="num">§9</span> Order I'd do it in</h2>
+
+      <ol>
+        <li>
+          Switch the specifier to <code>#shinro/routes</code>, delete
+          <code>shinro.d.ts</code> and the three
+          <code>resolveId</code> branches. Everything else depends on this, and
+          it's the change that makes the package work without Vite at all.
+        </li>
+        <li>
+          Extract <code>generate()</code> into the bundler-free core and make
+          the CLI call it directly instead of loading
+          <code>vite.config.ts</code> to find a plugin. The CLI stops being a
+          wrapper around the plugin and becomes the primary interface.
+        </li>
+        <li>
+          Delete <code>dev.ts</code> and <code>build.*</code>. Add the
+          <code>shinro/generate</code> preload and have <code>init</code> write
+          the one-line dev script. This is the commit where goals 2 and 4
+          actually become true.
+        </li>
+        <li>
+          Add the no-adapter fixture and <code>generate --check</code>. Now the
+          layering is enforced by CI rather than by intent.
+        </li>
+        <li>
+          Adapters: <code>shinro/tsdown</code> and <code>shinro/vite</code>, ~20
+          lines each, optional peers.
+        </li>
+      </ol>
+
+      <p>
+        Every step is subtractive and behaviour-preserving for a correctly
+        configured app, which means they can each land green, and none of them
+        touches the authoring surface. Nothing in this document asks you to
+        change how a route file is written.
+      </p>
+
+      <div class="colophon">
+        <span>Architecture review · shinro v0.1</span>
+        <span
+          >Sources: packages/shinro/src, docs/SPEC.md, prototype/tsdown</span
+        >
+      </div>
+    </div>
+  </body>
+</html>
