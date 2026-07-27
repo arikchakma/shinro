@@ -688,8 +688,8 @@
             today — the child process, the build coercion, the ambient module
             declarations — exists to prop up a bare specifier that a real file
             on disk resolves for free. <code>prototype/tsdown</code> already
-            gets this right. This is the argument for shipping it, plus the four
-            gaps I found in it.
+            gets this right. This is the argument for shipping it, plus the
+            seven gaps I found in it.
           </p>
           <div class="meta">
             <span><b>Reviewed</b> packages/shinro @ 612e179</span>
@@ -697,6 +697,10 @@
               ><b>Against</b> docs/SPEC.md (2371 lines), prototype/tsdown</span
             >
             <span><b>Target</b> v0.1</span>
+            <span
+              ><b>Revised</b> 2026-07-27 · &sect;5 platform question resolved,
+              gaps 6.5&ndash;6.7 added</span
+            >
           </div>
         </div>
       </header>
@@ -712,8 +716,8 @@
         <p style="font-size: 0.94rem; color: var(--ink-soft)">
           The rest of this is: where the code contradicts your goals today
           (&sect;1), the layering that fixes it (&sect;2&ndash;3), the DX end to
-          end (&sect;4&ndash;5), the four things the prototype misses (&sect;6),
-          and what to delete, in what order (&sect;7&ndash;9).
+          end (&sect;4&ndash;5), the seven things the prototype misses
+          (&sect;6), and what to delete, in what order (&sect;7&ndash;9).
         </p>
       </div>
 
@@ -972,7 +976,7 @@
   },
   "scripts": {
     "prepare": "shinro generate",
-    "dev": "node --watch --watch-path=src --import shinro/generate src/server.ts",
+    "dev": "node --watch --import shinro/watch src/server.ts",
     "build": "tsdown",
     "check": "shinro generate --check &amp;&amp; tsc --noEmit",
     "start": "node dist/server.mjs"
@@ -1105,24 +1109,36 @@
       </h2>
 
       <p>
-        I first wrote this section as a list of things you give up — two
-        processes, a cold-start race, split logs — on the assumption that
-        codegen and the runner had to be separate. They don't. One line, no
-        supervisor, no extra dependency:
+        An earlier draft of this section built the loop on
+        <code>node --watch --watch-path=src --import shinro/generate</code> and
+        filed the platform question under "worth confirming before it's written
+        down". Confirmed, and it kills that script as the default: Node's
+        documentation still restricts <code>--watch-path</code> to
+        <strong>macOS and Windows only</strong> (checked against current docs,
+        July 2026). It hard-fails on Linux — which is Docker, devcontainers,
+        WSL, Codespaces, and every CI smoke run. The <code>NODE_OPTIONS</code> +
+        <code>tsx watch --include</code> fallback breaks on Windows
+        <code>cmd</code> for the mirror-image reason. Neither survives as the
+        one documented loop.
+      </p>
+
+      <p>
+        The fix is to stop needing <code>--watch-path</code> at all: move the
+        directory watcher into the preload. Ship a second side-effecting
+        subpath, <code>shinro/watch</code> — generate once, then start the
+        in-process watcher from <code>core/watch.ts</code>. Plain
+        <code>--watch</code> is graph watching, which every platform supports,
+        and that turns out to be enough:
       </p>
 
       <figure class="code wide">
         <figcaption>
           <span>package.json</span><span>the whole dev loop</span>
         </figcaption>
-        <pre><code>"dev": "node --watch --watch-path=src --import shinro/generate src/server.ts"</code></pre>
+        <pre><code>"dev": "node --watch --import shinro/watch src/server.ts"</code></pre>
       </figure>
 
-      <p>
-        <code>shinro/generate</code> is a side-effecting subpath export: import
-        it, it generates. Three properties make it work, and each is
-        load-bearing:
-      </p>
+      <p>Three properties make it work, and each is load-bearing:</p>
 
       <ol>
         <li>
@@ -1140,18 +1156,23 @@
           hooks depend on.
         </li>
         <li>
-          <strong
-            ><code>--watch-path=src</code> watches the directory, not the
-            graph.</strong
-          >
-          A brand-new route file triggers a restart even though nothing imports
-          it yet. No graph watcher can do that — which is the real reason
-          <code>tsdown --watch</code> can't cover dev, and the reason I assumed
-          a second process was necessary.
+          <strong>The graph gap closes through the generated file.</strong> A
+          brand-new route file is invisible to a graph watcher — nothing imports
+          it yet. But the in-process watcher sees it, regenerates, and
+          <code>routes.ts</code> changes — and <code>routes.ts</code>
+          <em>is</em> in the graph via <code>#shinro/routes</code>, so
+          <code>--watch</code> restarts. The new-file problem that justified
+          <code>--watch-path</code> funnels itself through the one file the
+          graph can already see. Edits to existing route files never need the
+          watcher at all; they're in the graph on their own.
         </li>
         <li>
-          <strong>The restart re-runs the preload,</strong> so the new route is
-          registered. One restart per change, no coordination between processes.
+          <strong>The restart re-runs the preload,</strong> which regenerates
+          and re-establishes the watcher — so anything that changed during the
+          restart gap is reconciled on boot, and the tmp-then-rename writes in
+          <code>core/emit.ts</code> mean no restart ever imports a half-written
+          <code>routes.ts</code>. One restart per real change, no coordination
+          between processes.
         </li>
       </ol>
 
@@ -1160,15 +1181,15 @@
           >This makes an existing invariant load-bearing</span
         >
         <p>
-          Generation now runs on every restart, so an unconditional write bumps
-          the mtime of a file inside the watched tree, which triggers a restart,
-          which regenerates — forever. I tested both directions: unconditional
-          writes restart indefinitely, hash-then-skip settles at exactly one
-          restart per real change. SPEC &sect;25 already requires that unchanged
-          files keep their modification time, filed among the niceties. It is
-          the load-bearing invariant of the whole no-<code>shinro dev</code>
-          design, and it deserves a test asserting mtime is untouched — not
-          merely that the bytes match.
+          Generation runs on every restart, and <code>routes.ts</code> is a file
+          the graph watcher is watching — so an unconditional write triggers a
+          restart, which regenerates, which writes — forever. I tested both
+          directions: unconditional writes restart indefinitely, hash-then-skip
+          settles at exactly one restart per real change. SPEC &sect;25 already
+          requires that unchanged files keep their modification time, filed
+          among the niceties. It is the load-bearing invariant of the whole
+          no-<code>shinro dev</code> design, and it deserves a test asserting
+          mtime is untouched — not merely that the bytes match.
         </p>
       </div>
 
@@ -1181,44 +1202,44 @@
             <code>--experimental-strip-types</code>.
           </li>
           <li>
-            <strong>A platform caveat to verify.</strong> Node's documentation
-            puts <code>--watch-path</code> on macOS and Windows only. If that
-            still holds, Linux and Docker-based dev need the fallback, and this
-            can't be the single documented default. Worth confirming before it's
-            written down.
+            <strong>A resident watcher in the dev process.</strong> A few
+            <code>fs.watch</code> handles, dev-only and opt-in. It spawns
+            nothing, restarts nothing, and installs no signal handlers, so the
+            &sect;3 invariants hold — but it is Shinro code living inside the
+            user's server process, which the generate-only preload never was.
           </li>
           <li>
-            <strong
-              >Graph-only runners need the same preload, indirectly.</strong
-            >
-            <code
-              >NODE_OPTIONS="--import shinro/generate" tsx watch --include
-              "src/routes/**" src/server.ts</code
-            >. Awkward on Windows, and both <code>tsx --include</code> and
-            <code>NODE_OPTIONS</code> pass-through want verifying. If neither
-            holds, two processes is the last resort — with the split logs and
-            the <code>concurrently</code> dependency that I'd previously
-            accepted as the baseline.
+            <strong>Linux recursive watching has a bug history.</strong>
+            Recursive <code>fs.watch</code> landed on Linux in Node 20.13 and
+            misbehaved for several releases after. <code>core/watch.ts</code>
+            should maintain per-directory watchers there rather than trusting
+            <code>{ recursive: true }</code> — it owns the watcher either way,
+            so the fallback is contained in one file.
           </li>
         </ul>
       </div>
 
       <p>
-        Keep <code>shinro generate</code> in <code>prepare</code> regardless.
-        It's not about the dev loop any more — it's so a cold clone can run
+        Keep <code>shinro/generate</code> too — it's the right preload where a
+        directory restart is preferable and <code>--watch-path</code> is
+        available (macOS and Windows, skipping the resident watcher), and it's
+        what graph-only runners pass through <code>NODE_OPTIONS</code>. Both are
+        documented alternatives now, not the default. And keep
+        <code>shinro generate</code> in <code>prepare</code> regardless: it's
+        not about the dev loop any more — it's so a cold clone can run
         <code>tsc</code>, or open an editor, before anyone starts the server.
       </p>
 
       <p>
-        None of this argues for <code>shinro dev</code>. Node owns the watching,
-        the restarting, and the signals; Shinro guarantees only that
-        <code>.shinro</code> matches the route tree by the time the graph loads.
-        A <code>shinro dev</code> that spawns the runner is
+        None of this argues for <code>shinro dev</code>. Node still owns the
+        process: it restarts, it signals. The watcher writes files and the
+        runner notices — that's the whole contract. A
+        <code>shinro dev</code> that spawns the runner is
         <code>dev.ts</code> again under a friendlier name, and you'd be back to
         documenting SIGTERM semantics within a release.
       </p>
 
-      <h2><span class="num">§6</span> Four gaps in the prototype</h2>
+      <h2><span class="num">§6</span> Seven gaps in the prototype</h2>
 
       <h3>
         6.1 — The shipped tsconfig makes plain <code>tsc</code> impossible
@@ -1315,6 +1336,28 @@ $ echo $?
         rather than a trap.
       </p>
 
+      <div class="note">
+        <span class="note-title">The invariant --check quietly assumes</span>
+        <p>
+          Byte-comparing memory against disk only works if codegen is
+          <strong>deterministic</strong>: stable route ordering, no timestamps
+          in headers, forward slashes in emitted paths regardless of platform.
+          The header already gets this right — <code>format 3</code>, no date —
+          but nothing enforces it, and the first nondeterministic emit turns
+          <code>--check</code> into CI flake. Write it down as an invariant next
+          to mtime-preservation and runtime-neutrality, with a test: two
+          generates on the same tree, byte-identical, on every OS in the matrix.
+        </p>
+        <p>
+          The format number also earns its keep here: when the on-disk artifacts
+          carry an older format than the installed package would emit,
+          <code>--check</code> should say "generated by an older shinro — run
+          <code>shinro generate</code>" instead of dumping a byte diff. That's
+          the difference between a committed <code>.shinro/</code> surviving a
+          package upgrade and it becoming the confusing part of the changelog.
+        </p>
+      </div>
+
       <h3>6.4 — <code>basePath</code> should be Hono's, not yours</h3>
 
       <p>
@@ -1336,6 +1379,152 @@ $ echo $?
         since that string only feeds Hono's path generic for
         <code>c.req.param</code> typing.
       </p>
+
+      <h3>6.5 — <code>typeof app</code> is the DX cliff nobody has hit yet</h3>
+
+      <p>
+        <code>client.ts</code> derives <code>AppType</code> from
+        <code>typeof app</code>, and the <code>"./client"</code> export hands
+        that to frontend workspaces — which means the consumer's
+        <code>tsc</code> re-elaborates the entire server graph: every route,
+        every <code>zValidator</code> schema, every link in the chained generic.
+        Hono documents this slowdown on large chained apps and recommends
+        compiling types rather than shipping the inference. At ten routes nobody
+        notices. At eighty routes with validators it's the first complaint — and
+        it lands on exactly the feature that is the reason most people are here.
+      </p>
+
+      <p>
+        The supported answer is probably <code>tsc --declaration</code> over
+        <code>client.ts</code>: the emitted <code>.d.ts</code> flattens the
+        chain so consumers elaborate nothing (a <code>generate --dts</code>
+        flag can come later, once demand is proven). For v0.1 it's enough to
+        document that path and add a fixture with ~100 generated routes and a
+        type-check time budget in CI — so "the typed client scales" is a
+        measured claim, not an assumed one.
+      </p>
+
+      <h3>6.6 — The first error a new contributor sees is Node's, not yours</h3>
+
+      <p>
+        <code>validatePackageImports</code> warns at generate time — but the
+        failure a cold clone actually hits happens <em>before</em> generate
+        runs: <code>node src/server.ts</code> throws
+        <code>ERR_PACKAGE_IMPORT_NOT_DEFINED</code>, or a module-not-found
+        pointing into a <code>.shinro/</code> that doesn't exist, and nothing in
+        either message says "run <code>shinro generate</code>".
+        <code>prepare</code> covers install flows; it doesn't cover the person
+        who cloned and ran a file directly.
+      </p>
+
+      <p>
+        Two cheap fixes. First, promote <code>shinro init</code> from a
+        parenthetical to a specified command: idempotent, prints a diff of what
+        it would change, merges into an existing <code>imports</code> block
+        rather than refusing. It writes the four <code>imports</code> lines, the
+        tsconfig <code>extends</code>, and the
+        <code>dev</code>/<code>prepare</code>/<code>check</code> scripts — it is
+        the whole onboarding, so it deserves the spec section the dev server
+        used to have. Second, a docs page that lists the two or three
+        pre-generate errors verbatim with their one-line fixes, so the search
+        hit exists before the frustration does.
+      </p>
+
+      <h3>
+        6.7 — Hono's typed overloads end at ten handlers, and inlining sails
+        past them silently
+      </h3>
+
+      <p>
+        <code>routes.ts</code> inlines every <code>_middleware</code> along the
+        directory path plus the <code>defineHandler</code> tuple into one
+        registration. There are three arity ceilings in that pipeline, and they
+        fail very differently. <code>defineMiddleware</code> has none — it's a
+        variadic tuple. <code>defineHandler</code>'s hand-rolled ladder caps at
+        ten elements and fails <em>loud</em>: "no overload matches", in the
+        route file, where the author is. But Hono's
+        <code>HandlerInterface</code> also ends its typed overloads at path +
+        ten handlers, and past that lies a variadic fallback that infers one
+        shared <code>Input</code> for everything — and that one fails
+        <em>silent</em>.
+      </p>
+
+      <p>
+        Verified against hono 4.12.31 in the exact generated shape, pre-typed
+        tuples spread into <code>.get()</code>: at ten args the client is fully
+        typed. At eleven, <strong>zero diagnostics anywhere</strong> — not in
+        the route file, not in <code>routes.ts</code>, not in
+        <code>app.ts</code> — but that route's client input degrades to
+        <code>{} | undefined</code> and <code>.json()</code> returns
+        <code>unknown</code>. The validator's contribution to the contract just
+        vanishes. Runtime is unaffected (fourteen handlers execute fine, in
+        order), and <code>c.req.valid()</code> inside the route file stays
+        typed, because that's established at the
+        <code>defineHandler</code> site. It is specifically the generated client
+        — the headline feature — that loses the contract. Worse, the count is a
+        <em>sum the user never sees in one place</em>: three nested
+        <code>_middleware.ts</code> files with three middleware each, plus
+        <code>defineHandler(validator, handler)</code>, is eleven — and no
+        single file looks wrong.
+      </p>
+
+      <figure class="code wide">
+        <figcaption>
+          <span>.shinro/routes.ts</span><span>the fix, verified</span>
+        </figcaption>
+        <pre><code><span class="add">+ import { every } from "hono/combine";</span>
+
+<span class="del">- .get("/api/admin/users", ...apiMw, ...adminMw, ...usersGET)   // 11 args: silent type loss</span>
+<span class="add">+ .get("/api/admin/users", every(...apiMw, ...adminMw), ...usersGET)   // 3 args: fully typed</span></code></pre>
+      </figure>
+
+      <p>
+        The reason this costs nothing is worth internalizing: per-middleware
+        slots were never carrying type information.
+        <code>defineMiddleware</code> already types every element as plain
+        <code>MiddlewareHandler&lt;Env, Path&gt;</code> — no <code>Input</code>,
+        no typed responses — and the env is <em>declared</em> via the
+        <code>ShinroEnv</code> augmentation, not inferred through the chain
+        (your own &sect;17.1 argument). So collapsing N middleware into one slot
+        loses nothing, and I verified both halves: nine middleware plus a
+        validator plus a handler composed with <code>every()</code> keeps the
+        client fully typed, and a middleware that short-circuits without calling
+        <code>next()</code> still blocks the rest of the chain and the handler,
+        exactly as inline. Validators are the opposite case — they carry
+        <code>Input</code> into the RPC contract — which is why they live in the
+        <code>defineHandler</code> tuple and must stay inline. The rejected
+        alternative, chaining <code>.use("/api/*", …)</code> before the routes,
+        breaks route-group scoping: two pathless groups share URL space, so
+        path-pattern matching can't tell their middleware apart. Inlining is
+        per-route precise; composition keeps it that way.
+      </p>
+
+      <div class="note">
+        <span class="note-title">Two guards that go with it</span>
+        <p>
+          Composition shrinks the arity to 1 + the
+          <code>defineHandler</code> tuple length — but a maximal ten-element
+          tuple plus one middleware slot is eleven, over the cliff again. The
+          scanner already parses every <code>defineMiddleware</code> and
+          <code>defineHandler</code> call, so the arities are statically known:
+          <code>generate</code> should hard-error when a route's emitted
+          registration would exceed path + ten, naming the route and each
+          contributing file's count — per 6.3, generate is the only moment this
+          can be caught. And a type-level fixture (nine middleware + validator,
+          <code>expectTypeOf</code> asserting the client's input and response
+          stay concrete) pins both the emitter and Hono's ladder, so a hono
+          upgrade that moves the cliff fails in CI instead of in someone's
+          frontend.
+        </p>
+        <p>
+          The one cost: the generated file gains
+          <code>import { every } from "hono/combine"</code>. Still
+          runtime-neutral — no <code>node:</code> specifier — so the &sect;4
+          invariant holds. Emit it whenever a route has directory middleware,
+          not only past the limit, so the ≤10 and &gt;10 cases stay on one code
+          path.
+        </p>
+      </div>
 
       <h2><span class="num">§7</span> The cut list</h2>
 
@@ -1494,12 +1683,16 @@ $ echo $?
         </li>
         <li>
           Delete <code>dev.ts</code> and <code>build.*</code>. Add the
-          <code>shinro/generate</code> preload and have <code>init</code> write
-          the one-line dev script. This is the commit where goals 2 and 4
-          actually become true.
+          <code>shinro/generate</code> and <code>shinro/watch</code> preloads
+          and have <code>init</code> write the one-line dev script. This is the
+          commit where goals 2 and 4 actually become true.
         </li>
         <li>
-          Add the no-adapter fixture and <code>generate --check</code>. Now the
+          Add the no-adapter fixture and <code>generate --check</code>, with the
+          determinism and mtime tests behind it. Switch the emitter to
+          <code>every()</code> composition and add the arity diagnostic and type
+          fixture from 6.7 in the same pass — they're all facets of one claim:
+          what generate emits is exactly what the types promise. Now the
           layering is enforced by CI rather than by intent.
         </li>
         <li>
@@ -1516,9 +1709,10 @@ $ echo $?
       </p>
 
       <div class="colophon">
-        <span>Architecture review · shinro v0.1</span>
+        <span>Architecture review · shinro v0.1 · revised 2026-07-27</span>
         <span
-          >Sources: packages/shinro/src, docs/SPEC.md, prototype/tsdown</span
+          >Sources: packages/shinro/src, docs/SPEC.md, prototype/tsdown,
+          nodejs.org CLI docs</span
         >
       </div>
     </div>
