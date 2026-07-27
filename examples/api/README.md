@@ -17,13 +17,13 @@ client's URLs follow it for free.
 
 ## How it is wired
 
-There is no Shinro plugin in `vite.config.ts`. Four things do the whole job:
+Four things do the whole job:
 
 | Where                    | What                                                                                                                                         |
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | `package.json` `imports` | `#shinro/routes` → `./.shinro/routes.ts`. Part of ESM resolution, so tsc, node, tsx, bun, and rolldown all resolve it without configuration. |
 | `tsconfig.json`          | `{ "extends": "shinro/tsconfig" }`, which carries `rootDirs` and `include` for the generated `+types` declarations.                          |
-| `tsdown.config.ts`       | The app owns its build; `shinro/tsdown` regenerates in `buildStart` so a build cannot ship stale routes.                                     |
+| `vite.config.ts` `pack`  | The app owns its build; the `shinro/tsdown` plugin regenerates in `buildStart` so a build cannot ship stale routes.                          |
 | `package.json` scripts   | `shinro generate` in `prepare`, `shinro generate --check` in `check`.                                                                        |
 
 ## Highlights
@@ -37,7 +37,7 @@ There is no Shinro plugin in `vite.config.ts`. Four things do the whole job:
 - optional generated route and middleware type declarations;
 - a chained Hono sub-router and a chained manual route;
 - a generated typed client exported as `@shinro/api/client`;
-- a `tsdown` build whose `dist` mirrors the source tree, with
+- a `vp pack` build whose `dist` mirrors the source tree, with
   application-owned graceful shutdown.
 
 Generation reports Shinro's documented sub-router boundary warning: the root
