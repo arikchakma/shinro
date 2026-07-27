@@ -18,10 +18,14 @@ const PACKAGE_ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 test('the watcher picks up a brand-new route file', async () => {
   await withProject('watch-new-route', async (project) => {
-    await project.write('src/routes/health.ts', GET_ROUTE);
+    await project.write('src/routes/health.ts', route('{ ok: true }'));
+    const runs: { changed: string[]; wrote: number }[] = [];
     const watcher = await watch({
       config: await loadConfig(project.root, silentLogger()),
       logger: silentLogger(),
+      onGenerate: (result, changed) => {
+        runs.push({ changed, wrote: result.written.length });
+      },
     });
 
     try {
@@ -33,11 +37,24 @@ test('the watcher picks up a brand-new route file', async () => {
       await waitFor(async () =>
         (await project.generated('routes.ts')).includes('/added')
       );
+
+      // Editing a handler body changes nothing in `.shinro` — `routes.ts` only
+      // imports the file. That is the most common edit in a dev loop, and
+      // gating the callback on drift made it the silent one. Asserted on this
+      // watcher rather than a fourth of its own: every extra concurrent
+      // watcher in this file slows all of them under a parallel suite.
+      await project.write('src/routes/health.ts', route('{ ok: false }'));
+
+      await waitFor(() => runs.some((run) => run.wrote === 0));
+      const quiet = runs.find((run) => run.wrote === 0);
+      expect(quiet?.changed.some((file) => file.endsWith('health.ts'))).toBe(
+        true
+      );
     } finally {
       await watcher.close();
     }
   });
-}, 15_000);
+}, 20_000);
 
 test('the watcher ignores files that cannot change the route tree', async () => {
   await withProject('watch-noise', async (project) => {
@@ -284,9 +301,15 @@ function silentLogger(): ReturnType<typeof createLogger> {
   return { error: () => {}, info: () => {}, warn: () => {} };
 }
 
+/**
+ * The default is most of the 15s budget these tests declare, not a third of it.
+ * Every caller is waiting on a real `fs.watch` event plus a full scan, and the
+ * suite runs nine files at once — a tight inner deadline turns ordinary
+ * contention into a failure that looks like a dropped event.
+ */
 async function waitFor(
   condition: () => boolean | Promise<boolean>,
-  timeout = 5_000
+  timeout = 12_000
 ): Promise<void> {
   const deadline = Date.now() + timeout;
 

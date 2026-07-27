@@ -58,11 +58,21 @@ export async function watch(options: {
    */
   keepAlive?: boolean;
   logger: ShinroLogger;
-  onGenerate?: (result: GenerateResult) => void;
+  /**
+   * Called after every regeneration, including the ones that wrote nothing.
+   * `changed` is the files that triggered it, which may be empty when the
+   * platform reported an event without a filename.
+   */
+  onGenerate?: (result: GenerateResult, changed: string[]) => void;
 }): Promise<{ close: () => Promise<void> }> {
   const { config, initial = 'throw', keepAlive = false, logger } = options;
   const routesDirectory = resolve(config.root, config.routes);
   const watchers = new Map<string, FSWatcher>();
+  // What set this regeneration off, accumulated across the debounce window so a
+  // save that touches three files reports three files rather than the last one.
+  // Empty when the platform handed back a null filename, which says only that
+  // something happened.
+  const triggers = new Set<string>();
   let closed = false;
   let timer: NodeJS.Timeout | undefined;
   let generating = false;
@@ -77,9 +87,14 @@ export async function watch(options: {
     generating = true;
     try {
       const result = await generate({ config, logger });
-      if (result.written.length > 0 || result.removed.length > 0) {
-        options.onGenerate?.(result);
-      }
+      // Fired on every regeneration, drift or not. Gating on drift here made a
+      // silent watcher the normal case: editing a handler body changes nothing
+      // in `.shinro` — `routes.ts` only imports the file — so the common edit
+      // produced no output at all and the watcher looked dead. Callers that
+      // only care about writes check `written`/`removed` themselves.
+      const changed = [...triggers];
+      triggers.clear();
+      options.onGenerate?.(result, changed);
     } catch (error) {
       // A route conflict or a syntax error mid-edit is a normal state in a dev
       // loop: the previous generation is still on disk, and taking down the
@@ -139,6 +154,9 @@ export async function watch(options: {
       isDirectoryShaped ||
       affectsRouteTree(routesDirectory, file, config.ignoredRouteFiles)
     ) {
+      if (!isDirectoryShaped) {
+        triggers.add(file);
+      }
       schedule();
     }
   };
