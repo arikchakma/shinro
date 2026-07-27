@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
+import { readFile, rm } from 'node:fs/promises';
 import { promisify } from 'node:util';
 
 import { expect, test } from 'vite-plus/test';
@@ -100,19 +100,30 @@ test('published dependency ranges resolve without the workspace', async () => {
 
 test('the package build does not leak the fixture application environment', async () => {
   const packageRoot = new URL('..', import.meta.url);
+  // Into its own directory rather than `dist`: the example app runs against the
+  // published build in a test of its own, and a pack that cleans `dist` out from
+  // under it is a race, not a failure anyone can read.
+  const outputDirectory = 'dist-declarations';
 
   await run(
     new URL('../node_modules/.bin/vp', import.meta.url).pathname,
-    ['pack'],
+    // `--no-exports` because the export metadata is derived from the output
+    // directory: with one this build invented, packing would rewrite the real
+    // `bin` and `exports` to point at a directory it is about to delete.
+    ['pack', '--out-dir', outputDirectory, '--no-exports'],
     {
       cwd: packageRoot.pathname,
     }
   );
 
   const declaration = await readFile(
-    new URL('../dist/app.d.mts', import.meta.url),
+    new URL(`../${outputDirectory}/app.d.mts`, import.meta.url),
     'utf8'
   );
+  await rm(new URL(`../${outputDirectory}`, import.meta.url), {
+    force: true,
+    recursive: true,
+  });
   // Doc comments are stripped first: they legitimately show an example env, and
   // the leak this guards against would be in the declarations themselves.
   const declared = declaration.replace(/\/\*[\s\S]*?\*\//g, '');

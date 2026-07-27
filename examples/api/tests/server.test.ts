@@ -3,7 +3,6 @@ import type { ChildProcess } from 'node:child_process';
 import { readdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
-import { build } from 'tsdown';
 import { expect, test } from 'vite-plus/test';
 
 test('the production entry serves requests and shuts down gracefully', async () => {
@@ -11,14 +10,11 @@ test('the production entry serves requests and shuts down gracefully', async () 
   let child: ChildProcess | undefined;
 
   try {
-    // The app owns its build, and this is that build: its own `tsdown.config.ts`,
-    // with the Shinro adapter regenerating `.shinro` before rolldown reads the
-    // graph.
-    await build({
-      config: `${root}/tsdown.config.ts`,
-      cwd: root,
-      silent: true,
-    });
+    // The app owns its build, and this is that build: `vp pack` over the app's
+    // own config, with the Shinro adapter regenerating `.shinro` before rolldown
+    // reads the graph. Spawned rather than called, because the pack options live
+    // under `pack` in `vite.config.ts` — the CLI is what knows to read them.
+    await expect(pack(root)).resolves.toBe(0);
 
     const javascript = (await readdir(`${root}/dist`)).filter((file) =>
       /\.(?:c|m)?js$/.test(file)
@@ -51,6 +47,14 @@ test('the production entry serves requests and shuts down gracefully', async () 
     }
   }
 }, 15_000);
+
+function pack(root: string): Promise<number | null> {
+  const binary = fileURLToPath(import.meta.resolve('vite-plus/bin'));
+
+  return exitCode(
+    spawn(process.execPath, [binary, 'pack'], { cwd: root, stdio: 'ignore' })
+  );
+}
 
 function collectOutput(child: ChildProcess): {
   waitFor: (pattern: RegExp) => Promise<RegExpMatchArray>;
