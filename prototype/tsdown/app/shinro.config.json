@@ -1,6 +1,0 @@
-{
-  "$schema": "./node_modules/shinro/schema.json",
-  "routes": "src/routes",
-  "app": "src/app.ts",
-  "ignoredRouteFiles": ["**/*.spec.ts"]
-}

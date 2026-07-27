@@ -4,12 +4,27 @@ A runnable Node.js API demonstrating Shinro's route-authoring features in a
 small, focused application.
 
 ```sh
-vp run api#typegen
-vp run api#dev
+vp run api#generate   # write .shinro from the route tree
+vp run api#dev        # node --watch --import shinro/watch src/server.ts
 ```
 
-The server listens on `PORT`, defaulting to `3000`. File routes use the
-configured `/v1` base path.
+One process, no `shinro dev`, no supervisor: the preload generates before the
+entry resolves and then watches the routes directory, and Node owns the watching,
+the restarting, and the signals. The server listens on `PORT`, defaulting to
+`3000`. The `/v1` prefix is Hono's — `defineApp().basePath('/v1')` in `src/app.ts`
+— so it covers the manual route and every file route alike, and the generated
+client's URLs follow it for free.
+
+## How it is wired
+
+There is no Shinro plugin in `vite.config.ts`. Four things do the whole job:
+
+| Where                    | What                                                                                                                                         |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `package.json` `imports` | `#shinro/routes` → `./.shinro/routes.ts`. Part of ESM resolution, so tsc, node, tsx, bun, and rolldown all resolve it without configuration. |
+| `tsconfig.json`          | `{ "extends": "shinro/tsconfig" }`, which carries `rootDirs` and `include` for the generated `+types` declarations.                          |
+| `tsdown.config.ts`       | The app owns its build; `shinro/tsdown` regenerates in `buildStart` so a build cannot ship stale routes.                                     |
+| `package.json` scripts   | `shinro generate` in `prepare`, `shinro generate --check` in `check`.                                                                        |
 
 ## Highlights
 
@@ -21,12 +36,13 @@ configured `/v1` base path.
   escaped `[sitemap.xml].ts` route serving `/v1/sitemap.xml`;
 - optional generated route and middleware type declarations;
 - a chained Hono sub-router and a chained manual route;
-- generated Hono RPC and client exports;
-- a one-file Node build with application-owned graceful shutdown.
+- a generated typed client exported as `@shinro/api/client`;
+- a `tsdown` build whose `dist` mirrors the source tree, with
+  application-owned graceful shutdown.
 
-Type generation reports Shinro's documented sub-router boundary warning:
-the root directory middleware runs around `/v1/admin`, but its response
-types cannot be merged into every opaque route inside that sub-router.
+Generation reports Shinro's documented sub-router boundary warning: the root
+directory middleware runs around `/v1/admin`, but its response types cannot be
+merged into every opaque route inside that sub-router.
 
 Call the protected route with and without the demo credential:
 

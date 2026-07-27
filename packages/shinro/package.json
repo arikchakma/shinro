@@ -34,9 +34,14 @@
   },
   "files": [
     "dist",
-    "tsconfig.base.json"
+    "tsconfig.base.json",
+    "tsconfig.emit.json"
   ],
   "type": "module",
+  "imports": {
+    "#shinro/routes": "./.shinro/routes.ts",
+    "#shinro/client": "./.shinro/client.ts"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.mts",
@@ -50,19 +55,41 @@
       "types": "./dist/cli.d.mts",
       "import": "./dist/cli.mjs"
     },
-    "./package.json": "./package.json",
-    "./tsconfig": "./tsconfig.base.json"
+    "./generate": {
+      "types": "./dist/generate.d.mts",
+      "import": "./dist/generate.mjs"
+    },
+    "./watch": {
+      "types": "./dist/watch.d.mts",
+      "import": "./dist/watch.mjs"
+    },
+    "./tsdown": {
+      "types": "./dist/adapters/tsdown.d.mts",
+      "import": "./dist/adapters/tsdown.mjs"
+    },
+    "./vite": {
+      "types": "./dist/adapters/vite.d.mts",
+      "import": "./dist/adapters/vite.mjs"
+    },
+    "./tsconfig": "./tsconfig.base.json",
+    "./tsconfig/emit": "./tsconfig.emit.json",
+    "./package.json": "./package.json"
   },
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
     "build": "vp pack",
-    "check": "vp check",
+    "check": "vp run generate && vp check",
     "dev": "vp pack --watch",
+    "generate": "node src/cli.ts generate",
     "prepublishOnly": "vp run build",
+    "pretest": "vp run generate",
     "release": "bumpp",
     "test": "vp test"
+  },
+  "dependencies": {
+    "oxc-parser": "^0.90.0"
   },
   "devDependencies": {
     "@hono/node-server": "catalog:",
@@ -71,6 +98,7 @@
     "@typescript/native-preview": "catalog:",
     "bumpp": "^11.1.0",
     "hono": "^4.10.0",
+    "tsdown": "^0.15.0",
     "typescript": "^7.0.2",
     "vite": "catalog:",
     "vite-plus": "catalog:",
@@ -79,7 +107,16 @@
   },
   "peerDependencies": {
     "hono": "^4.0.0",
+    "tsdown": "^0.15.0",
     "vite": "^8.0.0"
+  },
+  "peerDependenciesMeta": {
+    "tsdown": {
+      "optional": true
+    },
+    "vite": {
+      "optional": true
+    }
   },
   "engines": {
     "node": ">=22.12.0"

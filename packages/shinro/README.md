@@ -2,23 +2,23 @@
 
 Opinionated file-based routing for Hono with end-to-end type safety.
 
-Shinro discovers route modules through one Vite plugin, exposes them as a Hono
-sub-router, and generates a typed Hono client. You decide where to mount the
-routes, how to start the server, and how to handle signals and graceful
-shutdown.
+Shinro turns a directory of route modules into a real file on disk, exposes it as
+a Hono sub-router, and generates a typed Hono client. You decide where to mount
+the routes, which runner starts the server, and how to handle signals and
+graceful shutdown.
 
-Its scope is deliberately narrow: a documented set of filename conventions,
-one routing integration, and no abstraction over your server lifecycle. For
+Its scope is deliberately narrow: a documented set of filename conventions, one
+generator, and no abstraction over your server lifecycle or your build. For
 anything outside that scope, use Hono directly.
 
 ## Install
 
 ```sh
-vp add hono
-vp add -D shinro
+vp add hono shinro
 ```
 
-For Node.js:
+`shinro/app` is imported by your route files, so `shinro` is a dependency rather
+than a dev dependency. For Node.js:
 
 ```sh
 vp add @hono/node-server
@@ -28,23 +28,27 @@ Bun can use `Bun.serve()` directly.
 
 ## Configure
 
-```ts
-// vite.config.ts
-import { shinro } from 'shinro';
-import { defineConfig } from 'vite';
-
-export default defineConfig({
-  plugins: [shinro()],
-});
+```sh
+shinro init
 ```
 
-Shinro is the only routing integration. There is no Node plugin, Bun
-plugin, RPC plugin, or lifecycle plugin.
+`init` is idempotent, prints what it changed, and merges into what is already
+there. It writes three things, and there is nothing else to configure:
 
-Extend the bundled base config. It configures `moduleResolution`, TypeScript
-import extensions, `rootDirs`, and the `include` patterns for generated
-declarations. As a result, `shinro/app` and `shinro/routes` resolve without
-hand-written `paths`:
+```jsonc
+// package.json
+{
+  "imports": {
+    "#shinro/routes": "./.shinro/routes.ts",
+    "#shinro/client": "./.shinro/client.ts",
+  },
+  "scripts": {
+    "dev": "node --watch --import shinro/watch src/server.ts",
+    "prepare": "shinro generate",
+    "check": "shinro generate --check && tsc --noEmit",
+  },
+}
+```
 
 ```jsonc
 // tsconfig.json
@@ -58,22 +62,28 @@ hand-written `paths`:
 }
 ```
 
-`shinro/routes`, `shinro/client`, and `shinro/rpc` resolve through a
-generated `.shinro/shinro.d.ts` (ambient module declarations), and
-`shinro/app` resolves through the package `exports` — none needs a `paths`
-entry.
+The `imports` block is the load-bearing part, and it is deliberately not a
+plugin: subpath imports are part of ESM resolution, so `#shinro/routes` resolves
+in `node`, `tsx`, `bun`, `rolldown`, and TypeScript by construction rather than
+because a bundler was configured. A relative import works too and is never
+warned about — `import { routes } from '../.shinro/routes.ts'` needs no
+`package.json` at all. `#shinro/routes` is the documented default only because it
+survives moving `app.ts`.
 
-The base config includes both `.shinro/**/*.d.ts` and `.shinro/**/*.ts`. This
-loads the ambient declarations and type-checks the generated router with the
-rest of the project, even when nothing imports it. Both patterns are required
-because TypeScript's `*.ts` glob does not match `.d.ts` files.
+The shipped base config carries `moduleResolution`, TypeScript import
+extensions, `rootDirs`, and the `include` patterns the generated `+types`
+declarations need. It uses `${configDir}`, so a base config living in
+`node_modules` still expresses paths relative to _your_ project. `.shinro` is
+where Shinro generates, always — that is what makes the shipped config possible.
 
-The shipped base hardcodes the default `.shinro` location. A project that
-sets `rpc.outDir` elsewhere cannot extend it and should merge the equivalent
-`rootDirs` and `include` entries by hand; Shinro's warning prints them for
-the directory you configured.
+`shinro/tsconfig` is check-only (`noEmit`, which is what makes
+`allowImportingTsExtensions` legal). A project that wants plain `tsc` to _emit_
+extends `shinro/tsconfig/emit` instead, which swaps `noEmit` for
+`rewriteRelativeImportExtensions` so the generated `./x.ts` specifiers become
+`./x.js` in the output.
 
-Ignore generated and build output:
+Ignore generated and build output, or commit `.shinro/` and let
+`shinro generate --check` keep it honest — both are supported:
 
 ```gitignore
 .shinro/
@@ -83,10 +93,10 @@ dist/
 ## Create the app
 
 ```ts
-// app/app.ts
+// src/app.ts
+import { routes } from '#shinro/routes';
 import { logger } from 'hono/logger';
 import { defineApp } from 'shinro/app';
-import { routes } from 'shinro/routes';
 
 declare module 'shinro/app' {
   interface ShinroEnv {
@@ -107,7 +117,7 @@ const app = defineApp()
 export default app;
 ```
 
-`shinro/routes` exposes your file routes as a Hono sub-router. You mount it
+`#shinro/routes` exposes your file routes as a Hono sub-router. You mount it
 yourself. `route()` copies the sub-router's routes and schema onto your app and
 returns the same instance. The result is one Hono instance, no nested dispatch,
 and a complete RPC contract in `typeof app`, including manual routes.
@@ -169,7 +179,7 @@ Server startup and shutdown stay in your application code.
 ## Add routes
 
 ```ts
-// app/routes/health.ts
+// src/routes/health.ts
 import { defineHandler } from 'shinro/app';
 
 export const GET = defineHandler((c) => {
@@ -180,7 +190,7 @@ export const GET = defineHandler((c) => {
 One file can handle multiple methods:
 
 ```ts
-// app/routes/api/users.ts
+// src/routes/api/users.ts
 import { zValidator } from '@hono/zod-validator';
 import { defineHandler } from 'shinro/app';
 import { z } from 'zod';
@@ -209,14 +219,14 @@ Supported named exports are `GET`, `POST`, `PUT`, `PATCH`, `DELETE`,
 
 | File                            | URL                |
 | ------------------------------- | ------------------ |
-| `app/routes/index.ts`           | `/`                |
-| `app/routes/health.ts`          | `/health`          |
-| `app/routes/api/users.ts`       | `/api/users`       |
-| `app/routes/api/users/index.ts` | `/api/users`       |
-| `app/routes/api/users/$id.ts`   | `/api/users/:id`   |
-| `app/routes/files/$...path.ts`  | `/files/:path{.+}` |
-| `app/routes/(authed)/orders.ts` | `/orders`          |
-| `app/routes/[(foo)].ts`         | `/(foo)`           |
+| `src/routes/index.ts`           | `/`                |
+| `src/routes/health.ts`          | `/health`          |
+| `src/routes/api/users.ts`       | `/api/users`       |
+| `src/routes/api/users/index.ts` | `/api/users`       |
+| `src/routes/api/users/$id.ts`   | `/api/users/:id`   |
+| `src/routes/files/$...path.ts`  | `/files/:path{.+}` |
+| `src/routes/(authed)/orders.ts` | `/orders`          |
+| `src/routes/[(foo)].ts`         | `/(foo)`           |
 
 Catch-all parameters match one or more segments. Static routes register
 before dynamic routes, which register before catch-alls.
@@ -235,10 +245,11 @@ Additional files can be excluded with route-relative globs, matched by
 [`path.matchesGlob`](https://nodejs.org/api/path.html#pathmatchesglobpath-pattern).
 A match excludes both route modules and directory middleware:
 
-```ts
-shinro({
-  ignoredRouteFiles: ['internal/**', '**/*.draft.ts'],
-});
+```jsonc
+// shinro.config.json
+{
+  "ignoredRouteFiles": ["internal/**", "**/*.draft.ts"],
+}
 ```
 
 A method export is spread into Hono, so it must be an array of handlers.
@@ -261,7 +272,7 @@ else is left to TypeScript, which checks it against your own source.
 descendant. It can export multiple middleware handlers:
 
 ```ts
-// app/routes/api/_middleware.ts
+// src/routes/api/_middleware.ts
 import { defineMiddleware } from 'shinro/app';
 import type { Route } from './+types/api/_middleware.ts';
 
@@ -280,9 +291,9 @@ export default defineMiddleware<Route.Middleware>(
 For `/api/users`, middleware stacks from the route root toward the leaf:
 
 ```text
-app/routes/_middleware.ts
-app/routes/api/_middleware.ts
-app/routes/api/users.ts
+src/routes/_middleware.ts
+src/routes/api/_middleware.ts
+src/routes/api/users.ts
 ```
 
 Shinro flattens this chain onto named routes. Typed early responses from
@@ -294,7 +305,7 @@ response union.
 Because the chain is attached to each named route rather than to a path
 prefix, directory middleware runs **only when a route matches**. A request to
 `/api/does-not-exist` goes straight to the not-found handler without running
-`app/routes/api/_middleware.ts`, and so does an `OPTIONS` preflight to a path
+`src/routes/api/_middleware.ts`, and so does an `OPTIONS` preflight to a path
 that has no route.
 
 This behavior keeps the RPC contract accurate: every response a client can
@@ -303,7 +314,7 @@ _every_ request — CORS, request IDs, access logging, and tracing — therefore
 belong on the base app, where Hono middleware applies to all requests:
 
 ```ts
-// app/app.ts
+// src/app.ts
 app.use('*', cors());
 app.use('*', requestId());
 ```
@@ -318,10 +329,10 @@ some sibling URLs but not others, organize those routes under a directory named
 `(name)`. The directory contributes middleware ancestry but no URL segment:
 
 ```text
-app/routes/(authed)/_middleware.ts   ← auth
-app/routes/(authed)/orders.ts        → /orders    (authed)
-app/routes/(authed)/billing.ts       → /billing   (authed)
-app/routes/health.ts                 → /health    (public)
+src/routes/(authed)/_middleware.ts   ← auth
+src/routes/(authed)/orders.ts        → /orders    (authed)
+src/routes/(authed)/billing.ts       → /billing   (authed)
+src/routes/health.ts                 → /health    (public)
 ```
 
 `/orders` is protected, `/health` is not, and neither URL mentions the group.
@@ -341,11 +352,11 @@ To serve a character that route syntax would otherwise claim, wrap it in
 
 | File                          | URL            |
 | ----------------------------- | -------------- |
-| `app/routes/[sitemap.xml].ts` | `/sitemap.xml` |
-| `app/routes/[(foo)].ts`       | `/(foo)`       |
-| `app/routes/[$]id.ts`         | `/$id`         |
-| `app/routes/[index].ts`       | `/index`       |
-| `app/routes/[[weird]].ts`     | `/[weird]`     |
+| `src/routes/[sitemap.xml].ts` | `/sitemap.xml` |
+| `src/routes/[(foo)].ts`       | `/(foo)`       |
+| `src/routes/[$]id.ts`         | `/$id`         |
+| `src/routes/[index].ts`       | `/index`       |
+| `src/routes/[[weird]].ts`     | `/[weird]`     |
 
 An escape makes its segment static, so it is never read as a parameter or a
 group. A `[` matches the next `]`, and a stray `[` is an ordinary character.
@@ -372,7 +383,7 @@ Routes do not need generated imports. For runtime-validated input, prefer a
 Hono validator:
 
 ```ts
-// app/routes/users/$id.ts
+// src/routes/users/$id.ts
 const params = z.object({ id: z.string().min(1) });
 
 export const GET = defineHandler(zValidator('param', params), (c) => {
@@ -419,7 +430,7 @@ after an explicit one.
 A route file can default-export a chained Hono sub-router:
 
 ```ts
-// app/routes/admin.ts
+// src/routes/admin.ts
 import { Hono } from 'hono';
 
 export default new Hono()
@@ -429,17 +440,19 @@ export default new Hono()
 
 This creates `/admin` and `/admin/stats`, including both in the generated
 client. The file owns the complete `/admin` namespace, so it cannot coexist
-with `app/routes/admin/**` or a dynamic file route that can match beneath
+with `src/routes/admin/**` or a dynamic file route that can match beneath
 that namespace.
 
-`basePath` prefixes **file routes only**. Routes you register on the app
-yourself are left exactly as written, so a manual route that should sit under
-the prefix has to spell it out:
+To serve everything under a prefix, use Hono's own `basePath`. There is no
+Shinro option for this, deliberately: one mechanism covers the manual routes and
+the mounted file routes alike, and it stays in the schema, so the generated
+client's URLs follow it for free.
 
 ```ts
-shinro({ basePath: '/v1' });
-
-const app = defineApp().get('/v1/manual', handler);
+const app = defineApp()
+  .basePath('/v1')
+  .get('/manual', handler) // served at /v1/manual
+  .route('/', routes()); // file routes served under /v1 too
 ```
 
 Manual routes are also valid:
@@ -457,24 +470,38 @@ appear in the client type.
 
 ## Generated route table
 
-`.shinro/routes.ts` contains one chained Hono registration per route in a
-single exported function. The `shinro/routes` specifier resolves to this file,
-which imports only your route modules:
+`.shinro/routes.ts` contains one chained Hono registration per route in a single
+exported function. It imports your route modules by relative path with the `.ts`
+extension intact, which is why every runner can execute it without help:
 
 ```ts
 // .shinro/routes.ts
+import { Hono } from 'hono';
+import type { ProjectEnv } from 'shinro/app';
+
+import middleware0 from '../src/routes/api/_middleware.ts';
+import { GET as route0GET } from '../src/routes/health.ts';
+import { POST as route1POST } from '../src/routes/api/users.ts';
+
 export function routes() {
   return new Hono<ProjectEnv>()
     .get('/health', ...route0GET)
-    .post('/api/users', ...route1Middleware0, ...route1POST);
+    .post('/api/users', ...middleware0, ...route1POST);
 }
 ```
+
+Nothing in it is `node:`-specific, so the same output runs on Node, Bun, Deno,
+and a Worker. Generation writes into a staging directory inside `.shinro` and
+promotes each file with `rename`, so a reader never sees a half-written module and
+a failure leaves the previous generation byte for byte. Files whose contents are
+unchanged are not rewritten at all — their modification time is untouched, which
+is what keeps a watching runner from restarting in a loop.
 
 Because the generated router never imports your app, your app can safely import
 it. The chain gives Hono the schema required for RPC, and `route()` merges that
 schema into your app at the mount. Consequently, `typeof app` describes the
 complete contract. No generated module replaces your application:
-`app/app.ts` remains the routed app.
+`src/app.ts` remains the routed app.
 
 Error handling stays on your app. The generated router deliberately has no
 `onError`, because Hono's `route()` wraps every copied handler in a compose
@@ -482,11 +509,12 @@ closure when the sub-app carries its own error handler.
 
 ## RPC client
 
-Shinro generates `.shinro/client.ts`, and `.shinro/rpc.ts` re-exports
-`AppType` from it for workspaces that publish their types:
+Shinro generates `.shinro/client.ts`, whose `AppType` is `typeof app` — so
+manual routes and file routes are both in it without codegen assembling
+anything:
 
 ```ts
-import { defineClient } from './.shinro/client.ts';
+import { defineClient } from '#shinro/client';
 
 const api = defineClient('http://localhost:3000');
 
@@ -517,21 +545,24 @@ An API workspace can publish its generated types:
 {
   "exports": {
     "./client": "./.shinro/client.ts",
-    "./rpc": "./.shinro/rpc.ts",
   },
 }
 ```
 
-Set `rpc.enabled` to `false` when the project does not need a generated client.
-Routing is unaffected: `.shinro/routes.ts` and its declaration are always
-generated, since mounting them is how the application serves anything.
+There is no switch for this. `client.ts` is one type-only file, it costs nothing
+to emit, and it is why most people are here.
+
+On a large app, note that a consumer of `./client` re-elaborates the whole
+chained server type. Hono documents that cost; past a few dozen routes, run
+`tsc --declaration` over `client.ts` and publish the emitted `.d.ts` so
+consumers elaborate nothing.
 
 ## Own the server lifecycle
 
 Node example:
 
 ```ts
-// app/server.ts
+// src/server.ts
 import { serve } from '@hono/node-server';
 
 import app from './app.ts';
@@ -549,7 +580,7 @@ process.once('SIGTERM', () => {
 Bun example:
 
 ```ts
-// app/server.ts
+// src/server.ts
 import app from './app.ts';
 
 const server = Bun.serve({
@@ -562,25 +593,89 @@ process.once('SIGTERM', () => {
 });
 ```
 
-These are application decisions. Shinro imports the configured entry
-during development and bundles that exact entry for production; it never
-creates or hides the native server.
+These are application decisions. Shinro never imports your entry, never spawns
+it, and never installs a signal handler: it guarantees only that `.shinro`
+matches the route tree by the time your module graph loads.
 
-## Development, type generation, and build
+## Development
 
 ```sh
-vp dev
-shinro typegen
-vp build
+node --watch --import shinro/watch src/server.ts
 ```
 
-`shinro typegen` refreshes `.shinro` without starting the application
-listener, which makes clean-checkout `tsc --noEmit` workflows possible.
+That is the whole dev loop, in one process. `shinro/watch` is a side-effecting
+subpath for `node --import`: it generates once — before the entry is resolved,
+which is why it must be `--import` and not an import inside a dev entry — and
+then keeps one debounced watcher on the routes directory.
 
-By default the build is **unbundled** (`build.unbundle: true`): the output
-preserves your source module tree and keeps dependencies external, so `dist`
-mirrors `src` and remains easy to inspect. `dist/server.mjs` is always the entry
-that boots the app:
+Plain `--watch` is graph watching, and the graph is enough because the one thing
+it cannot see funnels through a file it can. A brand-new route file is invisible
+to a graph watcher, since nothing imports it yet; the watcher regenerates,
+`routes.ts` changes, and `routes.ts` _is_ in the graph through `#shinro/routes`,
+so Node restarts. The restart re-runs the preload, which reconciles anything that
+changed in the gap. One restart per real change.
+
+Two documented alternatives, both one line:
+
+```sh
+# a directory restart instead of a resident watcher (macOS and Windows: Node
+# restricts --watch-path to those platforms)
+node --watch --watch-path=src --import shinro/generate src/server.ts
+
+# a runner with its own watcher
+NODE_OPTIONS="--import shinro/generate" tsx watch --include "src/routes/**" src/server.ts
+```
+
+There is no `shinro dev`. Anything that spawned the runner would be a supervisor,
+and a supervisor owes you SIGTERM semantics, log multiplexing, and exit-code
+forwarding within a release.
+
+A `.ts` entry needs Node ≥23.6 for unflagged type stripping, or 22.12 with
+`--experimental-strip-types`.
+
+## Generating, checking, and building
+
+```sh
+shinro generate           # write .shinro from the route tree
+shinro generate --watch   # for a runner that can do neither half itself
+shinro generate --check   # compare against disk, write nothing, exit non-zero on drift
+```
+
+`--check` is the CI gate. Because no bundler is guaranteed to run, `generate` is
+the only moment a route conflict can be caught, and `--check` is how CI fails on
+one. It also fails on a stale `.shinro/`, which is what makes committing the
+generated directory a supported choice rather than a trap — and it tells an
+upgrade apart from a forgotten regeneration, because the artifacts carry the
+format number that wrote them.
+
+The app owns its build. With `tsdown`:
+
+```ts
+// tsdown.config.ts
+import { shinro } from 'shinro/tsdown';
+import { defineConfig } from 'tsdown';
+
+export default defineConfig({
+  entry: ['src/server.ts'],
+  format: 'esm',
+  outDir: 'dist',
+  outExtensions: () => ({ js: '.mjs' }),
+  platform: 'node',
+  unbundle: true,
+  plugins: [shinro()],
+});
+```
+
+The adapter does one thing: it regenerates in `buildStart`, before rolldown
+resolves the graph, so a build cannot ship stale routes. It is never
+load-bearing — delete it, run `shinro generate` in the script instead, and the
+output is byte-identical. `shinro/vite` is the same ~40 lines for projects
+already on Vite or `vp`, and it additionally keeps the old bare `shinro/routes`
+specifier resolving while a project migrates.
+
+With `unbundle: true` the output preserves your source module tree and keeps
+dependencies external, so `dist` mirrors `src` and `#shinro/routes` is resolved
+at build time rather than shipped:
 
 ```text
 dist/
@@ -592,42 +687,34 @@ dist/
     └── health.mjs
 ```
 
-`node dist/server.mjs` boots this output, resolving dependencies from
-`node_modules` at runtime. Set `build.unbundle: false` for a self-contained
-single-artifact build: ordinary JavaScript dependencies are bundled into one
-`dist/server.mjs`, extra JavaScript chunks become an error, and emitted
-runtime assets produce a warning. Node built-ins remain native in both modes;
-native addons, migrations, templates, files opened at runtime, and external
-WASM remain application deployment concerns.
+Plain `tsc` works too, with `shinro/tsconfig/emit`. So does any other bundler:
+the generated router is a normal TypeScript module with relative imports.
 
-## Options
+## Configuration
 
-```ts
-shinro({
-  app: 'app/app.ts',
-  entry: 'app/server.ts',
-  routes: 'app/routes',
-  basePath: '/',
-  build: {
-    outDir: 'dist',
-    fileName: 'server.mjs',
-    minify: false,
-    sourcemap: false,
-    unbundle: true,
-  },
-  rpc: {
-    enabled: true,
-    outDir: '.shinro',
-  },
-});
+Three keys, all JSON, in `shinro.config.json` or `package.json#shinro` — and
+every one of them optional:
+
+```jsonc
+// shinro.config.json
+{
+  "routes": "src/routes",
+  "app": "src/app.ts",
+  "ignoredRouteFiles": [],
+}
 ```
 
-Server settings such as the port, hostname, signals, and shutdown behavior
-belong in your application rather than the Shinro plugin.
+There is no config loader and no `jiti`/`unconfig` dependency, because nothing
+left in the config needs to be code. `entry` and `build` belong to your bundler,
+`basePath` is Hono's, and the output directory is always `.shinro` — a knob with
+one working setting is not a knob. The adapters accept the same three keys inline
+and they win over both files, so config-in-code stays available.
 
-v0.1 supports one `shinro()` plugin instance per TypeScript project.
-Separate applications in a monorepo use separate Vite configurations and
-TypeScript programs.
+Server settings such as the port, hostname, signals, and shutdown behavior belong
+in your application.
+
+v0.1 supports one Shinro application per TypeScript project. Separate
+applications in a monorepo use separate projects.
 
 See the repository [specification](../../docs/SPEC.md) for the complete v0.1
 contract, diagnostics, and test requirements.

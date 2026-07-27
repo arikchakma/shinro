@@ -1,277 +1,260 @@
 import { spawn } from 'node:child_process';
-import {
-  mkdir,
-  mkdtemp,
-  readFile,
-  readdir,
-  rm,
-  writeFile,
-} from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 import { expect, test } from 'vite-plus/test';
 
-test('the CLI reports the supported typegen command', async () => {
-  const result = await run(process.execPath, [
-    fileURLToPath(new URL('../src/cli.ts', import.meta.url)),
-    'unknown',
-  ]);
+import { APP_SOURCE, GET_ROUTE } from './helpers.ts';
+
+const CLI = fileURLToPath(new URL('../src/cli.ts', import.meta.url));
+
+test('the CLI lists its commands when asked for help', async () => {
+  const result = await run(['--help']);
+
+  expect(result.code).toBe(0);
+  expect(result.stdout).toContain('shinro <command>');
+  expect(result.stdout).toContain('generate');
+  expect(result.stdout).toContain('init');
+});
+
+test('an unknown command names itself and prints usage', async () => {
+  const result = await run(['serve']);
 
   expect(result.code).toBe(1);
-  expect(result.stderr).toContain('shinro typegen');
+  expect(result.stderr).toContain('Unknown command "serve"');
 });
 
-test('typegen fails clearly when the Vite config does not install shinro', async () => {
-  const root = await mkdtemp(`${tmpdir()}/shinro-cli-no-plugin-`);
-
-  try {
-    const result = await run(
-      process.execPath,
-      [fileURLToPath(new URL('../src/cli.ts', import.meta.url)), 'typegen'],
-      root
-    );
-
-    expect(result.code).toBe(1);
-    expect(result.stderr).toMatch(
-      /typegen[\s\S]*vite config[\s\S]*shinro\(\)/i
-    );
-  } finally {
-    await rm(root, { recursive: true });
-  }
-});
-
-test('typegen prepares every generated type artifact in a clean checkout', async () => {
-  const packageRoot = fileURLToPath(new URL('..', import.meta.url));
-  const root = await mkdtemp(`${packageRoot}/.shinro-cli-typegen-`);
-  const plugin = fileURLToPath(new URL('../src/index.ts', import.meta.url));
-  const appHelper = fileURLToPath(new URL('../src/app.ts', import.meta.url));
-
-  await mkdir(`${root}/src/routes/users`, { recursive: true });
-  await writeFile(
-    `${root}/vite.config.ts`,
-    [
-      `import { shinro } from ${JSON.stringify(plugin)};`,
-      'import { defineConfig } from "vite";',
-      'export default defineConfig({ plugins: [shinro()] });',
-      '',
-    ].join('\n')
-  );
-  await writeFile(
-    `${root}/src/app.ts`,
-    [
-      'import { defineApp } from "shinro/app";',
-      'import { routes } from "shinro/routes";',
-      'declare module "shinro/app" {',
-      '  interface ShinroEnv {',
-      '    Variables: { requestId: string };',
-      '  }',
-      '}',
-      'export default defineApp().route("/", routes());',
-      '',
-    ].join('\n')
-  );
-  await writeFile(
-    `${root}/src/routes/users/$id.ts`,
-    [
-      'import { defineHandler } from "shinro/app";',
-      'import type { Route } from "./+types/users/$id.ts";',
-      'export const GET = defineHandler<Route.Handler>((c) => {',
-      '  const id: string = c.req.param("id");',
-      '  const requestId: string = c.var.requestId;',
-      '  // @ts-expect-error An unknown filename parameter is possibly undefined.',
-      '  const missing: string = c.req.param("missing");',
-      '  // @ts-expect-error Route is a namespace, not the removed route contract alias.',
-      '  const legacy: Route = {};',
-      '  return c.json({ id, legacy, missing, requestId });',
-      '});',
-      '',
-    ].join('\n')
-  );
-  await writeFile(
-    `${root}/src/routes/users/_middleware.ts`,
-    [
-      'import { defineMiddleware } from "shinro/app";',
-      'import type { Route } from "./+types/users/_middleware.ts";',
-      '// @ts-expect-error The old top-level middleware alias was removed.',
-      'import type { Middleware } from "./+types/users/_middleware.ts";',
-      'export default defineMiddleware<Route.Middleware>(',
-      '  async (c, next) => {',
-      '    const requestId: string = c.var.requestId;',
-      '    void requestId;',
-      '    await next();',
-      '  },',
-      '  async (_c, next) => { await next(); },',
-      ');',
-      'type LegacyMiddleware = Middleware;',
-      '',
-    ].join('\n')
-  );
-  await writeFile(
-    `${root}/tsconfig.json`,
-    JSON.stringify({
-      compilerOptions: {
-        allowImportingTsExtensions: true,
-        module: 'ESNext',
-        moduleResolution: 'Bundler',
-        noEmit: true,
-        paths: {
-          'shinro/app': [appHelper],
-        },
-        rootDirs: ['.', './.shinro/types'],
-        strict: true,
-      },
-      include: ['src', '.shinro/**/*.d.ts'],
-    })
-  );
-
-  try {
-    const result = await run(
-      process.execPath,
-      [fileURLToPath(new URL('../src/cli.ts', import.meta.url)), 'typegen'],
-      root
-    );
+test('generate writes the artifacts and reports where', async () => {
+  await withCliProject('cli-generate', async (root) => {
+    const result = await run(['generate'], root);
 
     expect(result.code).toBe(0);
-    for (const file of [
-      '.shinro/client.ts',
-      '.shinro/shinro.d.ts',
-      '.shinro/manifest.json',
-      '.shinro/rpc.ts',
-      '.shinro/routes.ts',
-      '.shinro/types/src/routes/users/+types/users/_middleware.d.ts',
-      '.shinro/types/src/routes/users/+types/users/$id.d.ts',
-    ]) {
-      await expect(readFile(`${root}/${file}`, 'utf8')).resolves.toContain(
-        'Generated by Shinro (format 2)'
-      );
-    }
-    for (const file of ['.shinro/entry.ts', '.shinro/modules.d.ts']) {
-      await expect(readFile(`${root}/${file}`, 'utf8')).rejects.toMatchObject({
-        code: 'ENOENT',
-      });
-    }
+    expect(result.stdout).toContain('wrote .shinro');
+    await expect(
+      readFile(`${root}/.shinro/routes.ts`, 'utf8')
+    ).resolves.toContain('/health');
+  });
+});
 
-    await expect(
-      readFile(`${root}/.shinro/routes.ts`, 'utf8')
-    ).resolves.toContain('from "../src/routes/users/$id.ts";');
-    await expect(
-      readFile(`${root}/.shinro/routes.ts`, 'utf8')
-    ).resolves.toContain('from "../src/routes/users/_middleware.ts";');
-    // Nothing generated imports the app at runtime any more: only the client
-    // reaches for it, and only as a type.
-    await expect(
-      readFile(`${root}/.shinro/routes.ts`, 'utf8')
-    ).resolves.not.toContain('from "../src/app.ts";');
-    await expect(readFile(`${root}/.shinro/rpc.ts`, 'utf8')).resolves.toContain(
-      'from "./client.ts";'
-    );
-    await expect(
-      readFile(`${root}/.shinro/client.ts`, 'utf8')
-    ).resolves.toContain('import type app from "../src/app.ts";');
-    await expect(
-      readFile(`${root}/.shinro/shinro.d.ts`, 'utf8')
-    ).resolves.toContain('declare module "shinro/routes"');
+test('generate says so when there was nothing to write', async () => {
+  await withCliProject('cli-idempotent', async (root) => {
+    await run(['generate'], root);
+    const second = await run(['generate'], root);
 
-    const typecheck = await run(
-      `${packageRoot}/node_modules/.bin/tsc`,
-      ['--noEmit'],
-      root
+    expect(second.code).toBe(0);
+    expect(second.stdout).toContain('is up to date');
+  });
+});
+
+test('typegen still resolves, undocumented, for existing scripts', async () => {
+  await withCliProject('cli-typegen', async (root) => {
+    const result = await run(['typegen'], root);
+
+    expect(result.code).toBe(0);
+    await expect(
+      readFile(`${root}/.shinro/routes.ts`, 'utf8')
+    ).resolves.toContain('/health');
+  });
+});
+
+test('--check exits zero on a tree that matches', async () => {
+  await withCliProject('cli-check-clean', async (root) => {
+    await run(['generate'], root);
+    const result = await run(['generate', '--check'], root);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain('matches the route tree');
+  });
+});
+
+test('--check exits non-zero on drift and names the files', async () => {
+  await withCliProject('cli-check-drift', async (root) => {
+    await run(['generate'], root);
+    await writeFile(`${root}/src/routes/extra.ts`, GET_ROUTE);
+
+    const result = await run(['generate', '--check'], root);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('is out of date');
+    expect(result.stderr).toContain('.shinro/routes.ts');
+  });
+});
+
+test('--check exits non-zero on a route conflict, having written nothing', async () => {
+  await withCliProject('cli-check-conflict', async (root) => {
+    await mkdir(`${root}/src/routes/health`, { recursive: true });
+    await writeFile(`${root}/src/routes/health/index.ts`, GET_ROUTE);
+
+    const result = await run(['generate', '--check'], root);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('Route conflict');
+    await expect(
+      readFile(`${root}/.shinro/routes.ts`, 'utf8')
+    ).rejects.toThrow();
+  });
+});
+
+test('--watch and --check are refused together', async () => {
+  await withCliProject('cli-both', async (root) => {
+    const result = await run(['generate', '--watch', '--check'], root);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('mutually exclusive');
+  });
+});
+
+test('an unknown option is named rather than ignored', async () => {
+  await withCliProject('cli-unknown-option', async (root) => {
+    const result = await run(['generate', '--force'], root);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('--force');
+  });
+});
+
+test('init writes the imports block, the tsconfig, and the scripts', async () => {
+  const root = await mkdtemp(`${tmpdir()}/shinro-cli-init-`);
+
+  try {
+    await writeFile(
+      `${root}/package.json`,
+      `${JSON.stringify({ name: 'fresh', type: 'module' }, undefined, 2)}\n`
     );
-    expect(typecheck.code, `${typecheck.stdout}${typecheck.stderr}`).toBe(0);
+
+    const result = await run(['init'], root);
+    expect(result.code).toBe(0);
+
+    const packageJson = JSON.parse(
+      await readFile(`${root}/package.json`, 'utf8')
+    ) as { imports: Record<string, string>; scripts: Record<string, string> };
+    expect(packageJson.imports).toEqual({
+      '#shinro/client': './.shinro/client.ts',
+      '#shinro/routes': './.shinro/routes.ts',
+    });
+    expect(packageJson.scripts.dev).toBe(
+      'node --watch --import shinro/watch src/server.ts'
+    );
+    expect(packageJson.scripts.prepare).toBe('shinro generate');
+    await expect(readFile(`${root}/tsconfig.json`, 'utf8')).resolves.toContain(
+      '"extends": "shinro/tsconfig"'
+    );
+
+    // Idempotent: onboarding is a command someone runs twice.
+    const second = await run(['init'], root);
+    expect(second.stdout).toContain('already initialised');
   } finally {
-    await rm(root, { recursive: true });
+    await rm(root, { force: true, recursive: true });
   }
 });
 
-test('concurrent typegen processes commit one complete generated directory', async () => {
-  const packageRoot = fileURLToPath(new URL('..', import.meta.url));
-  const root = await mkdtemp(`${packageRoot}/.shinro-concurrent-typegen-`);
-  const plugin = fileURLToPath(new URL('../src/index.ts', import.meta.url));
-  const appHelper = fileURLToPath(new URL('../src/app.ts', import.meta.url));
-  const cli = fileURLToPath(new URL('../src/cli.ts', import.meta.url));
-
-  await mkdir(`${root}/src/routes`, { recursive: true });
-  await writeFile(
-    `${root}/vite.config.ts`,
-    [
-      `import { shinro } from ${JSON.stringify(plugin)};`,
-      'import { defineConfig } from "vite";',
-      'export default defineConfig({ plugins: [shinro()] });',
-      '',
-    ].join('\n')
-  );
-  await writeFile(
-    `${root}/src/app.ts`,
-    [
-      `import { defineApp } from ${JSON.stringify(appHelper)};`,
-      'import { routes } from "shinro/routes";',
-      'export default defineApp().route("/", routes());',
-      '',
-    ].join('\n')
-  );
-  await Promise.all(
-    Array.from({ length: 40 }, (_, index) =>
-      writeFile(
-        `${root}/src/routes/route-${index}.ts`,
-        `export const GET = [(c: any) => c.json({ route: ${index} })] as const;\n`
-      )
-    )
-  );
+test('init merges into an existing imports block rather than refusing', async () => {
+  const root = await mkdtemp(`${tmpdir()}/shinro-cli-init-merge-`);
 
   try {
-    const results = await Promise.all(
-      Array.from({ length: 8 }, () =>
-        run(process.execPath, [cli, 'typegen'], root)
-      )
+    await writeFile(
+      `${root}/package.json`,
+      `${JSON.stringify(
+        {
+          name: 'existing',
+          type: 'module',
+          imports: { '#db': './src/db.ts' },
+          scripts: { dev: 'bun --watch src/server.ts' },
+        },
+        undefined,
+        2
+      )}\n`
     );
 
-    expect(
-      results.map((result) => result.code),
-      results.map((result) => `${result.stdout}${result.stderr}`).join('\n')
-    ).toEqual(Array.from({ length: 8 }, () => 0));
+    await run(['init'], root);
 
-    const manifest = JSON.parse(
-      await readFile(`${root}/.shinro/manifest.json`, 'utf8')
-    ) as {
-      routes: unknown[];
-    };
-    expect(manifest.routes).toHaveLength(40);
-    expect(
-      (await readdir(root)).filter((name) => name.startsWith('.shinro.'))
-    ).toEqual([]);
+    const packageJson = JSON.parse(
+      await readFile(`${root}/package.json`, 'utf8')
+    ) as { imports: Record<string, string>; scripts: Record<string, string> };
+    expect(packageJson.imports['#db']).toBe('./src/db.ts');
+    expect(packageJson.imports['#shinro/routes']).toBe('./.shinro/routes.ts');
+    // A project that chose `bun --watch` has made a decision; init is not the
+    // place to overrule it.
+    expect(packageJson.scripts.dev).toBe('bun --watch src/server.ts');
   } finally {
-    await rm(root, { recursive: true });
+    await rm(root, { force: true, recursive: true });
   }
-}, 20_000);
+});
+
+test('init --dry-run reports the changes without making them', async () => {
+  const root = await mkdtemp(`${tmpdir()}/shinro-cli-init-dry-`);
+
+  try {
+    await writeFile(
+      `${root}/package.json`,
+      `${JSON.stringify({ name: 'fresh', type: 'module' }, undefined, 2)}\n`
+    );
+
+    const result = await run(['init', '--dry-run'], root);
+
+    expect(result.stdout).toContain('would make these changes');
+    expect(await readFile(`${root}/package.json`, 'utf8')).not.toContain(
+      '#shinro/routes'
+    );
+    await expect(readFile(`${root}/tsconfig.json`, 'utf8')).rejects.toThrow();
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+async function withCliProject(
+  name: string,
+  body: (root: string) => Promise<void>
+): Promise<void> {
+  const root = await mkdtemp(`${tmpdir()}/shinro-${name}-`);
+
+  try {
+    await mkdir(`${root}/src/routes`, { recursive: true });
+    await writeFile(
+      `${root}/package.json`,
+      `${JSON.stringify(
+        {
+          name: 'cli-test-project',
+          type: 'module',
+          imports: {
+            '#shinro/routes': './.shinro/routes.ts',
+            '#shinro/client': './.shinro/client.ts',
+          },
+        },
+        undefined,
+        2
+      )}\n`
+    );
+    await writeFile(`${root}/src/app.ts`, APP_SOURCE);
+    await writeFile(`${root}/src/routes/health.ts`, GET_ROUTE);
+    await body(root);
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+}
 
 function run(
-  command: string,
-  args: string[],
+  argv: string[],
   cwd = fileURLToPath(new URL('..', import.meta.url))
-): Promise<{
-  code: number | null;
-  stderr: string;
-  stdout: string;
-}> {
-  return new Promise((resolve) => {
-    const child = spawn(command, args, {
+): Promise<{ code: number | null; stderr: string; stdout: string }> {
+  return new Promise((resolvePromise, reject) => {
+    const child = spawn(process.execPath, [CLI, ...argv], {
       cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
-    let stderr = '';
     let stdout = '';
+    let stderr = '';
 
-    child.stdout.setEncoding('utf8');
-    child.stdout.on('data', (chunk: string) => {
-      stdout += chunk;
+    child.stdout.on('data', (chunk: Buffer) => {
+      stdout += chunk.toString();
     });
-    child.stderr.setEncoding('utf8');
-    child.stderr.on('data', (chunk: string) => {
-      stderr += chunk;
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString();
     });
-    child.on('close', (code) => {
-      resolve({ code, stderr, stdout });
+    child.once('error', reject);
+    child.once('close', (code) => {
+      resolvePromise({ code, stderr, stdout });
     });
   });
 }

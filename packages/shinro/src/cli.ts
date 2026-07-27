@@ -1,35 +1,41 @@
 #!/usr/bin/env node
+import { generate } from './cli/generate.ts';
+import { init } from './cli/init.ts';
 
-import { resolveConfig } from 'vite';
+// `shinro generate [--watch] [--check]` is the whole CLI, plus `shinro init` to
+// write the boilerplate once. There is no `shinro dev`: `node --watch` plus the
+// `shinro/watch` preload covers dev in one process, and anything that spawns the
+// runner is the old DevelopmentProcess with a friendlier name.
+//
+// `typegen` is kept as an undocumented alias for `generate`.
+const USAGE = [
+  'Usage: shinro <command> [options]',
+  '',
+  'Commands:',
+  '  generate [--watch] [--check]  Write .shinro from the route tree',
+  '  init [--dry-run]              Add the imports block, tsconfig, and scripts',
+].join('\n');
 
-import type { ShinroApi } from './server/plugin.ts';
+const [command, ...argv] = process.argv.slice(2);
 
-const [command] = process.argv.slice(2);
-
-if (command !== 'typegen') {
-  console.error('Usage: shinro typegen');
-  process.exitCode = 1;
-} else {
-  const config = await resolveConfig({}, 'serve');
-  const plugin = config.plugins.find(
-    (candidate) => candidate.name === 'shinro'
-  );
-
-  if (!plugin) {
-    console.error(
-      'shinro typegen could not find shinro() in the loaded Vite config. Add plugins: [shinro()] to vite.config.ts.'
-    );
+switch (command) {
+  case 'generate':
+  case 'typegen': {
+    process.exitCode = await generate(argv);
+    break;
+  }
+  case 'init': {
+    process.exitCode = await init(argv);
+    break;
+  }
+  case '--help':
+  case '-h':
+  case undefined: {
+    console.info(USAGE);
+    break;
+  }
+  default: {
+    console.error(`[shinro] Unknown command "${command}".\n${USAGE}`);
     process.exitCode = 1;
-  } else {
-    // Resolving the config already generates once. Calling the plugin's own API
-    // makes that explicit rather than depending on a side effect, and gives the
-    // command something concrete to report.
-    const result = await (plugin.api as ShinroApi | undefined)?.generate();
-
-    console.info(
-      result
-        ? `shinro typegen wrote ${result.outputDirectory}`
-        : 'shinro typegen completed'
-    );
   }
 }

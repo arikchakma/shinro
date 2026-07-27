@@ -4,27 +4,31 @@
   "private": true,
   "description": "Runnable Hono API showcasing every Shinro route authoring convention.",
   "type": "module",
+  "imports": {
+    "#shinro/routes": "./.shinro/routes.ts",
+    "#shinro/client": "./.shinro/client.ts"
+  },
   "exports": {
-    "./client": "./.shinro/client.ts",
-    "./rpc": "./.shinro/rpc.ts"
+    "./client": "./.shinro/client.ts"
   },
   "scripts": {
-    "build": "vp build",
-    "check": "vp run typegen && vp check",
-    "dev": "vp dev",
+    "build": "vp pack",
+    "check": "vp run generate && vp check",
+    "dev": "node --watch --import shinro/watch src/server.ts",
+    "generate": "vp run shinro#build && shinro generate",
+    "prepare": "vp run generate",
     "start": "node dist/server.mjs",
-    "test": "vp test",
-    "typegen": "vp run shinro#build && shinro typegen"
+    "test": "vp run generate && vp test"
   },
   "dependencies": {
     "@hono/node-server": "catalog:",
     "@hono/zod-validator": "catalog:",
     "hono": "^4.10.0",
+    "shinro": "workspace:*",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",
-    "shinro": "workspace:*",
     "typescript": "^7.0.2",
     "vite-plus": "catalog:"
   }

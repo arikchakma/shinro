@@ -22,9 +22,58 @@ test('public package subpaths expose matching runtime and declaration files', as
       import: './dist/app.mjs',
       types: './dist/app.d.mts',
     },
+    // The two side-effecting preloads. They are the dev story, so they are part
+    // of the published surface rather than an implementation detail.
+    './generate': {
+      import: './dist/generate.mjs',
+      types: './dist/generate.d.mts',
+    },
+    './watch': {
+      import: './dist/watch.mjs',
+      types: './dist/watch.d.mts',
+    },
+    './tsdown': {
+      import: './dist/adapters/tsdown.mjs',
+      types: './dist/adapters/tsdown.d.mts',
+    },
+    './vite': {
+      import: './dist/adapters/vite.mjs',
+      types: './dist/adapters/vite.d.mts',
+    },
     './tsconfig': './tsconfig.base.json',
+    './tsconfig/emit': './tsconfig.emit.json',
     './package.json': './package.json',
   });
+});
+
+test('the shipped tsconfigs cover both checking and emitting', async () => {
+  // The shipped configs carry comments explaining why each option is there, so
+  // they are JSONC — which is exactly what a consumer's tsc accepts.
+  const base = (await readJsonc('../tsconfig.base.json')) as {
+    compilerOptions: Record<string, unknown>;
+    include: string[];
+  };
+  const emit = (await readJsonc('../tsconfig.emit.json')) as {
+    compilerOptions: Record<string, unknown>;
+    extends: string;
+  };
+
+  // `${configDir}` is what lets a base config in node_modules express
+  // project-relative paths, and it is the only reason the boilerplate can live
+  // in the package rather than in every consumer's tsconfig.
+  expect(base.compilerOptions.rootDirs).toEqual([
+    '${configDir}',
+    '${configDir}/.shinro/types',
+  ]);
+  expect(base.include).toContain('${configDir}/.shinro/**/*.ts');
+  expect(base.compilerOptions.allowImportingTsExtensions).toBe(true);
+  expect(base.compilerOptions.noEmit).toBe(true);
+
+  // One config made "build it however you want" false for plain tsc: emitting
+  // needs the generated `./x.ts` specifiers rewritten, which `noEmit` forbids.
+  expect(emit.extends).toBe('./tsconfig.base.json');
+  expect(emit.compilerOptions.noEmit).toBe(false);
+  expect(emit.compilerOptions.rewriteRelativeImportExtensions).toBe(true);
 });
 
 test('published dependency ranges resolve without the workspace', async () => {
@@ -79,3 +128,8 @@ test('the package build does not leak the fixture application environment', asyn
   // member here would mean a local environment had been baked into the package.
   expect(declared).toMatch(/interface ShinroEnv extends Env \{\s*\}/);
 });
+
+async function readJsonc(path: string): Promise<unknown> {
+  const source = await readFile(new URL(path, import.meta.url), 'utf8');
+  return JSON.parse(source.replace(/^\s*\/\/.*$/gm, '')) as unknown;
+}

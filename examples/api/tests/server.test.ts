@@ -3,7 +3,7 @@ import type { ChildProcess } from 'node:child_process';
 import { readdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
-import { build } from 'vite-plus';
+import { build } from 'tsdown';
 import { expect, test } from 'vite-plus/test';
 
 test('the production entry serves requests and shuts down gracefully', async () => {
@@ -11,10 +11,13 @@ test('the production entry serves requests and shuts down gracefully', async () 
   let child: ChildProcess | undefined;
 
   try {
+    // The app owns its build, and this is that build: its own `tsdown.config.ts`,
+    // with the Shinro adapter regenerating `.shinro` before rolldown reads the
+    // graph.
     await build({
-      configFile: `${root}/vite.config.ts`,
-      logLevel: 'silent',
-      root,
+      config: `${root}/tsdown.config.ts`,
+      cwd: root,
+      silent: true,
     });
 
     const javascript = (await readdir(`${root}/dist`)).filter((file) =>
