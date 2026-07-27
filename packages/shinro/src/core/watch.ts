@@ -7,7 +7,7 @@ import type { ResolvedShinroConfig } from '../config.ts';
 import { generate } from './generate.ts';
 import type { GenerateResult } from './generate.ts';
 import type { ShinroLogger } from './logger.ts';
-import { affectsRouteTree } from './scanner.ts';
+import { affectsRouteTree } from './routes/ignore.ts';
 
 const DEBOUNCE_MS = 30;
 

@@ -19,8 +19,9 @@ import {
   routeParameterNames,
   toProjectPath,
 } from './path.ts';
-import { discoverRoutes, validateRoutes } from './scanner.ts';
-import type { DirectoryMiddleware, Route } from './scanner.ts';
+import { validateRoutes } from './routes/conflicts.ts';
+import { discoverRoutes } from './routes/discover.ts';
+import type { DirectoryMiddleware, Route } from './routes/discover.ts';
 
 /**
  * Absolute path to contents, in the order they should be promoted. Codegen never
@@ -71,10 +72,9 @@ export async function generateSources(options: {
     );
   }
 
-  // The application owns the mount now, which makes two mistakes possible that
-  // the previous generated entry prevented structurally: never mounting, and
-  // mounting before the middleware that is supposed to wrap the mounted routes.
-  // Both leave a working app that quietly serves the wrong thing.
+  // The application owns the mount, which makes two mistakes possible: never
+  // mounting, and mounting before the middleware that is supposed to wrap the
+  // mounted routes. Both leave a working app that quietly serves the wrong thing.
   if (!appAnalysis.mountsRoutes && routes.length > 0) {
     logger.warn(
       `[shinro] ${toProjectPath(root, appFile)} never mounts ${ROUTES_SPECIFIER}, so ${
@@ -169,7 +169,7 @@ function planMiddleware(
   // working code over a number nobody can read is worse than the loud overload
   // error TypeScript raises if the guess is wrong.
   const slotsPerFile = new Map(
-    middleware.map((entry) => [entry.file, entry.count ?? 1])
+    middleware.map((entry) => [entry.file, entry.handlerCount ?? 1])
   );
   const middlewareSlots = (route: Route): number =>
     route.middleware.reduce(
@@ -184,10 +184,10 @@ function planMiddleware(
 
     // The widest method decides for the whole route: one registration per method,
     // but one emitted middleware form per route keeps `routes.ts` readable.
-    const arities = route.methods
-      .map((method) => route.arities[method])
-      .filter((arity): arity is number => typeof arity === 'number');
-    const widest = Math.max(0, ...arities);
+    const counts = route.methods
+      .map((method) => route.handlerCounts[method])
+      .filter((count): count is number => typeof count === 'number');
+    const widest = Math.max(0, ...counts);
     const inlined = widest + middlewareSlots(route);
     if (inlined <= HONO_HANDLER_LIMIT) {
       continue;
@@ -205,7 +205,7 @@ function planMiddleware(
     }
 
     const method = route.methods.find(
-      (candidate) => route.arities[candidate] === widest
+      (candidate) => route.handlerCounts[candidate] === widest
     );
     offenders.push(
       [
