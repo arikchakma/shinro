@@ -40,9 +40,10 @@ Four things do the whole job:
 - a `vp pack` build whose `dist` mirrors the source tree, with
   application-owned graceful shutdown.
 
-Generation reports Shinro's documented sub-router boundary warning: the root
-directory middleware runs around `/v1/admin`, but its response types cannot be
-merged into every opaque route inside that sub-router.
+Generation warns about one thing on purpose: `admin.ts` default-exports a
+sub-router, so the root directory middleware wraps it at runtime but stays out of
+its types. Harmless here — that middleware only sets a header and always calls
+`next()` — and the warning is there for the case where it does not.
 
 Call the protected route with and without the demo credential:
 

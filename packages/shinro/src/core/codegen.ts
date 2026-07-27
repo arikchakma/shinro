@@ -68,7 +68,7 @@ export async function generateSources(options: {
       `[shinro] ${toProjectPath(
         root,
         appFile
-      )} contains base-app middleware with an early response. It runs at runtime, but every file-route RPC contract is missing that response.`
+      )} registers middleware on the app that can respond early. It runs at runtime, but a response returned there belongs to no single route, so the generated client shows none of your file routes returning it.`
     );
   }
 
@@ -95,10 +95,14 @@ export async function generateSources(options: {
   for (const route of routes) {
     if (route.kind === 'sub-router' && route.middleware.length > 0) {
       logger.warn(
-        `[shinro] ${toProjectPath(
-          root,
-          route.file
-        )} is a default sub-router surrounded by directory middleware. The middleware runs at runtime, but its early responses cannot be added to every internal RPC response contract.`
+        [
+          `[shinro] ${toProjectPath(
+            root,
+            route.file
+          )} default-exports a sub-router, so these middleware wrap it at runtime but stay out of its types:`,
+          ...route.middleware.map((file) => `- ${toProjectPath(root, file)}`),
+          `Hono copies a mounted sub-router's schema exactly as the file wrote it, so an early response from them — a 401 from an auth check, say — is missing from the generated client for ${route.path}. Ignore this when they always call next(); otherwise move them inside the sub-router, or export GET/POST from this file instead of a router.`,
+        ].join('\n')
       );
     }
   }

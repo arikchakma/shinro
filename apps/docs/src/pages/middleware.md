@@ -38,6 +38,10 @@ Shinro flattens this chain onto each named route. Typed early responses from mid
 
 Hono's typed overloads stop at a path plus ten handlers. A route that would exceed the limit once its directory middleware are inlined has them composed into a single slot instead, which keeps the route's validated request and response types at the cost of those middleware's early responses. Shinro warns when it does this, and fails with the offending route when even composition cannot fit.
 
+## Around a sub-router
+
+A route file that default-exports a Hono sub-router is mounted, not registered handler by handler, and Hono copies a mounted sub-router's schema exactly as the file wrote it. Directory middleware still wrap it at runtime, but an early response they return cannot reach the generated client for the routes inside it. Shinro warns when this applies; it only matters if the middleware can respond before calling `next()`.
+
 ## Unmatched requests
 
 Directory middleware runs only when a route matches. A request to `/api/does-not-exist` goes directly to the app's not-found handler, without running `src/routes/api/_middleware.ts`.
