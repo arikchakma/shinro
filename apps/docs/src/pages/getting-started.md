@@ -1,17 +1,18 @@
 ---
 layout: ../layouts/Layout.astro
 title: Installation
-description: Install and configure Shinro in a Hono application.
+description: Install Shinro in a Hono application and wire it up with shinro init.
 ---
 
 # Installation
 
-Shinro is a Vite plugin for Hono applications. Install Hono and Shinro, then add the adapter for the runtime that starts your server.
+Shinro is a generator with a CLI, not a plugin. Install Hono and Shinro, then add the adapter for the runtime that starts your server.
 
 ```sh
-vp add hono
-vp add -D shinro
+vp add hono shinro
 ```
+
+`shinro/app` is imported by your route files, so `shinro` is a dependency rather than a dev dependency.
 
 Node.js applications also need Hono's Node adapter:
 
@@ -21,20 +22,31 @@ vp add @hono/node-server
 
 Bun applications can use `Bun.serve()` directly.
 
-## Add the plugin
+## Wire it up
 
-Add `shinro()` to the Vite config. This is the only routing integration; there is no separate Node, Bun, RPC, or lifecycle plugin.
-
-```ts title="vite.config.ts"
-import { shinro } from 'shinro';
-import { defineConfig } from 'vite';
-
-export default defineConfig({
-  plugins: [shinro()],
-});
+```sh
+shinro init
 ```
 
-The plugin discovers routes, writes generated declarations and router code, refreshes structural route changes during development, and builds the configured server entry.
+`init` is idempotent, prints what it changed, and merges into what is already there. It writes three things, and there is nothing else to configure.
+
+```json title="package.json"
+{
+  "imports": {
+    "#shinro/routes": "./.shinro/routes.ts",
+    "#shinro/client": "./.shinro/client.ts"
+  },
+  "scripts": {
+    "dev": "node --watch --import shinro/watch src/server.ts",
+    "prepare": "shinro generate",
+    "check": "shinro generate --check && tsc --noEmit"
+  }
+}
+```
+
+The `imports` block is the load-bearing part, and it is deliberately not a plugin: subpath imports are part of ESM resolution, so `#shinro/routes` resolves in `node`, `tsx`, `bun`, `rolldown`, and TypeScript by construction rather than because a bundler was configured.
+
+A relative import works too and is never warned about — `import { routes } from '../.shinro/routes.ts'` needs no `package.json` entry at all. `#shinro/routes` is the documented default only because it survives moving `app.ts`.
 
 ## Configure TypeScript
 
@@ -51,19 +63,23 @@ Extend the base config shipped with Shinro:
 }
 ```
 
-The base config sets `moduleResolution`, import-extension behavior, `rootDirs`, and the generated-file include patterns. This makes `shinro/app`, `shinro/routes`, `shinro/client`, and `shinro/rpc` resolve without hand-written aliases.
+The base config sets `moduleResolution`, import-extension behavior, `rootDirs`, and the include patterns the generated `+types` declarations need. It uses `${configDir}`, so a base config living in `node_modules` still expresses paths relative to your project.
 
-## Ignore generated output
+`shinro/tsconfig` is check-only: `noEmit` is what makes `allowImportingTsExtensions` legal. A project that wants plain `tsc` to _emit_ extends `shinro/tsconfig/emit` instead, which swaps `noEmit` for `rewriteRelativeImportExtensions` so the generated `./x.ts` specifiers become `./x.js` in the output.
 
-Shinro writes its working files to `.shinro` by default. Keep generated and build output out of version control:
+## Generated output
+
+Shinro always generates into `.shinro`. Ignore it, or commit it and let `shinro generate --check` keep it honest — both are supported.
 
 ```text title=".gitignore"
 .shinro/
 dist/
 ```
 
-After configuration, start the Vite development server normally:
+With that in place, start the dev loop:
 
 ```sh
-vp dev
+node --watch --import shinro/watch src/server.ts
 ```
+
+One process, no supervisor. The [CLI](/cli) page covers the rest of the commands.

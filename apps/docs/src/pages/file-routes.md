@@ -18,7 +18,7 @@ export const GET = defineHandler((c) => {
 });
 ```
 
-Supported exports are `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS`, and `ALL`.
+Supported exports are `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS`, and `ALL`. A route file with no supported export is ignored with a warning.
 
 ## Basic mapping
 
@@ -62,6 +62,22 @@ src/routes/health.ts                → /health
 ```
 
 Groups are pathless, not ignored. Their routes and middleware stay active, and groups can nest.
+
+## Sub-routers
+
+Instead of method exports, a route file can default-export a chained Hono router:
+
+```ts title="src/routes/admin.ts"
+import { Hono } from 'hono';
+
+export default new Hono()
+  .get('/', (c) => c.json({ section: 'admin' }, 200))
+  .get('/stats', (c) => c.json({ activeUsers: 42 }, 200));
+```
+
+This serves `/admin` and `/admin/stats`, both included in the generated client. The file owns the complete `/admin` namespace, so it cannot coexist with `src/routes/admin/**` or with a dynamic route that could match beneath it.
+
+The routes must stay chained. An unassigned `router.get(...)` statement still registers at runtime, but Hono does not retain its schema, so the route could not appear in the client — Shinro rejects that shape rather than generating a client that quietly omits it.
 
 ## Static routes win
 

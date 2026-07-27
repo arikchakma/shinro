@@ -58,7 +58,9 @@ A `(group)` directory is not ignored. Its routes and middleware remain active ev
 
 ## Conflict rules
 
-Two files cannot resolve to the same normalized URL pattern. This includes alternate index spellings such as `users.ts` and `users/index.ts`.
+Two files cannot resolve to the same normalized URL pattern. This includes alternate index spellings such as `users.ts` and `users/index.ts`, and shapes that differ only in parameter name, such as `users/$id.ts` and `users/$slug.ts`.
+
+A file that default-exports a sub-router owns its whole mount namespace, so nothing else may serve a URL beneath it. Every conflict in a tree is reported together, each one listing the files involved.
 
 Registration order is always:
 

@@ -1,68 +1,60 @@
 ---
 layout: ../layouts/Layout.astro
 title: Configuration
-description: Configure Shinro's app, route tree, build, base path, and generated RPC output.
+description: Point Shinro at your app and route tree with three optional JSON keys.
 ---
 
 # Configuration
 
-Pass options to the single `shinro()` Vite plugin. Defaults are deliberately small and suit a conventional `src` directory.
+Three keys, all JSON, in `shinro.config.json` or `package.json#shinro` — and every one of them optional.
 
-```ts title="vite.config.ts"
-import { shinro } from 'shinro';
-import { defineConfig } from 'vite';
-
-export default defineConfig({
-  plugins: [
-    shinro({
-      app: 'src/app.ts',
-      entry: 'src/server.ts',
-      routes: 'src/routes',
-      basePath: '/',
-    }),
-  ],
-});
+```json title="shinro.config.json"
+{
+  "routes": "src/routes",
+  "app": "src/app.ts",
+  "ignoredRouteFiles": []
+}
 ```
-
-## Route options
 
 | Option              | Default      | Purpose                                    |
 | ------------------- | ------------ | ------------------------------------------ |
 | `routes`            | `src/routes` | Directory scanned for route modules        |
-| `basePath`          | `/`          | Prefix applied to every generated URL      |
+| `app`               | `src/app.ts` | Module that default-exports the Hono app   |
 | `ignoredRouteFiles` | `[]`         | Route-relative `path.matchesGlob` patterns |
 
-Additional exclusions apply to both route modules and directory middleware:
+There is no config loader and no `jiti`/`unconfig` dependency, because nothing left in the config needs to be code. An unknown key is a typo worth naming, so Shinro warns about it rather than ignoring it.
 
-```ts title="vite.config.ts"
-shinro({
-  ignoredRouteFiles: ['internal/**', '**/*.draft.ts'],
-});
+## Excluding files
+
+`ignoredRouteFiles` patterns are matched against the path below the routes directory, and apply to route modules and directory middleware alike.
+
+```json title="shinro.config.json"
+{
+  "ignoredRouteFiles": ["internal/**", "**/*.draft.ts"]
+}
 ```
 
-## Build options
+Reserved names are excluded without configuration — see [file conventions](/file-conventions) for the full list.
 
-| Option            | Default      | Purpose                                |
-| ----------------- | ------------ | -------------------------------------- |
-| `build.outDir`    | `dist`       | Server build directory                 |
-| `build.fileName`  | `server.mjs` | Configured server entry output         |
-| `build.minify`    | `false`      | Minify the server build                |
-| `build.sourcemap` | `false`      | Emit an inline source map when enabled |
-| `build.unbundle`  | `true`       | Preserve the source module tree        |
+## Config in code
 
-The default unbundled build keeps dependencies external and produces output that is easy to inspect. Set `build.unbundle: false` for a self-contained server artifact.
+The build adapters accept the same three keys inline, and they win over both files. Use this when you would rather not keep a `shinro.config.json`:
 
-## RPC options
-
-RPC generation is enabled by default:
-
-```ts title="vite.config.ts"
-shinro({
-  rpc: {
-    enabled: true,
-    outDir: '.shinro',
-  },
-});
+```ts title="tsdown.config.ts"
+plugins: [shinro({ routes: 'src/api' })];
 ```
 
-The bundled TypeScript base config assumes `.shinro`. If `rpc.outDir` changes, merge the equivalent `rootDirs` and `include` entries into your project config; Shinro prints the required values.
+The precedence is: adapter options, then `shinro.config.json`, then `package.json#shinro`, then the defaults. Defining configuration in both files at once warns; keep one place to look.
+
+## What is not configurable
+
+| Not an option    | Where it lives instead                                                                       |
+| ---------------- | -------------------------------------------------------------------------------------------- |
+| `entry`, `build` | Your bundler. The app owns its build; the adapter only regenerates before it runs.           |
+| `basePath`       | Hono's own `defineApp().basePath('/v1')`, so the generated client's URLs follow it for free. |
+| Output directory | Always `.shinro`. The shipped tsconfig hardcodes it in `rootDirs` and `include`.             |
+| RPC generation   | Always on. `client.ts` is one type-only file that costs nothing to emit.                     |
+
+Server settings such as the port, hostname, signals, and shutdown behavior belong in your application.
+
+v0.1 supports one Shinro application per TypeScript project. Separate applications in a monorepo use separate projects.

@@ -39,9 +39,9 @@ export const GET = defineHandler((c) => {
   </p>
 
   <p>
-    One Vite plugin handles discovery, development, RPC types, and builds on
-    Node.js or Bun. You keep ownership of the Hono app, middleware order, server
-    startup, and graceful shutdown.
+    One command writes it all: <code>shinro generate</code> turns the route tree
+    into a real file on disk that any runner can execute. You keep ownership of
+    the Hono app, middleware order, server startup, and graceful shutdown.
   </p>
 
   <figure class="route-figure">
@@ -50,7 +50,7 @@ export const GET = defineHandler((c) => {
       <div
         class="route-flow-svg"
         role="img"
-        aria-label="Route files flow through the Shinro Vite plugin to produce a Hono router and typed client."
+        aria-label="Route files flow through Shinro to produce a Hono router and typed client."
         set:html={routeFlowSvg}
       />
     </div>
@@ -65,8 +65,9 @@ export const GET = defineHandler((c) => {
 
   <ul>
     <li>
-      <strong>One plugin.</strong> <code>shinro()</code> owns route discovery,
-      development integration, builds, and RPC generation.
+      <strong>No plugin required.</strong> <code>shinro generate</code> writes
+      <code>.shinro</code>, and <code>#shinro/routes</code> resolves through ESM
+      subpath imports — in Node, tsx, Bun, rolldown, and TypeScript alike.
     </li>
     <li>
       <strong>Your server.</strong> Start Hono with <code>serve()</code> or
@@ -108,8 +109,8 @@ export const GET = defineHandler((c) => {
           <td>Server startup and shutdown</td>
         </tr>
         <tr>
-          <td>Development and build integration</td>
-          <td>Runtime-specific server options</td>
+          <td>Keeping <code>.shinro</code> in step with the tree</td>
+          <td>The build, the runner, and runtime-specific options</td>
         </tr>
       </tbody>
     </table>

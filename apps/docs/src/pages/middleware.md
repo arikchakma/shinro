@@ -36,6 +36,8 @@ src/routes/api/users.ts
 
 Shinro flattens this chain onto each named route. Typed early responses from middleware, such as an authentication `401`, therefore become part of that route's RPC response union.
 
+Hono's typed overloads stop at a path plus ten handlers. A route that would exceed the limit once its directory middleware are inlined has them composed into a single slot instead, which keeps the route's validated request and response types at the cost of those middleware's early responses. Shinro warns when it does this, and fails with the offending route when even composition cannot fit.
+
 ## Unmatched requests
 
 Directory middleware runs only when a route matches. A request to `/api/does-not-exist` goes directly to the app's not-found handler, without running `src/routes/api/_middleware.ts`.
@@ -43,9 +45,10 @@ Directory middleware runs only when a route matches. A request to `/api/does-not
 Cross-cutting concerns that must cover every request belong on the base Hono app:
 
 ```ts title="src/app.ts"
-app.use('*', cors());
-app.use('*', requestId());
-app.route('/', routes());
+const app = defineApp()
+  .use('*', cors())
+  .use('*', requestId())
+  .route('/', routes());
 ```
 
 Use directory middleware for route-scoped behavior such as authenticating one section of the API.

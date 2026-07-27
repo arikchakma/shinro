@@ -9,9 +9,9 @@ description: Create a Hono app, mount Shinro's generated router, and start a Nod
 `defineApp()` creates a regular Hono instance with the project environment already applied. Mount the generated router with Hono's native `route()` method.
 
 ```ts title="src/app.ts"
+import { routes } from '#shinro/routes';
 import { logger } from 'hono/logger';
 import { defineApp } from 'shinro/app';
-import { routes } from 'shinro/routes';
 
 const app = defineApp()
   .use('*', logger())
@@ -24,7 +24,9 @@ const app = defineApp()
 export default app;
 ```
 
-`route()` returns the same Hono instance and copies the generated router's schema onto it. Runtime routing and the RPC contract therefore describe one application.
+`#shinro/routes` exposes your file routes as a Hono sub-router, and `route()` returns the same Hono instance with the sub-router's schema copied onto it. Runtime routing and the RPC contract therefore describe one application.
+
+Because the generated router never imports your app, your app can safely import it — `typeof app` ends up describing the complete contract, file routes and hand-written routes alike.
 
 ## Middleware order
 
@@ -55,7 +57,7 @@ const server = serve({
 process.once('SIGTERM', () => server.close());
 ```
 
-Keeping the native server handle means your application can drain requests, close databases, stop workers, and choose its own exit behavior.
+Keeping the native server handle means your application can drain requests, close databases, stop workers, and choose its own exit behavior. Shinro never imports your entry, never spawns it, and never installs a signal handler: it guarantees only that `.shinro` matches the route tree by the time your module graph loads.
 
 ## Start on Bun
 
