@@ -323,6 +323,37 @@ export function validateRoutes(
   // the route count.
   const shapes = routes.map((route) => routeShape(route.path));
   const hasSubRouter = routes.some((route) => route.kind === 'sub-router');
+  // Collected rather than thrown on sight. Conflicts arrive in batches — a
+  // rename that lands `users.ts` next to `users/index.ts` usually did the same
+  // to `$id.ts` — and fixing them one round-trip at a time is the slow way to
+  // find that out. Keyed by the conflicting path so three files on one URL are
+  // one entry with three files, not three pairs.
+  const conflicts = new Map<
+    string,
+    { files: Set<string>; headline: string; notes: string[] }
+  >();
+
+  const record = (headline: string, files: string[], notes: string[]): void => {
+    const existing = conflicts.get(headline);
+
+    if (existing === undefined) {
+      conflicts.set(headline, { files: new Set(files), headline, notes });
+      return;
+    }
+
+    for (const file of files) {
+      existing.files.add(file);
+    }
+
+    // The group hint rides on whichever pair happened to involve the grouped
+    // file, which is not always the first pair for this path. Merging keeps the
+    // explanation attached to the conflict it explains.
+    for (const note of notes) {
+      if (!existing.notes.includes(note)) {
+        existing.notes.push(note);
+      }
+    }
+  };
 
   for (let leftIndex = 0; leftIndex < routes.length; leftIndex += 1) {
     const left = routes[leftIndex];
@@ -355,27 +386,46 @@ export function validateRoutes(
         const owner = reservesPath(left, right.path) ? left : right;
         const descendant = owner === left ? right : left;
 
-        throw new Error(
+        record(
+          `Route namespace conflict at ${JSON.stringify(owner.path)}:`,
           [
-            `[shinro] Route namespace conflict at ${JSON.stringify(owner.path)}:`,
-            `- ${toProjectPath(root, owner.file)}`,
-            `- ${toProjectPath(root, descendant.file)}`,
+            toProjectPath(root, owner.file),
+            toProjectPath(root, descendant.file),
+          ],
+          [
             `The default sub-router at ${owner.path} owns its complete mount namespace.`,
             ...groupHint,
-          ].join('\n')
+          ]
         );
+        continue;
       }
 
-      throw new Error(
-        [
-          `[shinro] Route conflict at ${JSON.stringify(sameShape ? left.path : `${left.path} ↔ ${right.path}`)}:`,
-          `- ${toProjectPath(root, left.file)}`,
-          `- ${toProjectPath(root, right.file)}`,
-          ...groupHint,
-        ].join('\n')
+      record(
+        `Route conflict at ${JSON.stringify(sameShape ? left.path : `${left.path} ↔ ${right.path}`)}:`,
+        [toProjectPath(root, left.file), toProjectPath(root, right.file)],
+        groupHint
       );
     }
   }
+
+  if (conflicts.size === 0) {
+    return;
+  }
+
+  // One error carrying every conflict, blocks separated by a blank line. The
+  // `[shinro]` prefix leads only the first: the message is one diagnostic, and
+  // repeating the prefix per block would read as several.
+  throw new Error(
+    [...conflicts.values()]
+      .map((conflict, index) =>
+        [
+          `${index === 0 ? '[shinro] ' : ''}${conflict.headline}`,
+          ...[...conflict.files].map((file) => `- ${file}`),
+          ...conflict.notes,
+        ].join('\n')
+      )
+      .join('\n\n')
+  );
 }
 
 /**

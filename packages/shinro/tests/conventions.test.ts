@@ -299,6 +299,42 @@ test('two routes collapsing onto one URL through a group explain the collapse', 
   });
 });
 
+test('every conflict is reported, not just the first one found', async () => {
+  await withProject('all-conflicts', async (project) => {
+    await project.write('src/routes/api/users.ts', GET_ROUTE);
+    await project.write('src/routes/api/users/index.ts', GET_ROUTE);
+    await project.write('src/routes/api/posts.ts', GET_ROUTE);
+    await project.write('src/routes/api/posts/index.ts', GET_ROUTE);
+
+    // Conflicts arrive in batches — the rename that collided `users` usually
+    // collided `posts` too — so fixing them one run at a time is the slow way
+    // to find the second one.
+    const error = await project.generate().catch((cause: unknown) => cause);
+    const message = error instanceof Error ? error.message : String(error);
+
+    expect(message).toContain('Route conflict at "/api/users"');
+    expect(message).toContain('Route conflict at "/api/posts"');
+  });
+});
+
+test('three files on one URL are one conflict listing three files', async () => {
+  await withProject('triple-conflict', async (project) => {
+    await project.write('src/routes/health.ts', GET_ROUTE);
+    await project.write('src/routes/health/index.ts', GET_ROUTE);
+    await project.write('src/routes/(authed)/health.ts', GET_ROUTE);
+
+    const error = await project.generate().catch((cause: unknown) => cause);
+    const message = error instanceof Error ? error.message : String(error);
+
+    // Pairwise scanning finds three pairs here. The report is keyed by the
+    // conflicting path, so it stays one block with three files under it.
+    expect(message.match(/Route conflict at "\/health"/g)).toHaveLength(1);
+    expect(message).toContain('- src/routes/health.ts');
+    expect(message).toContain('- src/routes/health/index.ts');
+    expect(message).toContain('- src/routes/(authed)/health.ts');
+  });
+});
+
 test('a group must be a directory, and says so when a file names one', async () => {
   await withProject('group-file', async (project) => {
     await project.write('src/routes/(authed).ts', GET_ROUTE);
