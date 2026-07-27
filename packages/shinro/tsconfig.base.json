@@ -1,11 +1,4 @@
 {
-  // `shinro/tsconfig` — check-only, the common case: a bundler emits, tsc just
-  // type-checks. `noEmit` here is what makes `allowImportingTsExtensions` legal.
-  //
-  // A project that wants plain `tsc` to EMIT extends `shinro/tsconfig/emit`
-  // instead, which swaps `noEmit` for `rewriteRelativeImportExtensions` so the
-  // generated `./x.ts` specifiers become `./x.js` in the output. Shipping only
-  // this file made "build it however you want" false for tsc.
   "$schema": "https://json.schemastore.org/tsconfig",
   "compilerOptions": {
     "target": "esnext",
@@ -23,7 +16,6 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
-    "types": ["node"],
     "rootDirs": ["${configDir}", "${configDir}/.shinro/types"]
   },
   "include": [

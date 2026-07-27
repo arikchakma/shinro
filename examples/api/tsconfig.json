@@ -1,6 +1,7 @@
 {
   "extends": "shinro/tsconfig",
   "compilerOptions": {
+    "types": ["node"],
     "paths": {
       "~/*": ["./src/*"]
     }
