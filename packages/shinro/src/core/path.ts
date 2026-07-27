@@ -2,17 +2,8 @@ import { dirname, relative, resolve, sep } from 'node:path';
 
 import { TYPE_DECLARATION_PREFIX } from '../constants.ts';
 
-/**
- * Moved from `server/path.ts` minus `normalizeBasePath` and `withBasePath`:
- * `basePath` is Hono's now, so nothing here composes prefixes any more.
- */
-
-/**
- * Whether `file` sits at or below `directory`. The directory itself counts,
- * which is what path-prefix checks such as "is this inside the generated
- * output" want.
- */
-export function isAtOrWithin(directory: string, file: string): boolean {
+/** Whether `file` sits at or below `directory`. The directory itself counts. */
+function isAtOrWithin(directory: string, file: string): boolean {
   const path = relative(directory, file);
   return path !== '..' && !path.startsWith(`..${sep}`);
 }
@@ -61,13 +52,13 @@ export function generatedSpecifier(
 /**
  * Prefixes `./` unless the path already navigates. Testing for a leading dot is
  * not enough — `.shinro/routes.ts` starts with one and is still a bare
- * specifier, which is how a correct `imports` block came to be reported as
- * pointing somewhere else.
+ * specifier.
  */
 export function toRelativeSpecifier(path: string): string {
   return /^\.{1,2}\//.test(path) ? path : `./${path}`;
 }
 
+/** Where a route file's generated `+types` declaration is written. */
 export function getTypeDeclarationPath(
   root: string,
   routesDirectory: string,

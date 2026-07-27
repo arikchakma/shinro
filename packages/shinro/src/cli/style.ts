@@ -1,7 +1,6 @@
 /**
- * Sixteen lines of SGR instead of a colour dependency. The CLI only ever needs
- * eight colours applied to whole strings, and a package for that would be a
- * package to keep up to date.
+ * SGR escapes instead of a colour dependency: the CLI only ever needs eight
+ * colours applied to whole strings.
  *
  * `NO_COLOR` and a non-TTY stdout both disable it, which is what keeps
  * `shinro generate` a clean set of lines in a CI log.
@@ -22,7 +21,6 @@ export const green = sgr(32, 39);
 export const yellow = sgr(33, 39);
 export const blue = sgr(34, 39);
 export const magenta = sgr(35, 39);
-export const cyan = sgr(36, 39);
 
 /** Verb colours, so a route table is scannable by method before it is read. */
 export function method(verb: string): string {
