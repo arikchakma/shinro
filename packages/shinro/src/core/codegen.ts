@@ -68,7 +68,7 @@ export async function generateSources(options: {
       `[shinro] ${toProjectPath(
         root,
         appFile
-      )} registers middleware on the app that can respond early. It runs at runtime, but a response returned there belongs to no single route, so the generated client shows none of your file routes returning it.`
+      )} has app middleware that can respond early. It runs, but that response is missing from every file route in the client.`
     );
   }
 
@@ -99,9 +99,8 @@ export async function generateSources(options: {
           `[shinro] ${toProjectPath(
             root,
             route.file
-          )} default-exports a sub-router, so these middleware wrap it at runtime but stay out of its types:`,
+          )} mounts a sub-router: its directory middleware run, but an early response from them is missing from the client for ${route.path}.`,
           ...route.middleware.map((file) => `- ${toProjectPath(root, file)}`),
-          `Hono copies a mounted sub-router's schema exactly as the file wrote it, so an early response from them — a 401 from an auth check, say — is missing from the generated client for ${route.path}. Ignore this when they always call next(); otherwise move them inside the sub-router, or export GET/POST from this file instead of a router.`,
         ].join('\n')
       );
     }

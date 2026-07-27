@@ -186,7 +186,7 @@ test('a sub-router with directory middleware is wrapped once before the chain', 
     expect(routes).toMatch(/const route\d+Mounted = new Hono<ProjectEnv>\(\)/);
     expect(routes).toMatch(/\.use\("\*", \.\.\.middleware\d\)/);
     expect(project.warnings.join('\n')).toMatch(
-      /default-exports a sub-router, so these middleware wrap it at runtime/
+      /mounts a sub-router: its directory middleware run/
     );
   });
 });
@@ -304,7 +304,7 @@ test('app middleware that can respond early is reported as missing from the clie
       await project.generate();
 
       expect(project.warnings.join('\n')).toMatch(
-        /registers middleware on the app that can respond early/
+        /has app middleware that can respond early/
       );
     },
     {

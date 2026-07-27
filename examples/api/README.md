@@ -40,10 +40,9 @@ Four things do the whole job:
 - a `vp pack` build whose `dist` mirrors the source tree, with
   application-owned graceful shutdown.
 
-Generation warns about one thing on purpose: `admin.ts` default-exports a
-sub-router, so the root directory middleware wraps it at runtime but stays out of
-its types. Harmless here — that middleware only sets a header and always calls
-`next()` — and the warning is there for the case where it does not.
+Generation warns about `admin.ts`: it mounts a sub-router, so an early response
+from the root middleware would be missing from the client. Harmless here, since
+that middleware only sets a header and always calls `next()`.
 
 Call the protected route with and without the demo credential:
 
