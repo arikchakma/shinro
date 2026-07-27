@@ -687,9 +687,10 @@
             stop being the product. Everything framework-shaped in the package
             today — the child process, the build coercion, the ambient module
             declarations — exists to prop up a bare specifier that a real file
-            on disk resolves for free. <code>prototype/tsdown</code> already
-            gets this right. This is the argument for shipping it, plus the
-            seven gaps I found in it.
+            on disk resolves for free. <code>prototype/tsdown</code> already got
+            this right. This was the argument for shipping it, plus the seven
+            gaps I found in it — and it has since shipped: the prototype is now
+            <code>packages/shinro</code>.
           </p>
           <div class="meta">
             <span><b>Reviewed</b> packages/shinro @ 612e179</span>
@@ -699,7 +700,12 @@
             <span><b>Target</b> v0.1</span>
             <span
               ><b>Revised</b> 2026-07-27 · &sect;5 platform question resolved,
-              gaps 6.5&ndash;6.7 added</span
+              &sect;5.1 added, gaps 6.5&ndash;6.7 added</span
+            >
+            <span
+              ><b>Shipped</b> 2026-07-27 · this is now
+              <code>packages/shinro</code>. The prototype was built, verified,
+              merged, and deleted; <code>examples/api</code> runs on it</span
             >
           </div>
         </div>
@@ -1193,6 +1199,77 @@
         </p>
       </div>
 
+      <h3>5.1 — Everything is generated into a temp directory first</h3>
+
+      <p>
+        The scan produces the complete generation in memory, and
+        <code>core/emit.ts</code> then stages every file it means to change in a
+        temp directory inside <code>.shinro</code> before promoting any of them
+        by <code>rename</code>. That reads like a detail of writing files. It is
+        actually the mechanism six separate guarantees in this design rest on,
+        so it's worth listing what it buys:
+      </p>
+
+      <ul>
+        <li>
+          <strong>No reader ever sees a half-written module.</strong>
+          <code>rename</code> within one filesystem is atomic, so
+          <code>routes.ts</code> goes from the old contents to the new contents
+          with nothing in between. This is not theoretical here: the graph
+          watcher fires <em>on the write</em>, so a plain
+          <code>writeFile</code> races the restart it causes, and the losing
+          side imports a truncated router. Staging inside
+          <code>.shinro</code> rather than the OS temp directory is what keeps
+          the rename atomic — across a mount point it degrades to a copy.
+        </li>
+        <li>
+          <strong
+            >A failure leaves the previous generation byte for byte.</strong
+          >
+          Nothing is promoted until every staged file exists, so a route
+          conflict found late, a full disk, or a <code>SIGKILL</code> mid-write
+          all end with the tree that was already working. That is the difference
+          between a dev loop that prints an error and one that crash-loops the
+          runner on a typo — and it's what lets the preload treat a broken route
+          tree as a diagnostic instead of a fatal error.
+        </li>
+        <li>
+          <strong><code>--check</code> falls out of it for free.</strong>
+          Because the generation is complete before anything touches disk, the
+          check is the same code path with the write skipped: compare, report,
+          exit. One implementation decides both "what should change" and "is
+          this tree stale", so CI and the build cannot disagree about what stale
+          means — which was the risk in &sect;6.3.
+        </li>
+        <li>
+          <strong>The lock file disappears.</strong> Writing in place needed
+          <code>.shinro/.lock</code>, a pid, a liveness probe, and stale-lock
+          reclamation, all so two processes couldn't interleave halves of two
+          generations. Staging plus deterministic output makes concurrency
+          benign: a <code>tsdown</code> build beside a dev server stage
+          separately and promote identical bytes. Roughly eighty lines of
+          coordination deleted, and with them the failure mode where a killed
+          process left a lock that made every later run wait out its timeout.
+        </li>
+        <li>
+          <strong>Unchanged files are never touched at all.</strong> The
+          comparison happens before staging, so a no-op generation creates no
+          temp directory, writes nothing, and moves no mtime — the steady state
+          of the dev loop is genuinely inert rather than merely cheap. And
+          because the temp files live under <code>.shinro</code>, they are
+          invisible to the graph watcher and already covered by the one ignore
+          rule the project has.
+        </li>
+        <li>
+          <strong>Pruning becomes provable rather than heuristic.</strong> The
+          staged tree is the complete answer, so any generated file absent from
+          it — the <code>+types</code> declaration of a deleted route, an older
+          format's <code>shinro.d.ts</code> — is stale by construction. Deleting
+          happens after promotion and only for files carrying the generated
+          notice, so a mid-generation crash can't take a declaration with it.
+        </li>
+      </ul>
+
       <div class="cost">
         <span class="note-title">What it actually costs</span>
         <ul>
@@ -1200,6 +1277,17 @@
             <strong>A Node floor.</strong> A <code>.ts</code> entry needs Node
             ≥23.6 for unflagged type stripping, or 22.12 with
             <code>--experimental-strip-types</code>.
+          </li>
+          <li>
+            <strong>Promotion is per file, not one directory swap.</strong>
+            Deliberately: renaming a whole directory into place makes the
+            generated tree briefly disappear, which editors observe as the
+            project's types vanishing on every save. The consequence is that a
+            failure <em>between</em> two renames can leave a new
+            <code>routes.ts</code> beside an older <code>manifest.json</code>.
+            The manifest is promoted last for exactly that reason — it describes
+            the generation rather than being part of it, so it is the right
+            thing to be behind.
           </li>
           <li>
             <strong>A resident watcher in the dev process.</strong> A few
@@ -1479,25 +1567,42 @@ $ echo $?
       </figure>
 
       <p>
-        The reason this costs nothing is worth internalizing: per-middleware
-        slots were never carrying type information.
-        <code>defineMiddleware</code> already types every element as plain
-        <code>MiddlewareHandler&lt;Env, Path&gt;</code> — no <code>Input</code>,
-        no typed responses — and the env is <em>declared</em> via the
-        <code>ShinroEnv</code> augmentation, not inferred through the chain
-        (your own &sect;17.1 argument). So collapsing N middleware into one slot
-        loses nothing, and I verified both halves: nine middleware plus a
-        validator plus a handler composed with <code>every()</code> keeps the
-        client fully typed, and a middleware that short-circuits without calling
-        <code>next()</code> still blocks the rest of the chain and the handler,
-        exactly as inline. Validators are the opposite case — they carry
-        <code>Input</code> into the RPC contract — which is why they live in the
-        <code>defineHandler</code> tuple and must stay inline. The rejected
-        alternative, chaining <code>.use("/api/*", …)</code> before the routes,
-        breaks route-group scoping: two pathless groups share URL space, so
-        path-pattern matching can't tell their middleware apart. Inlining is
-        per-route precise; composition keeps it that way.
+        The rejected alternative, chaining <code>.use("/api/*", …)</code> before
+        the routes, breaks route-group scoping: two pathless groups share URL
+        space, so path-pattern matching can't tell their middleware apart.
+        Inlining is per-route precise, and composition keeps it that way.
       </p>
+
+      <div class="cost">
+        <span class="note-title"
+          >Correction: composition is not free, so it is not the default</span
+        >
+        <p>
+          I claimed collapsing N middleware into one slot "loses nothing", on
+          the grounds that <code>defineMiddleware</code> types every element as
+          a plain <code>MiddlewareHandler&lt;Env, Path&gt;</code>. Building it
+          disproved that. The tuple's <code>const</code> type parameter
+          preserves each element's <em>own</em> inferred signature, so a
+          middleware that short-circuits with
+          <code>c.json({ error }, 401)</code> carries that typed response into
+          its slot — and inlining puts the 401 in the route's client response
+          union. <code>every()</code> returns a plain
+          <code>MiddlewareHandler</code>, which erases it. The suite's own
+          "directory middleware responses are part of the RPC response union"
+          test is what caught it: composed, that union went to
+          <code>never</code>.
+        </p>
+        <p>
+          So the shipped emitter inlines by default and composes
+          <strong>per route, only where inlining would overflow</strong>. That
+          keeps the higher-fidelity emit everywhere it fits, and where it
+          doesn't, it trades one route's middleware responses for the validator
+          contract of the whole chain — with a warning naming the route, because
+          a silent trade is how this section's bug happened in the first place.
+          The slot count is the sum of <em>tuple lengths</em>, not of files:
+          three middleware in one <code>_middleware.ts</code> cost three slots.
+        </p>
+      </div>
 
       <div class="note">
         <span class="note-title">Two guards that go with it</span>
@@ -1517,12 +1622,27 @@ $ echo $?
           frontend.
         </p>
         <p>
-          The one cost: the generated file gains
-          <code>import { every } from "hono/combine"</code>. Still
-          runtime-neutral — no <code>node:</code> specifier — so the &sect;4
-          invariant holds. Emit it whenever a route has directory middleware,
-          not only past the limit, so the ≤10 and &gt;10 cases stay on one code
-          path.
+          One correction to the failure mode, from building it: how the
+          over-limit case fails depends on the tuple's shape. With the validator
+          <em>first</em> in a <code>defineHandler</code> tuple — the shape a
+          composed route actually emits — an inlined eleventh argument does not
+          go quiet. TypeScript rejects the variadic fallback outright ("no
+          overload matches this call"), because the validator's
+          <code>H&lt;Env, string, …&gt;</code> can't satisfy the fallback's
+          <code>H&lt;ShinroEnv, "/path", {}, Response&gt;</code>. That is still
+          an error the author never wrote and can't act on — it points at
+          <code>.shinro/routes.ts</code> — so the generate-time diagnostic keeps
+          its job. It just means the cliff is silent in some shapes and loudly
+          misplaced in others, and both are reasons to catch it before emitting.
+        </p>
+        <p>
+          Both guards shipped: <code>generate</code> hard-errors when even
+          composition cannot fit a route under path + ten, naming the route and
+          each contributing file's count, and the type fixture lives in the
+          suite. The one runtime cost is the
+          <code>import { every } from "hono/combine"</code> the generated file
+          gains — emitted only when some route composes. Still runtime-neutral,
+          no <code>node:</code> specifier, so the &sect;4 invariant holds.
         </p>
       </div>
 
@@ -1711,8 +1831,8 @@ $ echo $?
       <div class="colophon">
         <span>Architecture review · shinro v0.1 · revised 2026-07-27</span>
         <span
-          >Sources: packages/shinro/src, docs/SPEC.md, prototype/tsdown,
-          nodejs.org CLI docs</span
+          >Sources: packages/shinro/src, docs/SPEC.md, the (now merged)
+          prototype/tsdown, nodejs.org CLI docs</span
         >
       </div>
     </div>
