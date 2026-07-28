@@ -32,11 +32,9 @@ export default defineConfig({
     dts: {
       tsgo: true,
     },
+    clean: false,
     exports: {
       customExports() {
-        // Returned wholesale rather than spread over the generated map: the auto
-        // map derives an export per entry file, which would publish
-        // `./adapters/vite` beside `./vite` — two spellings of one thing.
         return {
           '.': {
             types: './dist/index.d.mts',
@@ -50,9 +48,6 @@ export default defineConfig({
             types: './dist/cli.d.mts',
             import: './dist/cli.mjs',
           },
-          // The two side-effecting preloads. Subpaths rather than flags because
-          // `node --import` takes a module specifier, and that is the whole dev
-          // story: no `shinro dev`, no supervisor.
           './generate': {
             types: './dist/generate.d.mts',
             import: './dist/generate.mjs',
