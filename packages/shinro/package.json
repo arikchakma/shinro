@@ -83,6 +83,7 @@
     "check": "vp run generate && vp check",
     "dev": "vp pack --watch",
     "generate": "node src/cli.ts generate",
+    "prepare": "vp run build",
     "prepublishOnly": "vp run build",
     "pretest": "vp run generate",
     "release": "bumpp",
