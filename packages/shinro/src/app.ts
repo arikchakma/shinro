@@ -1,6 +1,9 @@
 import { Hono } from 'hono';
 import type { Env } from 'hono';
 
+// The only entry point the running server imports. Nothing here reaches for the
+// filesystem, a parser, or a bundler, so importing `shinro/app` in a Worker or on
+// the edge pulls in Hono and nothing else.
 export { defineHandler } from './factory/handler.ts';
 export type { ShinroRoute } from './factory/handler.ts';
 export { defineMiddleware } from './factory/middleware.ts';

@@ -1,0 +1,298 @@
+import { readFile } from 'node:fs/promises';
+import { relative, resolve } from 'node:path';
+
+import { defineCommand } from 'citty';
+
+import type { ResolvedShinroConfig } from '../config.ts';
+import { findProjectRoot, loadConfig } from '../config.ts';
+import { GENERATED_FORMAT, MANIFEST_FILE } from '../constants.ts';
+import { generate as generateCore } from '../core/generate.ts';
+import type { ShinroLogger } from '../core/logger.ts';
+import { watch } from '../core/watch.ts';
+import { unknownOptions } from './args.ts';
+import { createReporter } from './report.ts';
+import { dim, green } from './style.ts';
+import type { ManifestRoute } from './tree.ts';
+import { routeTree } from './tree.ts';
+
+/**
+ * `shinro generate [--watch] [--check]`
+ *
+ * Load config, generate, exit. Named for the core function it calls rather than
+ * for its output, because `.shinro/routes.ts` is runtime code and a name like
+ * `typegen` describes a third of it.
+ *
+ * `--watch` debounces a watcher on the routes directory and regenerates. It
+ * spawns nothing and restarts nothing; the runner is the user's business. It
+ * generates once, synchronously, before it starts watching, so the artifacts
+ * exist by the time anything else reads them. Only needed for a runner that
+ * can't do either half itself — with `node --watch`, `shinro/watch` as an
+ * `--import` preload covers dev in one process.
+ *
+ * `--check` generates into memory and compares against disk. Exits non-zero on
+ * a route conflict, an invalid module, or a stale artifact, and writes nothing.
+ * No bundler is guaranteed to run, so this is the CI gate — and what makes
+ * committing `.shinro/` a supported choice rather than a trap.
+ */
+export const generate = defineCommand({
+  args: {
+    check: {
+      description:
+        'Compare against disk, write nothing, exit non-zero if stale',
+      type: 'boolean',
+    },
+    tree: {
+      description: 'Print the route tree instead of just the count',
+      type: 'boolean',
+    },
+    watch: {
+      description: 'Regenerate whenever the route tree changes',
+      type: 'boolean',
+    },
+  },
+  meta: {
+    description: 'Write .shinro from the route tree',
+    name: 'generate',
+  },
+  async run({ args, rawArgs }) {
+    const unknown = unknownOptions(rawArgs, ['--check', '--tree', '--watch']);
+
+    if (unknown.length > 0) {
+      createReporter().error(
+        `[shinro] Unknown option ${unknown.join(', ')}.\nUsage: shinro generate [--watch] [--check] [--tree]`
+      );
+      process.exitCode = 1;
+      return;
+    }
+
+    process.exitCode = await run({
+      check: args.check,
+      tree: args.tree,
+      watch: args.watch,
+    });
+  },
+});
+
+/**
+ * `generate` under its former name, resolved but never listed, so existing
+ * scripts keep running. The fields are restated rather than spread, because citty
+ * types `meta` and `args` as `Resolvable` — possibly a promise — and spreading
+ * one of those is a bug in every case but this one.
+ */
+export const typegen = defineCommand({
+  args: generate.args,
+  meta: {
+    description: 'Deprecated alias for generate',
+    hidden: true,
+    name: 'typegen',
+  },
+  run: generate.run,
+});
+
+async function run(flags: {
+  check?: boolean;
+  tree?: boolean;
+  watch?: boolean;
+}): Promise<number> {
+  const logger = createReporter();
+
+  if (flags.watch === true && flags.check === true) {
+    logger.error(
+      '[shinro] --watch and --check are mutually exclusive: one writes whenever the tree changes, the other never writes.'
+    );
+    return 1;
+  }
+
+  const root = await findProjectRoot();
+
+  try {
+    const config = await loadConfig(root, logger);
+
+    if (flags.watch === true) {
+      return await watchLines(config, logger, root);
+    }
+
+    const result = await generateCore({
+      check: flags.check === true,
+      config,
+      logger,
+    });
+    const drifted = [...result.written, ...result.removed];
+
+    if (flags.check !== true) {
+      const routes = await readManifest(config);
+      const where = relative(root, result.outputDirectory);
+
+      logger.info(
+        `${
+          drifted.length === 0
+            ? `[shinro] ${where} is up to date`
+            : `[shinro] wrote ${where}`
+        }${dim(` · ${count(routes.length)}`)}`
+      );
+
+      if (flags.tree === true) {
+        console.info(['', ...routeTree(routes), ''].join('\n'));
+      }
+      return 0;
+    }
+
+    if (drifted.length === 0) {
+      logger.info(
+        `[shinro] ${relative(root, result.outputDirectory)} matches the route tree`
+      );
+      return 0;
+    }
+
+    // Stale artifacts and a package upgrade produce the same byte diff and want
+    // opposite reactions, so the format number decides which message this is.
+    // Without it, a committed `.shinro/` becomes the confusing part of an
+    // upgrade.
+    logger.error(
+      result.onDiskFormat === undefined
+        ? [
+            `[shinro] ${relative(root, result.outputDirectory)} is out of date. Run "shinro generate".`,
+            ...drifted.map((file) => `- ${relative(root, file)}`),
+          ].join('\n')
+        : `[shinro] ${relative(root, result.outputDirectory)} was generated by an older shinro (format ${result.onDiskFormat}, this is format ${GENERATED_FORMAT}). Run "shinro generate" and commit the result.`
+    );
+    return 1;
+  } catch (error) {
+    logger.error(error instanceof Error ? error.message : String(error));
+    return 1;
+  }
+}
+
+async function watchLines(
+  config: ResolvedShinroConfig,
+  logger: ShinroLogger,
+  root: string
+): Promise<number> {
+  // The first generation runs inside `watch`, before the line below has been
+  // printed. Its writes are worth announcing; its "nothing changed" is not,
+  // because nothing has told the user a watcher exists yet.
+  let started = false;
+  const base = resolve(root, config.routes);
+  // Named relative to the routes directory, which the `watching …` line above
+  // already spelled out in full. Repeating `tests/fixtures/basic/src/routes/`
+  // on every save was most of the line and none of the information.
+  const trigger = (changed: string[]): string => {
+    const names = changed.map((file) => relative(base, file));
+
+    if (names.length === 0) {
+      return '';
+    }
+
+    return `${names.slice(0, 2).join(', ')}${
+      names.length > 2 ? ` +${names.length - 2} more` : ''
+    }  `;
+  };
+
+  await watch({
+    config,
+    initial: 'report',
+    keepAlive: true,
+    logger,
+    onGenerate: (result, changed) => {
+      const drifted = result.written.length + result.removed.length;
+
+      // Most edits change a handler body without changing the route tree, so
+      // `.shinro` is already correct and nothing is written. Saying nothing
+      // then is indistinguishable from a dead watcher — but announcing it
+      // before `watching …` has printed would announce a watcher the user has
+      // not been told about.
+      if (drifted === 0) {
+        if (started) {
+          logger.info(`[shinro] ${trigger(changed)}${dim('up to date')}`);
+        }
+        return;
+      }
+
+      // One line per action rather than one per file. A single new route
+      // touches three artifacts, and three lines that each say `wrote` are
+      // three copies of the same fact. Written past the reporter because the
+      // hanging indent is a layout the `- item` convention cannot express.
+      for (const line of [
+        ...action('wrote', result.written, root),
+        ...action('removed', result.removed, root),
+      ]) {
+        console.info(line);
+      }
+    },
+  });
+  logger.info(`[shinro] watching ${config.routes}`);
+  started = true;
+  // No tree here. A watcher prints once per edit and the tree is fifteen lines;
+  // reprinting it on every save buries the one line that says what changed, and
+  // the tree you want is the one `shinro generate` already showed you.
+  //
+  // Never resolves; the watcher holds the event loop open. Nothing here installs
+  // a signal handler, so Ctrl-C behaves the way Ctrl-C behaves.
+  return await new Promise<number>(() => {});
+}
+
+/**
+ * What was actually written, read back from the manifest rather than from the
+ * scan — the manifest is the record of the generation, so it describes what is
+ * on disk instead of what the scanner believed a moment earlier.
+ */
+async function readManifest(
+  config: ResolvedShinroConfig
+): Promise<ManifestRoute[]> {
+  try {
+    const manifest = JSON.parse(
+      await readFile(resolve(config.outputDirectory, MANIFEST_FILE), 'utf8')
+    ) as { routes?: ManifestRoute[] };
+
+    return manifest.routes ?? [];
+  } catch {
+    // No manifest, or one nobody can parse. The generation it describes either
+    // failed or never ran, and both already said so.
+    return [];
+  }
+}
+
+function count(routes: number): string {
+  return `${routes} route${routes === 1 ? '' : 's'}`;
+}
+
+/** Width of the widest verb, so `wrote` and `removed` share a column. */
+const LABEL = 'removed'.length;
+/** `✓ ` plus the label column plus its trailing space. */
+const HANGING = 2 + LABEL + 1;
+
+/**
+ * One `wrote`/`removed` line, its file list filled to the terminal width and
+ * wrapped under a hanging indent so continuations line up with the first name
+ * instead of the symbol.
+ */
+function action(label: string, paths: string[], root: string): string[] {
+  if (paths.length === 0) {
+    return [];
+  }
+
+  const width = Math.max(process.stdout.columns ?? 80, HANGING + 20);
+  const names = paths.map((file) => relative(root, file)).sort();
+  const rows: string[] = [];
+  let row = '';
+
+  for (const [index, name] of names.entries()) {
+    const piece = index === names.length - 1 ? name : `${name},`;
+
+    if (row === '') {
+      row = piece;
+    } else if (HANGING + row.length + 1 + piece.length <= width) {
+      row += ` ${piece}`;
+    } else {
+      rows.push(row);
+      row = piece;
+    }
+  }
+  rows.push(row);
+
+  return rows.map((line, index) =>
+    index === 0
+      ? `${green('✓')} ${label.padEnd(LABEL)} ${dim(line)}`
+      : `${' '.repeat(HANGING)}${dim(line)}`
+  );
+}

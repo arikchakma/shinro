@@ -1,0 +1,75 @@
+---
+layout: ../layouts/Layout.astro
+title: Create the app
+description: Create a Hono app, mount Shinro's generated router, and start a Node.js or Bun server.
+---
+
+# Create the app
+
+`defineApp()` creates a regular Hono instance with the project environment already applied. Mount the generated router with Hono's native `route()` method.
+
+```ts title="src/app.ts"
+import { routes } from '#shinro/routes';
+import { logger } from 'hono/logger';
+import { defineApp } from 'shinro/app';
+
+const app = defineApp()
+  .use('*', logger())
+  .route('/', routes())
+  .onError((error, c) => {
+    console.error(error);
+    return c.json({ error: 'INTERNAL_ERROR' as const }, 500);
+  });
+
+export default app;
+```
+
+`#shinro/routes` exposes your file routes as a Hono sub-router, and `route()` returns the same Hono instance with the sub-router's schema copied onto it. Runtime routing and the RPC contract therefore describe one application.
+
+Because the generated router never imports your app, your app can safely import it — `typeof app` ends up describing the complete contract, file routes and hand-written routes alike.
+
+## Middleware order
+
+Mount generated routes after global middleware. Hono composes handlers in registration order, so middleware registered after `routes()` does not wrap file routes.
+
+```ts title="src/app.ts"
+const app = defineApp()
+  .use('*', logger()) // wraps file routes
+  .route('/', routes())
+  .use('*', lateMiddleware); // does not wrap file routes
+```
+
+Shinro warns when it detects this common mistake or when an app never mounts `routes()`.
+
+## Start on Node.js
+
+Server lifecycle stays in application code:
+
+```ts title="src/server.ts"
+import { serve } from '@hono/node-server';
+import app from './app.ts';
+
+const server = serve({
+  fetch: app.fetch,
+  port: Number(process.env.PORT ?? 3000),
+});
+
+process.once('SIGTERM', () => server.close());
+```
+
+Keeping the native server handle means your application can drain requests, close databases, stop workers, and choose its own exit behavior. Shinro never imports your entry, never spawns it, and never installs a signal handler: it guarantees only that `.shinro` matches the route tree by the time your module graph loads.
+
+## Start on Bun
+
+Bun can serve the same Hono application directly:
+
+```ts title="src/server.ts"
+import app from './app.ts';
+
+Bun.serve({
+  fetch: app.fetch,
+  port: Number(Bun.env.PORT ?? 3000),
+});
+```
+
+Shinro does not abstract either runtime. The only shared layer is the generated Hono router.

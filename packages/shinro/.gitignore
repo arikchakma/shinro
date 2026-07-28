@@ -1,4 +1,6 @@
 node_modules
 dist
+# Written by the declaration-leak test, removed once it has read them.
+dist-declarations
 *.log
 .DS_Store

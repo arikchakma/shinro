@@ -1,35 +1,37 @@
 #!/usr/bin/env node
+import { defineCommand, renderUsage, runMain } from 'citty';
 
-import { resolveConfig } from 'vite';
+import { generate, typegen } from './cli/generate.ts';
+import { init } from './cli/init.ts';
+import { createReporter } from './cli/report.ts';
 
-import type { ShinroApi } from './server/plugin.ts';
+// `shinro generate [--watch] [--check]` is the whole CLI, plus `shinro init` to
+// write the boilerplate once. There is no `shinro dev`: `node --watch` plus the
+// `shinro/watch` preload covers dev in one process, and anything that spawned the
+// runner would owe you a supervisor's signal handling.
+//
+// `typegen` is registered as a hidden command rather than a citty alias, because
+// an alias would list it in `--help` — and the point of keeping it is that old
+// scripts run, not that anyone writes it again.
+const main = defineCommand({
+  meta: {
+    description:
+      'Opinionated file-based routing for Hono with end-to-end type safety.',
+    name: 'shinro',
+  },
+  subCommands: { generate, init, typegen },
+});
 
-const [command] = process.argv.slice(2);
+// citty reports an unknown command after printing usage, unquoted. The quotes
+// are the difference between "we did not recognise this word" and a sentence
+// that happens to contain the word, so the check lives here instead.
+const COMMANDS = new Set(['generate', 'init', 'typegen']);
+const [first] = process.argv.slice(2);
 
-if (command !== 'typegen') {
-  console.error('Usage: shinro typegen');
+if (first !== undefined && !first.startsWith('-') && !COMMANDS.has(first)) {
+  createReporter().error(`[shinro] Unknown command "${first}".`);
+  console.error(`\n${await renderUsage(main)}`);
   process.exitCode = 1;
 } else {
-  const config = await resolveConfig({}, 'serve');
-  const plugin = config.plugins.find(
-    (candidate) => candidate.name === 'shinro'
-  );
-
-  if (!plugin) {
-    console.error(
-      'shinro typegen could not find shinro() in the loaded Vite config. Add plugins: [shinro()] to vite.config.ts.'
-    );
-    process.exitCode = 1;
-  } else {
-    // Resolving the config already generates once. Calling the plugin's own API
-    // makes that explicit rather than depending on a side effect, and gives the
-    // command something concrete to report.
-    const result = await (plugin.api as ShinroApi | undefined)?.generate();
-
-    console.info(
-      result
-        ? `shinro typegen wrote ${result.outputDirectory}`
-        : 'shinro typegen completed'
-    );
-  }
+  await runMain(main);
 }

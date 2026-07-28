@@ -1,9 +1,9 @@
 export const siteConfig = {
   name: 'Shinro',
   url: 'https://shinro.dev',
-  title: 'Shinro — File-based routing for Hono',
+  title: 'Shinro Docs — File-based routing for Hono',
   description:
-    'File-based routing for Hono with end-to-end type safety. One Vite plugin finds your routes, builds a router you can mount anywhere, and generates a typed client.',
+    'File-based routing for Hono with end-to-end type safety. Shinro finds your routes, generates a router you can mount anywhere, and derives a typed client from it.',
   keywords: [
     'Shinro',
     'Hono',
@@ -11,7 +11,7 @@ export const siteConfig = {
     'file routes',
     'Hono RPC',
     'typed API client',
-    'Vite plugin',
+    'Hono router',
     'TypeScript',
     'Node.js',
     'Bun',

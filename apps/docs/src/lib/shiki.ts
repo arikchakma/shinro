@@ -1,4 +1,5 @@
-import type { ThemeRegistration } from '@shikijs/core';
+import type { ShikiTransformer, ThemeRegistration } from '@shikijs/core';
+import type { Element, ElementContent, RootContent } from 'hast';
 
 interface CssVariablesThemeOptions {
   name?: string;
@@ -206,3 +207,55 @@ export const shinroTheme = createCssVariablesTheme({
   variablePrefix: '--shiki-',
   fontStyle: true,
 });
+
+const TITLE_META = /\btitle="([^"]+)"/;
+
+/**
+ * Renders the `title="..."` of a fenced code block as a header above it, the
+ * same shape Snippet renders. Highlighting is the last chance to do this on the
+ * server: doing it from a client script instead makes every titled block grow a
+ * header after paint.
+ */
+export function createCodeTitleTransformer(): ShikiTransformer {
+  return {
+    name: 'shinro:code-title',
+    root(hast) {
+      const title = this.options.meta?.__raw?.match(TITLE_META)?.[1];
+      if (!title) {
+        return;
+      }
+
+      hast.children = [
+        {
+          type: 'element',
+          tagName: 'div',
+          properties: { className: ['markdown-code-block'] },
+          children: [
+            createCodeHeader(title),
+            ...hast.children.filter(isElement),
+          ],
+        },
+      ];
+    },
+  };
+}
+
+function createCodeHeader(title: string): Element {
+  return {
+    type: 'element',
+    tagName: 'div',
+    properties: { className: ['markdown-code-header'] },
+    children: [
+      {
+        type: 'element',
+        tagName: 'span',
+        properties: { className: ['markdown-code-title'] },
+        children: [{ type: 'text', value: title }],
+      },
+    ],
+  };
+}
+
+function isElement(node: RootContent | ElementContent): node is Element {
+  return node.type === 'element';
+}

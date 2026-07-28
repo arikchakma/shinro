@@ -1,232 +1,134 @@
 ---
-import BrandMark from '../components/BrandMark.astro';
-import SectionHeading from '../components/SectionHeading.astro';
+import routeFlowSvg from '../assets/route-flow.svg?raw';
 import Snippet from '../components/Snippet.astro';
 import Layout from '../layouts/Layout.astro';
-import { siteConfig } from '../lib/config';
 
-const installExample = `vp add hono @hono/node-server
-vp add -D shinro`;
-
-const configExample = `import { shinro } from 'shinro';
-import { defineConfig } from 'vite-plus';
-
-export default defineConfig({
-  plugins: [shinro()],
-});`;
-
-const tsconfigExample = `{
-  "extends": "shinro/tsconfig"
-}`;
-
-const mountExample = `import { logger } from 'hono/logger';
-import { defineApp } from 'shinro/app';
-import { routes } from 'shinro/routes';
-
-const app = defineApp()
-  .use('*', logger())
-  .route('/', routes());
-
-export default app;`;
+const headings = [
+  { depth: 2, slug: 'why-shinro', text: 'Why Shinro' },
+  { depth: 2, slug: 'how-it-fits', text: 'How it fits' },
+  { depth: 2, slug: 'where-to-start', text: 'Where to start' },
+];
 
 const routeExample = `import { defineHandler } from 'shinro/app';
 
 export const GET = defineHandler((c) => {
   return c.json({ id: c.req.param('id') }, 200);
 });`;
-
-const clientExample = `import { defineClient } from '@acme/api/client';
-
-const client = defineClient('http://localhost:3000');
-const response = await client.api.users[':id'].$get({
-  param: { id: 'usr_123' },
-});
-
-if (response.status === 200) {
-  const user = await response.json();
-}`;
-
-const routeDir = 'src/routes/';
-
-const routes = [
-  { file: 'index.ts', result: '/' },
-  { file: 'health.ts', result: '/health' },
-  { file: 'api/users.ts', result: '/api/users' },
-  { file: 'api/users/$id.ts', result: '/api/users/:id' },
-  { file: '(authed)/orders.ts', result: '/orders' },
-  { file: 'files/$...path.ts', result: '/files/:path{.+}' },
-  { file: '[index].ts', result: '/index' },
-  { file: '_middleware.ts', result: 'Applies to all routes' },
-];
-
-const docs = `${siteConfig.repository}/blob/main/docs`;
 ---
 
-<Layout>
-  <header class="mb-5">
-    <BrandMark class="size-5 text-black" />
-    <h1 class="mt-3 mb-0.5">Shinro</h1>
-    <p class="text-zinc-500">File-based routing for Hono</p>
-  </header>
+<Layout
+  title="File-based routing for Hono"
+  description="Shinro turns route files into a mountable Hono router and an end-to-end typed client."
+  {headings}
+>
+  <link
+    slot="head"
+    rel="preload"
+    href="/fonts/balsamiq-sans.woff2"
+    as="font"
+    type="font/woff2"
+    crossorigin
+  />
 
-  <div class="mb-8">
-    <p>
-      Shinro turns your files into routes for <a
-        target="_blank"
-        rel="noopener noreferrer"
-        href="https://hono.dev"
-        class="link">Hono ↗</a
-      >. Add one <a
-        target="_blank"
-        rel="noopener noreferrer"
-        href="https://viteplus.dev"
-        class="link">Vite ↗</a
-      > plugin and Shinro will find your route files, build a router you can mount
-      anywhere, and generate a fully typed client for your API.
-    </p>
+  <h1>File-based routing</h1>
+
+  <p>
+    Shinro turns a folder of route modules into a regular Hono router and a
+    typed client. Add, move, or remove a route, and both update together without
+    a route registry or client types to maintain by hand.
+  </p>
+
+  <p>
+    One command writes it all: <code>shinro generate</code> turns the route tree
+    into a real file on disk that any runner can execute. You keep ownership of
+    the Hono app, middleware order, server startup, and graceful shutdown.
+  </p>
+
+  <figure class="route-figure">
+    <Snippet code={routeExample} title="src/routes/users/$id.ts" />
+    <div class="route-preview">
+      <div
+        class="route-flow-svg"
+        role="img"
+        aria-label="Route files flow through Shinro to produce a Hono router and typed client."
+        set:html={routeFlowSvg}
+      />
+    </div>
+    <figcaption>
+      One route tree drives runtime registration and the client contract.
+    </figcaption>
+  </figure>
+
+  <h2 id="why-shinro"><a href="#why-shinro">Why Shinro</a></h2>
+
+  <p>Three properties shape the project:</p>
+
+  <ul>
+    <li>
+      <strong>No plugin required.</strong> <code>shinro generate</code> writes
+      <code>.shinro</code>, and <code>#shinro/routes</code> resolves through ESM
+      subpath imports — in Node, tsx, Bun, rolldown, and TypeScript alike.
+    </li>
+    <li>
+      <strong>Your server.</strong> Start Hono with <code>serve()</code> or
+      <code>Bun.serve()</code>, and keep lifecycle code in your application.
+    </li>
+    <li>
+      <strong>Readable output.</strong> Generated routes are real TypeScript
+      files with one Hono registration per route, ready to inspect or debug.
+    </li>
+  </ul>
+
+  <h2 id="how-it-fits"><a href="#how-it-fits">How it fits</a></h2>
+
+  <p>
+    <code>routes()</code> returns a Hono sub-router. Mount it wherever it belongs
+    in the middleware chain. Hono copies the sub-router schema onto your app, so
+    <code>typeof app</code> contains generated and hand-written routes together.
+  </p>
+
+  <div class="table-block">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Shinro owns</th>
+          <th>You own</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Route discovery and ordering</td>
+          <td>The Hono application</td>
+        </tr>
+        <tr>
+          <td>Directory middleware composition</td>
+          <td>Global middleware and error handling</td>
+        </tr>
+        <tr>
+          <td>Generated router and client types</td>
+          <td>Server startup and shutdown</td>
+        </tr>
+        <tr>
+          <td>Keeping <code>.shinro</code> in step with the tree</td>
+          <td>The build, the runner, and runtime-specific options</td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 
-  <section class="mb-8">
-    <SectionHeading step={1} title="Install" />
+  <h2 id="where-to-start"><a href="#where-to-start">Where to start</a></h2>
 
-    <p>
-      Install Shinro alongside Hono. If you are using Node.js, you will also need
-      Hono's Node adapter. Bun users can leave it out and use
-      <code>Bun.serve()</code> instead.
-    </p>
+  <p>
+    Begin with <a href="/getting-started">installation</a>, then
+    <a href="/create-the-app">create and mount the app</a>. Read
+    <a href="/file-routes">file routes</a> for the filename rules, and
+    <a href="/middleware">directory middleware</a> when a section of the API
+    needs shared behavior.
+  </p>
 
-    <div class="mt-3">
-      <Snippet code={installExample} lang="sh" />
-    </div>
-  </section>
-
-  <section class="mb-8">
-    <SectionHeading step={2} title="Add the plugin" />
-
-    <p>
-      Add <code>shinro()</code> to your Vite config. That is the whole
-      integration: the plugin handles route discovery, development, and RPC type
-      generation on both Node.js and Bun.
-    </p>
-
-    <div class="mt-3">
-      <Snippet code={configExample} title="vite.config.ts" />
-    </div>
-
-    <p class="mt-3">
-      Then extend Shinro's TypeScript config so imports such as <code
-        >shinro/app</code
-      > and <code>shinro/routes</code> work without a custom
-      <code>paths</code> setup.
-    </p>
-
-    <div class="mt-3">
-      <Snippet code={tsconfigExample} lang="json" title="tsconfig.json" />
-    </div>
-  </section>
-
-  <section class="mb-8">
-    <SectionHeading step={3} title="Mount the router" />
-
-    <p>
-      <code>routes()</code> gives you a regular Hono router. Mount it
-      wherever it fits in your middleware chain. Hono carries the route schema into
-      <code>typeof app</code>, so your app and RPC client share the same contract.
-    </p>
-
-    <div class="mt-3">
-      <Snippet code={mountExample} title="src/app.ts" />
-    </div>
-  </section>
-
-  <section class="mb-8">
-    <SectionHeading step={4} title="Routes" />
-
-    <p>
-      Folders and filenames become URL paths. Start a segment with
-      <code>$</code> for a parameter or <code>$...</code> for a catch-all.
-      Use a <code>(group)</code> folder to share middleware without changing the
-      URL. Add <code>_middleware.ts</code> to wrap every route in a directory,
-      and use <code>[brackets]</code> when you need a literal path segment.
-    </p>
-
-    <div class="table-block mt-3">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>File</th>
-            <th>Result</th>
-          </tr>
-        </thead>
-        <tbody>
-          {
-            routes.map((route) => (
-              <tr>
-                <td>
-                  <span class="text-zinc-400">{routeDir}</span>{route.file}
-                </td>
-                <td class="text-zinc-600">{route.result}</td>
-              </tr>
-            ))
-          }
-        </tbody>
-      </table>
-    </div>
-
-    <p class="mt-3">
-      Each route file exports a handler named after the HTTP method it supports.
-      Exporting the handler is all you need to register the route.
-    </p>
-
-    <div class="mt-3">
-      <Snippet code={routeExample} title="src/routes/api/users/$id.ts" />
-    </div>
-  </section>
-
-  <section class="mb-8">
-    <SectionHeading step={5} title="Typed Client" />
-
-    <p>
-      Shinro generates a Hono client from your app, with types for every route,
-      parameter, and response. Export it from your API package, then use it
-      wherever you call the API.
-    </p>
-
-    <div class="mt-3">
-      <Snippet code={clientExample} />
-    </div>
-
-    <p class="mt-3">
-      Response types are tied to their status. Check for <code>200</code> and
-      TypeScript knows the exact shape of <code>user</code>. Early middleware
-      responses, such as <code>401</code>, are included too.
-    </p>
-  </section>
-
-  <div class="mt-8 space-y-3">
-    <p class="text-zinc-600">
-      See the <a
-        href={`${docs}/file-route-conventions.md`}
-        class="link text-black">file route conventions</a
-      > for the full set of filename rules, or read the <a
-        href={`${docs}/SPEC.md`}
-        class="link text-black">v0.1 spec</a
-      > for the complete contract. You can also explore the <a
-        href={`${siteConfig.repository}/tree/main/examples/api`}
-        class="link text-black">example API</a
-      > to see everything working in one runnable project.
-    </p>
-
-    <p class="text-zinc-600">
-      Shinro runs on Node.js and Bun. It is MIT licensed and open source on <a
-        href={siteConfig.repository}
-        class="link text-black">GitHub</a
-      >. Built by <a
-        target="_blank"
-        rel="noopener noreferrer"
-        href="https://x.com/imarikchakma"
-        class="link text-black">Arik Chakma</a
-      >.
-    </p>
-  </div>
+  <p>
+    Want the complete contract? The
+    <a href="/file-conventions">file conventions reference</a> collects every
+    mapping and exclusion in one place.
+  </p>
 </Layout>

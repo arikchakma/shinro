@@ -8,14 +8,14 @@
   </a>
 </p>
 
-Shinro discovers route modules through one Vite plugin, mounts them onto your
-own Hono instance, and generates a typed Hono client.
+Shinro turns a directory of route modules into a real file on disk, mounts it
+onto your own Hono instance, and generates a typed Hono client.
 
 ```ts
-// app/app.ts
+// src/app.ts
+import { routes } from '#shinro/routes';
 import { logger } from 'hono/logger';
 import { defineApp } from 'shinro/app';
-import { routes } from 'shinro/routes';
 
 const app = defineApp().use('*', logger()).route('/', routes());
 
@@ -33,8 +33,13 @@ Shinro turns a folder of route modules into a Hono router and a typed client.
 Add, move, or remove a route, and both update together—no route registry or
 client types to maintain by hand.
 
-- **One plugin.** `shinro()` handles routing, RPC types, and development
-  integration.
+- **No bundler required.** `shinro generate` writes `.shinro/routes.ts`, whose
+  imports are relative paths a plain `node`, `tsx`, `bun`, `tsc`, or `rolldown`
+  resolves on its own. Adapters for `tsdown` and Vite ship, and neither is ever
+  load-bearing.
+- **Dev is one process.** `node --watch --import shinro/watch src/server.ts`.
+  Nothing is spawned and nothing is supervised, so Node keeps owning the
+  restarts and the signals.
 - **You own the server.** Start it with `serve()` or `Bun.serve()`, choose how
   it runs, and handle shutdown in your own code. Shinro stays focused on
   routing.
@@ -54,8 +59,11 @@ client types to maintain by hand.
   route authoring convention.
 - [`docs/file-route-conventions.md`](./docs/file-route-conventions.md) — the
   complete list of filename conventions.
-- [`docs/SPEC.md`](./docs/SPEC.md) — the complete v0.1 contract, diagnostics, and test
-  requirements.
+- [`docs/SPEC.md`](./docs/SPEC.md) — the v0.1 contract, diagnostics, and test
+  requirements. Predates the runner-agnostic redesign in places; the review below
+  is the newer document.
+- [`docs/architecture-review.html`](./docs/architecture-review.html) — why the
+  Vite plugin stopped being the product, and what replaced it.
 
 ## Workspace commands
 
@@ -64,6 +72,7 @@ vp install
 vp check
 vp test
 vp run shinro#build
+vp run api#dev
 ```
 
 ## Acknowledgements

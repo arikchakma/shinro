@@ -16,13 +16,12 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
-    "types": ["node"],
     "rootDirs": ["${configDir}", "${configDir}/.shinro/types"]
   },
   "include": [
     "${configDir}/src",
     "${configDir}/tests",
-    "${configDir}/vite.config.ts",
+    "${configDir}/tsdown.config.ts",
     "${configDir}/.shinro/**/*.d.ts",
     "${configDir}/.shinro/**/*.ts"
   ]

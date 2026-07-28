@@ -2,7 +2,7 @@
   "name": "@shinro/docs",
   "version": "0.0.0",
   "private": true,
-  "description": "Landing page for Shinro.",
+  "description": "Documentation for Shinro.",
   "license": "MIT",
   "author": "Arik Chakma <arikchangma@gmail.com>",
   "type": "module",
@@ -21,6 +21,7 @@
   "devDependencies": {
     "@astrojs/check": "^0.9.9",
     "@shikijs/core": "^4.2.0",
+    "@types/hast": "catalog:",
     "typescript": "catalog:"
   },
   "engines": {

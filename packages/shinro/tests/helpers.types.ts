@@ -125,8 +125,8 @@ defineHandler<TeamRoute>(auditTeam[0], (c) =>
 
 // A validator may precede the handler here too, but the explicit route generic
 // stops TypeScript inferring its input, so only the filename-derived parameters
-// are readable. Validation still runs, and the RPC contract still records the
-// body; the inferred form is what makes `c.req.valid()` usable.
+// are readable. It still rejects invalid requests; what it loses is the type,
+// in the handler and in the generated client alike.
 defineHandler<TeamRoute>(zValidator('json', routeBody), (c) => {
   const teamId: string = c.req.param('teamId');
 

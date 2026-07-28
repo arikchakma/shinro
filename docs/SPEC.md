@@ -82,12 +82,18 @@ Generated `+types` are available but optional:
 ```ts
 // src/routes/users/$id.ts
 import { defineHandler } from 'shinro/app';
-import type { Route } from './+types/$id.ts';
+import type { Route } from './+types/users/$id.ts';
 
 export const GET = defineHandler<Route.Handler>((c) => {
   return c.json({ id: c.req.param('id') }, 200);
 });
 ```
+
+The specifier spells out the route's whole path below the routes directory, so
+it identifies one route on sight rather than repeating a basename such as
+`$id.ts` that recurs throughout the tree. It names the file, not the URL:
+`(group)` directories appear in it despite contributing no URL segment, and
+`basePath` appears in neither.
 
 The minimal and strict forms produce the same runtime route. The generated
 type only improves server-side filename-derived typing; the explicit
@@ -144,7 +150,7 @@ suited to long-running Node.js and Bun servers.
 - route discovery and conflict detection;
 - deterministic middleware and route registration;
 - mounting discovered routes onto the user's Hono instance;
-- generated optional route and middleware companion types;
+- generated optional route and middleware type declarations;
 - reconstructing the Hono RPC type;
 - generating a precomputed Hono client;
 - Vite development integration and structural route reloads;
@@ -290,7 +296,7 @@ Projects extend the base configuration shipped by the package:
 
 `shinro/tsconfig` resolves through the package `exports` map to a shipped
 `tsconfig.base.json`. It sets `moduleResolution: "Bundler"`, the TypeScript
-import-extension options, the `rootDirs` used by generated companions
+import-extension options, the `rootDirs` used by generated type declarations
 (`["${configDir}", "${configDir}/.shinro/types"]`), and the `include` that
 pulls in the generated declaration tree (`${configDir}/.shinro/**/*.d.ts`).
 Consumers add only their own `paths`; no `shinro/app` or `shinro/routes`
@@ -303,7 +309,8 @@ or `rewriteRelativeImportExtensions`; the base config uses `noEmit`.
 This lets a route optionally import:
 
 ```ts
-import type { Route } from './+types/$id.ts';
+// src/routes/users/$id.ts
+import type { Route } from './+types/users/$id.ts';
 ```
 
 without writing generated files into `src/routes`.
@@ -677,7 +684,7 @@ as are external method re-exports whose tuple shape cannot be validated.
 
 ## 14. Optional generated route types
 
-Shinro generates a type-only companion for every route. Importing it is
+Shinro generates a type-only declaration for every route. Importing it is
 optional.
 
 ### 14.1 Minimal form
@@ -707,7 +714,7 @@ It does not provide exact filename-derived parameter-key checking inside
 ```ts
 // src/routes/api/users/$id.ts
 import { defineHandler } from 'shinro/app';
-import type { Route } from './+types/$id.ts';
+import type { Route } from './+types/api/users/$id.ts';
 
 export const GET = defineHandler<Route.Handler>((c) => {
   const id = c.req.param('id');
@@ -723,7 +730,7 @@ export const GET = defineHandler<Route.Handler>((c) => {
 });
 ```
 
-The companion is conceptually:
+The declaration is conceptually:
 
 ```ts
 export namespace Route {
@@ -757,9 +764,10 @@ add validation, or change runtime behavior. Supplying it does stop input
 inference, because TypeScript does not partially infer later generic
 parameters after an explicit one: every parameter after `Route.Handler`
 falls back to a default, leaving the chain's inputs blank. A validator in
-that position still runs, and its schema still reaches the RPC contract, but
-`c.req.valid()` has nothing to read — middleware, which carries no input, is
-unaffected. The same rule is why the generic widens response and status
+that position still validates at runtime, but its schema reaches neither the
+handler nor the generated client: `c.req.valid()` has nothing to read, and the
+route's RPC contract records no input for it. Middleware, which carries no
+input, is unaffected. The same rule is why the generic widens response and status
 inference. Routes that read validated input, or want the narrowest RPC
 response contract, omit the generic.
 
@@ -789,13 +797,14 @@ requests at runtime. For many routes, this removes any reason to import the
 generated `Route` type.
 
 The two features compose at runtime but not in the type system. A validator
-may precede the handler under an explicit generic — it validates, and its
-schema still reaches the RPC contract — but `Route.Handler` stops input
-inference, so the handler reads its parameters from the filename and
-`c.req.valid()` stays empty:
+may precede the handler under an explicit generic and still rejects invalid
+requests, but `Route.Handler` stops input inference, so its schema is absent
+from both the handler and the generated client. The handler reads its
+parameters from the filename instead:
 
 ```ts
-import type { Route } from './+types/$id.ts';
+// src/routes/api/users/$id.ts
+import type { Route } from './+types/api/users/$id.ts';
 
 export const GET = defineHandler<Route.Handler>(
   zValidator('param', params),
@@ -807,9 +816,10 @@ export const GET = defineHandler<Route.Handler>(
 );
 ```
 
-For parameters this costs little, because the filename supplies the same
-keys. A route reading a validated body or query wants the inferred form,
-where the schema types `c.req.valid()` directly.
+For parameters this costs little, because the filename supplies the same keys
+and the client's path already carries them. A body or query is different: the
+schema types nothing and the client contract omits the input, so those routes
+want the inferred form.
 
 Use:
 
@@ -817,7 +827,8 @@ Use:
 - `Route.Handler` when exact filename-derived `c.req.param()` keys are
   useful;
 - both when a route wants runtime validation and filename typing, accepting
-  that `c.req.valid()` is unavailable;
+  that `c.req.valid()` is unavailable and the validated input stays out of the
+  RPC contract;
 - neither for a low-ceremony route that uses standard Hono typing.
 
 `+types` must never be required for route discovery, runtime registration,
@@ -850,7 +861,7 @@ Requirements:
   `src/routes/admin.ts` cannot coexist with files under
   `src/routes/admin/**`;
 - named HTTP exports are the primary convention;
-- filename companion types do not describe paths declared inside the
+- filename type declarations do not describe paths declared inside the
   sub-router because Hono already types those inline paths.
 
 Owning the complete namespace prevents an opaque route declared inside the
@@ -921,11 +932,11 @@ const security = defineMiddleware(cors(), secureHeaders());
 export default defineMiddleware(...security, authenticate());
 ```
 
-Generated middleware companion types are also optional:
+Generated middleware type declarations are also optional:
 
 ```ts
 import { defineMiddleware } from 'shinro/app';
-import type { Route } from './+types/_middleware.ts';
+import type { Route } from './+types/api/_middleware.ts';
 
 export default defineMiddleware<Route.Middleware>(
   requestId(),
@@ -944,7 +955,7 @@ To author a **named** middleware handler with the same env typing, reach for Hon
 ```ts
 import { defineMiddleware } from 'shinro/app';
 import { createMiddleware } from 'hono/factory';
-import type { Route } from './+types/_middleware.ts';
+import type { Route } from './+types/api/_middleware.ts';
 
 const requestId = createMiddleware<Route.Middleware['env']>(async (c, next) => {
   c.set('requestId', crypto.randomUUID());
@@ -954,7 +965,7 @@ const requestId = createMiddleware<Route.Middleware['env']>(async (c, next) => {
 export default defineMiddleware(requestId);
 ```
 
-The middleware companion is conceptually:
+The middleware declaration is conceptually:
 
 ```ts
 export namespace Route {
@@ -1354,7 +1365,7 @@ Development requirements:
 - Editing route code updates request handling without regenerating the
   route manifest.
 - Adding, deleting, or renaming a route rescans the manifest, regenerates
-  RPC and optional companion types, and restarts or reloads the user entry
+  RPC and optional type declarations, and restarts or reloads the user entry
   as required.
 - Shinro must not install its own signal handlers into the application.
 - When Shinro must restart an isolated development server process, it
@@ -1442,7 +1453,7 @@ One normalized manifest drives:
 
 - development registration;
 - production registration;
-- route and middleware companion types;
+- route and middleware type declarations;
 - the RPC type;
 - conflict diagnostics.
 
@@ -1833,9 +1844,17 @@ spawn the user's server entry explicitly.
         │   └── index.d.ts
         └── api/users/
             └── +types/
-                ├── $id.d.ts
-                └── index.d.ts
+                └── api/users/
+                    ├── $id.d.ts
+                    └── index.d.ts
 ```
+
+A type declaration sits where its specifier resolves. Because the specifier spells out
+the whole path below the routes directory, a nested route's directories appear on
+both sides of `+types`: `src/routes/api/users/$id.ts` writes
+`./+types/api/users/$id.ts`, which `rootDirs` re-bases onto
+`.shinro/types/src/routes/api/users/+types/api/users/$id.d.ts`. Routes at the
+root of the routes directory have nothing to repeat.
 
 Requirements:
 
@@ -1853,10 +1872,10 @@ Requirements:
   regardless of the format number it names;
 - writes are atomic;
 - unchanged files keep their modification time;
-- removed and renamed routes delete stale companions;
+- removed and renamed routes delete stale type declarations;
 - generation failure cannot leave a partially updated RPC contract;
 - generated files contain a format version;
-- companion generation happens regardless of whether routes import them.
+- type declaration generation happens regardless of whether routes import them.
 
 Generation runs automatically when Vite loads the plugin for development,
 tests, preview, or build.
@@ -1923,7 +1942,7 @@ Warnings:
   absent from the sub-router's internal RPC contracts;
 - external runtime assets weaken the one-entry deployment model.
 
-Omitting `Route.Handler` or `Route.Middleware` companion types is never a
+Omitting `Route.Handler` or `Route.Middleware` type declarations is never a
 warning. It is a supported API choice.
 
 Example conflict:
@@ -2124,7 +2143,8 @@ handler takes its parameters from the filename rather than `c.req.valid()`,
 as §14.3 describes:
 
 ```ts
-import type { Route } from './+types/$id.ts';
+// src/routes/api/users/$id.ts
+import type { Route } from './+types/api/users/$id.ts';
 
 export const GET = defineHandler<Route.Handler>(
   zValidator('param', params),
@@ -2219,7 +2239,7 @@ This section describes and constrains the v0.1 implementation.
 
 ### 29.3 Type generator
 
-- Generate optional route and middleware companions bound to `ProjectEnv`,
+- Generate optional route and middleware type declarations bound to `ProjectEnv`,
   which the application declares by augmenting `ShinroEnv` — there is no
   environment inference step.
 - Generate named RPC registrations with the same flattened middleware and
@@ -2308,7 +2328,7 @@ v0.1 is complete when:
   and its internal paths reach the generated client.
 - a default sub-router cannot overlap descendant file routes beneath its
   mount namespace.
-- route changes update runtime registration, companion types, and RPC.
+- route changes update runtime registration, type declarations, and RPC.
 - runtime and RPC generation consume the same normalized route-kind, path,
   method, and middleware metadata.
 - Node and Bun example entries build and run independently.

@@ -1,0 +1,4 @@
+{
+  "routes": "tests/fixtures/basic/src/routes",
+  "app": "tests/fixtures/basic/src/app.ts"
+}

@@ -1,6 +1,6 @@
 import { defineMiddleware } from 'shinro/app';
 
-import type { Route } from './+types/_middleware.ts';
+import type { Route } from './+types/api/_middleware.ts';
 
 export default defineMiddleware<Route.Middleware>(
   async (c, next) => {
