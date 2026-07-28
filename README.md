@@ -57,13 +57,8 @@ client types to maintain by hand.
   [installation and usage guide](./packages/shinro/README.md).
 - [`examples/api`](./examples/api) — a runnable Node.js API demonstrating every
   route authoring convention.
-- [`docs/file-route-conventions.md`](./docs/file-route-conventions.md) — the
+- [File-to-URL mapping](./packages/shinro/README.md#file-to-url-mapping) — the
   complete list of filename conventions.
-- [`docs/SPEC.md`](./docs/SPEC.md) — the v0.1 contract, diagnostics, and test
-  requirements. Predates the runner-agnostic redesign in places; the review below
-  is the newer document.
-- [`docs/architecture-review.html`](./docs/architecture-review.html) — why the
-  Vite plugin stopped being the product, and what replaced it.
 
 ## Workspace commands
 
