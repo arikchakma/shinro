@@ -1,4 +1,9 @@
 import { zValidator } from '@hono/zod-validator';
+import type { Env } from 'hono';
+import { bearerAuth } from 'hono/bearer-auth';
+import { every } from 'hono/combine';
+import { cors } from 'hono/cors';
+import type { Input, MiddlewareHandler } from 'hono/types';
 import { z } from 'zod';
 
 import { defineHandler, defineMiddleware } from '../src/app.ts';
@@ -10,6 +15,10 @@ defineMiddleware(async (_c, next) => {
 });
 defineMiddleware(async (c, next) => {
   const requestId: string = c.var.requestId;
+
+  // @ts-expect-error The project env is the only thing writable here.
+  c.set('sessionId', requestId);
+
   void requestId;
   await next();
 });
@@ -19,6 +28,42 @@ defineHandler();
 
 // @ts-expect-error A directory middleware tuple requires at least one middleware.
 defineMiddleware();
+
+// Hono's own middleware declares a bare `Env`, which an augmented `ShinroEnv` is
+// not assignable to. It belongs in a directory middleware all the same.
+defineMiddleware(bearerAuth({ token: 'demo' }));
+defineMiddleware(cors());
+defineMiddleware(every(cors(), bearerAuth({ token: 'demo' })));
+
+declare const foreignMiddleware: MiddlewareHandler<
+  Env,
+  string,
+  Input,
+  Response
+>;
+defineMiddleware(foreignMiddleware);
+
+// Standing beside one, an inline middleware keeps the project env.
+defineMiddleware(bearerAuth({ token: 'demo' }), async (c, next) => {
+  const requestId: string = c.var.requestId;
+  void requestId;
+  await next();
+});
+
+// And its short-circuit response still reaches the route's client contract.
+const guard = defineMiddleware(async (c, next) => {
+  if (!c.req.header('authorization')) {
+    return c.json({ error: 'UNAUTHORIZED' as const }, 401);
+  }
+
+  await next();
+});
+
+const unauthorized: { _status: 401 } = null as unknown as Exclude<
+  Awaited<ReturnType<(typeof guard)[0]>>,
+  undefined | void
+>;
+void unauthorized;
 
 type TeamMiddleware = ShinroMiddleware<{
   env: ProjectEnv;

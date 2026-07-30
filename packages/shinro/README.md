@@ -316,6 +316,22 @@ Shinro flattens this chain onto named routes. Typed early responses from
 directory middleware, such as a `401`, therefore enter that route's RPC
 response union.
 
+Any Hono middleware belongs in the tuple, not just handlers written against
+the project env:
+
+```ts
+// src/routes/api/_middleware.ts
+import { bearerAuth } from 'hono/bearer-auth';
+import { defineMiddleware } from 'shinro/app';
+
+export default defineMiddleware(bearerAuth({ token: process.env.API_TOKEN! }));
+```
+
+One caveat: `cors()`, `logger()`, and the rest of the middleware Hono types
+against `any` will erase the env of an inline handler sharing their tuple. Give
+those a `_middleware.ts` of their own, or mount them on the base app, where
+they cover unmatched requests too.
+
 ### Behavior for unmatched requests
 
 Because the chain is attached to each named route rather than to a path

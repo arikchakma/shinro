@@ -3,12 +3,6 @@ import type { MiddlewareHandler } from 'hono/types';
 
 import type { ProjectEnv } from '../app.ts';
 
-/**
- * Every element is a plain `MiddlewareHandler`: no `Input`, no typed response,
- * and the env comes from the `ShinroEnv` augmentation rather than from inference
- * along the chain. That is what lets the generated router collapse a whole
- * directory chain into one `every()` slot without losing type information.
- */
 export type ShinroMiddleware<
   T extends {
     env: Env;
@@ -21,30 +15,37 @@ type AnyMiddleware = ShinroMiddleware<{
   path: string;
 }>;
 
+type DirectoryMiddlewareEnv<Middleware extends AnyMiddleware | undefined> =
+  Middleware extends AnyMiddleware ? Middleware['env'] : ProjectEnv;
+
 type DirectoryMiddlewarePath<Middleware extends AnyMiddleware | undefined> =
   Middleware extends AnyMiddleware ? Middleware['path'] : string;
 
+type ProjectSlot<Middleware extends AnyMiddleware | undefined> =
+  MiddlewareHandler<
+    DirectoryMiddlewareEnv<Middleware>,
+    DirectoryMiddlewarePath<Middleware>
+  >;
+
+type ForeignSlot<Middleware extends AnyMiddleware | undefined> =
+  MiddlewareHandler<any, DirectoryMiddlewarePath<Middleware>>;
+
 export function defineMiddleware<
   Middleware extends AnyMiddleware | undefined = undefined,
-  const T extends [
-    MiddlewareHandler<
-      Middleware extends AnyMiddleware ? Middleware['env'] : ProjectEnv,
-      DirectoryMiddlewarePath<Middleware>
-    >,
-    ...MiddlewareHandler<
-      Middleware extends AnyMiddleware ? Middleware['env'] : ProjectEnv,
-      DirectoryMiddlewarePath<Middleware>
-    >[],
-  ] = [
-    MiddlewareHandler<
-      Middleware extends AnyMiddleware ? Middleware['env'] : ProjectEnv,
-      DirectoryMiddlewarePath<Middleware>
-    >,
-    ...MiddlewareHandler<
-      Middleware extends AnyMiddleware ? Middleware['env'] : ProjectEnv,
-      DirectoryMiddlewarePath<Middleware>
-    >[],
+  const T extends [ProjectSlot<Middleware>, ...ProjectSlot<Middleware>[]] = [
+    ProjectSlot<Middleware>,
+    ...ProjectSlot<Middleware>[],
   ],
->(...middleware: T): T {
+>(...middleware: T): T;
+export function defineMiddleware<
+  Middleware extends AnyMiddleware | undefined = undefined,
+  const T extends [ForeignSlot<Middleware>, ...ForeignSlot<Middleware>[]] = [
+    ForeignSlot<Middleware>,
+    ...ForeignSlot<Middleware>[],
+  ],
+>(...middleware: T): T;
+export function defineMiddleware(
+  ...middleware: MiddlewareHandler<any, string>[]
+): MiddlewareHandler<any, string>[] {
   return middleware;
 }
