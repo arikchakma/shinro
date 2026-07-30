@@ -34,6 +34,8 @@ Four things do the whole job:
 - route-local and inherited directory middleware;
 - a `(authed)` group directory that scopes middleware to `/v1/orders`, plus an
   escaped `[sitemap.xml].ts` route serving `/v1/sitemap.xml`;
+- a colocated `resources/-resource.ts` holding the schemas, type, and fixtures
+  its two neighbouring route files share, excluded from routing by its `-` prefix;
 - optional generated route and middleware type declarations;
 - a chained Hono sub-router and a chained manual route;
 - a generated typed client exported as `@shinro/api/client`;

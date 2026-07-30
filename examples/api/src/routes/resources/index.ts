@@ -1,33 +1,20 @@
 import { zValidator } from '@hono/zod-validator';
 import { defineHandler } from 'shinro/app';
-import { z } from 'zod';
 
-const listResources = z.object({
-  limit: z.coerce.number().int().min(1).max(100).default(20),
-  query: z.string().optional(),
-});
+import { listResources, resourceInput, resourceQuery } from './-resource.ts';
 
-const createResource = z.object({
-  name: z.string().trim().min(1),
-});
-
-export const GET = defineHandler(zValidator('query', listResources), (c) => {
+export const GET = defineHandler(zValidator('query', resourceQuery), (c) => {
   const input = c.req.valid('query');
   return c.json(
     {
       input,
-      resources: [
-        {
-          id: 'res_123',
-          name: 'Example resource',
-        },
-      ],
+      resources: listResources(input.limit),
     },
     200
   );
 });
 
-export const POST = defineHandler(zValidator('json', createResource), (c) => {
+export const POST = defineHandler(zValidator('json', resourceInput), (c) => {
   const input = c.req.valid('json');
   return c.json(
     {

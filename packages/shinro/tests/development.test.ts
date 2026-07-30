@@ -74,6 +74,7 @@ test('the watcher ignores files that cannot change the route tree', async () => 
     try {
       await project.write('src/routes/README.md', '# notes\n');
       await project.write('src/routes/health.test.ts', GET_ROUTE);
+      await project.write('src/routes/-health-body.ts', GET_ROUTE);
       await new Promise((settle) => setTimeout(settle, 250));
     } finally {
       await watcher.close();

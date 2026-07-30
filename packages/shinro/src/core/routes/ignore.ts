@@ -8,7 +8,13 @@ export function isDirectoryMiddleware(file: string): boolean {
   return name === '_middleware.ts' || name === '_middleware.js';
 }
 
-/** Whether a file is eligible to become a route, by name alone. */
+/**
+ * Whether a file is eligible to become a route, by name alone.
+ *
+ * A leading `-` excludes the file so the schemas, queries, and fixtures a route
+ * needs can sit beside it. `[-]name.ts` still serves `/-name`, because the escape
+ * puts `[` at the front of the name that this reads.
+ */
 export function isRouteCandidate(
   routesDirectory: string,
   file: string
@@ -20,6 +26,7 @@ export function isRouteCandidate(
     supportedExtension &&
     !name.startsWith('_') &&
     !name.startsWith('.') &&
+    !name.startsWith('-') &&
     !name.endsWith('.d.ts') &&
     !/\.(?:test|spec)\./.test(name) &&
     !isInIgnoredDirectory(routesDirectory, file)
@@ -70,6 +77,9 @@ export function isInIgnoredDirectory(
 ): boolean {
   const segments = relative(routesDirectory, dirname(file)).split(sep);
   return segments.some(
-    (segment) => segment.startsWith('.') || IGNORED_DIRECTORIES.has(segment)
+    (segment) =>
+      segment.startsWith('.') ||
+      segment.startsWith('-') ||
+      IGNORED_DIRECTORIES.has(segment)
   );
 }

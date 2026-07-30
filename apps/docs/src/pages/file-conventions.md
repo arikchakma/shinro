@@ -28,6 +28,7 @@ Shinro maps files under the configured routes directory to Hono paths. Every dir
 - `$name` declares a required parameter.
 - `$...name` declares a final catch-all parameter matching one or more segments.
 - `(name)` directories are pathless route groups.
+- `-name` files and directories are excluded from routing.
 - `_middleware.ts` wraps matching routes in its directory and descendants.
 - `[value]` emits `value` literally instead of interpreting route syntax.
 
@@ -49,12 +50,28 @@ An escape makes the entire segment static. Dynamic segments containing an escape
 
 Shinro ignores:
 
+- files and directories beginning with `-`;
 - files beginning with `_` or `.`, except `_middleware.ts`;
 - declaration files and test/spec files;
 - files below `__tests__`, `__fixtures__`, `.dot-directories`, or `+types`;
 - files matched by `ignoredRouteFiles`.
 
 A `(group)` directory is not ignored. Its routes and middleware remain active even though its name is absent from the URL.
+
+## Colocation
+
+A leading `-` excludes a file or directory from routing, so whatever a route needs can live next to it:
+
+```text
+src/routes/
+├── posts.ts          // /posts
+├── -post-schema.ts   // ignored
+└── -queries/         // ignored, with everything below it
+    ├── list-posts.ts
+    └── insert-post.ts
+```
+
+Nothing inside a `-` directory is routed, including a `_middleware.ts`, so a colocated subtree adds no middleware to the routes around it. Escape the prefix to serve a URL segment that really starts with a dash: `[-]well-known.ts` serves `/-well-known`.
 
 ## Conflict rules
 

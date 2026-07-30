@@ -241,6 +241,22 @@ files under `__tests__`, `__fixtures__`, `.dot-directories`, or `+types`
 are not routes. A route group is pathless, not ignored — its routes and its
 `_middleware.ts` are live.
 
+A `-` prefix excludes a file or directory from routing, which is how a route
+colocates what it is built from:
+
+```text
+src/routes/
+├── posts.ts          // /posts
+├── -post-schema.ts   // ignored
+└── -queries/         // ignored, with everything below it
+    ├── list-posts.ts
+    └── insert-post.ts
+```
+
+Nothing below a `-` directory is routed, `_middleware.ts` included, so a
+colocated subtree adds no middleware to the routes around it. `[-]name.ts`
+serves `/-name`, for a URL segment that starts with a literal dash.
+
 Additional files can be excluded with route-relative globs, matched by
 [`path.matchesGlob`](https://nodejs.org/api/path.html#pathmatchesglobpath-pattern).
 A match excludes both route modules and directory middleware:
