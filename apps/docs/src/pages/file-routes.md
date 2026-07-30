@@ -63,6 +63,21 @@ src/routes/health.ts                → /health
 
 Groups are pathless, not ignored. Their routes and middleware stay active, and groups can nest.
 
+## Colocation
+
+A `-` prefix excludes a file or directory from routing, so the pieces a route is built from can sit beside it:
+
+```text
+src/routes/
+├── posts.ts          // /posts
+├── -post-schema.ts   // ignored
+└── -queries/         // ignored, with everything below it
+    ├── list-posts.ts
+    └── insert-post.ts
+```
+
+Nothing below a `-` directory is routed, `_middleware.ts` included. Write `[-]name.ts` for a URL segment that starts with a literal dash.
+
 ## Sub-routers
 
 Instead of method exports, a route file can default-export a chained Hono router:

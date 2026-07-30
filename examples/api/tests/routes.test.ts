@@ -43,11 +43,14 @@ test('one collection route validates query and JSON input for multiple methods',
   });
 
   expectTypeOf(created.status).toEqualTypeOf<201 | 400>();
+  // The listed resources come from the colocated `-resource.ts` beside the route,
+  // which is excluded from routing but not from the module graph.
   await expect(listed.json()).resolves.toMatchObject({
     input: {
       limit: 5,
       query: 'example',
     },
+    resources: [{ id: 'res_123' }, { id: 'res_456' }],
   });
   await expect(created.json()).resolves.toEqual({
     resource: {

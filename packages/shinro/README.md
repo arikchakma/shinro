@@ -241,6 +241,22 @@ files under `__tests__`, `__fixtures__`, `.dot-directories`, or `+types`
 are not routes. A route group is pathless, not ignored — its routes and its
 `_middleware.ts` are live.
 
+A `-` prefix excludes a file or directory from routing, which is how a route
+colocates what it is built from:
+
+```text
+src/routes/
+├── posts.ts          // /posts
+├── -post-schema.ts   // ignored
+└── -queries/         // ignored, with everything below it
+    ├── list-posts.ts
+    └── insert-post.ts
+```
+
+Nothing below a `-` directory is routed, `_middleware.ts` included, so a
+colocated subtree adds no middleware to the routes around it. `[-]name.ts`
+serves `/-name`, for a URL segment that starts with a literal dash.
+
 Additional files can be excluded with route-relative globs, matched by
 [`path.matchesGlob`](https://nodejs.org/api/path.html#pathmatchesglobpath-pattern).
 A match excludes both route modules and directory middleware:
@@ -299,6 +315,22 @@ src/routes/api/users.ts
 Shinro flattens this chain onto named routes. Typed early responses from
 directory middleware, such as a `401`, therefore enter that route's RPC
 response union.
+
+Any Hono middleware belongs in the tuple, not just handlers written against
+the project env:
+
+```ts
+// src/routes/api/_middleware.ts
+import { bearerAuth } from 'hono/bearer-auth';
+import { defineMiddleware } from 'shinro/app';
+
+export default defineMiddleware(bearerAuth({ token: process.env.API_TOKEN! }));
+```
+
+One caveat: `cors()`, `logger()`, and the rest of the middleware Hono types
+against `any` will erase the env of an inline handler sharing their tuple. Give
+those a `_middleware.ts` of their own, or mount them on the base app, where
+they cover unmatched requests too.
 
 ### Behavior for unmatched requests
 

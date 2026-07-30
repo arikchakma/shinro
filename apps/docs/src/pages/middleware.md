@@ -36,6 +36,19 @@ src/routes/api/users.ts
 
 Shinro flattens this chain onto each named route. Typed early responses from middleware, such as an authentication `401`, therefore become part of that route's RPC response union.
 
+## Hono's own middleware
+
+The tuple takes any Hono middleware, not just handlers written against the project env:
+
+```ts title="src/routes/api/_middleware.ts"
+import { bearerAuth } from 'hono/bearer-auth';
+import { defineMiddleware } from 'shinro/app';
+
+export default defineMiddleware(bearerAuth({ token: process.env.API_TOKEN! }));
+```
+
+One caveat: `cors()`, `logger()`, and the rest of the middleware Hono types against `any` will erase the env of an inline handler sharing their tuple. Give those a `_middleware.ts` of their own, or mount them on the base app, where they cover unmatched requests too.
+
 Hono's typed overloads stop at a path plus ten handlers. A route that would exceed the limit once its directory middleware are inlined has them composed into a single slot instead, which keeps the route's validated request and response types at the cost of those middleware's early responses. Shinro warns when it does this, and fails with the offending route when even composition cannot fit.
 
 ## Around a sub-router

@@ -260,6 +260,41 @@ test('reserved basenames and directories are excluded from discovery', async () 
   });
 });
 
+test('a leading dash colocates a file or directory beside the routes', async () => {
+  await withProject('colocation', async (project) => {
+    await project.write('src/routes/posts.ts', GET_ROUTE);
+    await project.write('src/routes/-post-schema.ts', GET_ROUTE);
+    await project.write('src/routes/-queries/list-posts.ts', GET_ROUTE);
+    await project.write('src/routes/-queries/nested/insert-post.ts', GET_ROUTE);
+    // Excluded by its directory, not by its own name — a colocated subtree
+    // contributes no middleware to the routes above it either.
+    await project.write('src/routes/-queries/_middleware.ts', middleware());
+    await project.generate();
+
+    expect((await project.manifest()).routes).toEqual([
+      {
+        file: 'src/routes/posts.ts',
+        kind: 'methods',
+        methods: ['GET'],
+        middleware: [],
+        path: '/posts',
+      },
+    ]);
+  });
+});
+
+test('an escaped dash serves a URL segment that starts with one', async () => {
+  await withProject('escaped-dash', async (project) => {
+    await project.write('src/routes/[-]well-known.ts', GET_ROUTE);
+    await project.write('src/routes/[-assets]/logo.ts', GET_ROUTE);
+    await project.generate();
+
+    expect(
+      (await project.manifest()).routes.map((entry) => entry.path)
+    ).toEqual(['/-well-known', '/-assets/logo']);
+  });
+});
+
 test('ignoredRouteFiles excludes route-relative globs', async () => {
   await withProject('ignored-globs', async (project) => {
     await project.write('src/routes/health.ts', GET_ROUTE);
