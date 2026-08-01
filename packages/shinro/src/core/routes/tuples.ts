@@ -1,11 +1,6 @@
+import type { NodeView } from '../ast.ts';
 import { isTransparentExpression, toNodeView } from '../ast.ts';
 
-/**
- * How many handlers an expression contributes, or `undefined` when it is not a
- * handler tuple at all. `null` means it is one but the length is unknowable —
- * a spread element, or an alias of something unresolved — in which case the
- * arity guard stays quiet rather than guessing at a limit.
- */
 export function handlerCount(
   value: unknown,
   factories: Set<string>,
@@ -23,18 +18,11 @@ export function handlerCount(
   }
   if (node.type === 'ArrayExpression') {
     const elements = node.elements ?? [];
-    return elements.length > 0 && elements.every(isHandlerValue)
-      ? lengthUnlessSpread(elements)
-      : undefined;
+    return isHandlerList(elements) ? lengthUnlessSpread(elements) : undefined;
   }
   if (node.type === 'CallExpression') {
-    const callee = toNodeView(node.callee);
     const arguments_ = node.arguments ?? [];
-    return callee?.type === 'Identifier' &&
-      callee.name !== undefined &&
-      factories.has(callee.name) &&
-      arguments_.length > 0 &&
-      arguments_.every(isHandlerValue)
+    return isFactoryCall(node, factories) && isHandlerList(arguments_)
       ? lengthUnlessSpread(arguments_)
       : undefined;
   }
@@ -45,14 +33,6 @@ export function handlerCount(
   return undefined;
 }
 
-/**
- * Whether an expression could be a handler tuple. Deliberately lenient: a method
- * export is spread into Hono (`...GET`), so a value that *provably* is not a
- * tuple is worth rejecting early with a precise message, and everything else — a
- * project wrapper, a shared tuple, a helper call — is left to TypeScript, which
- * checks spreadability exactly and reports it against the user's own source
- * rather than against generated code.
- */
 export function couldBeHandlerTuple(
   value: unknown,
   factories: Set<string>
@@ -67,20 +47,11 @@ export function couldBeHandlerTuple(
   }
 
   if (node.type === 'ArrayExpression') {
-    const elements = node.elements ?? [];
-    return elements.length > 0 && elements.every(isHandlerValue);
+    return isHandlerList(node.elements ?? []);
   }
   if (node.type === 'CallExpression') {
-    const callee = toNodeView(node.callee);
-    const arguments_ = node.arguments ?? [];
-    const isFactoryCall =
-      callee?.type === 'Identifier' &&
-      callee.name !== undefined &&
-      factories.has(callee.name);
-
     return (
-      !isFactoryCall ||
-      (arguments_.length > 0 && arguments_.every(isHandlerValue))
+      !isFactoryCall(node, factories) || isHandlerList(node.arguments ?? [])
     );
   }
 
@@ -93,6 +64,21 @@ export function couldBeHandlerTuple(
     node.type !== 'ObjectExpression' &&
     node.type !== 'TemplateLiteral'
   );
+}
+
+/** A call to `defineHandler` or `defineMiddleware` under whatever local name. */
+function isFactoryCall(node: NodeView, factories: Set<string>): boolean {
+  const callee = toNodeView(node.callee);
+  return (
+    callee?.type === 'Identifier' &&
+    callee.name !== undefined &&
+    factories.has(callee.name)
+  );
+}
+
+/** A non-empty list whose every element could be a handler. */
+function isHandlerList(items: unknown[]): boolean {
+  return items.length > 0 && items.every(isHandlerValue);
 }
 
 function isHandlerValue(value: unknown): boolean {

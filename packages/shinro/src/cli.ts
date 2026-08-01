@@ -5,14 +5,8 @@ import { generate, typegen } from './cli/generate.ts';
 import { init } from './cli/init.ts';
 import { createReporter } from './cli/report.ts';
 
-// `shinro generate [--watch] [--check]` is the whole CLI, plus `shinro init` to
-// write the boilerplate once. There is no `shinro dev`: `node --watch` plus the
-// `shinro/watch` preload covers dev in one process, and anything that spawned the
-// runner would owe you a supervisor's signal handling.
-//
-// `typegen` is registered as a hidden command rather than a citty alias, because
-// an alias would list it in `--help` — and the point of keeping it is that old
-// scripts run, not that anyone writes it again.
+// `typegen` is a hidden command rather than a citty alias, which would list it
+// in `--help`.
 const main = defineCommand({
   meta: {
     description:
@@ -22,9 +16,7 @@ const main = defineCommand({
   subCommands: { generate, init, typegen },
 });
 
-// citty reports an unknown command after printing usage, unquoted. The quotes
-// are the difference between "we did not recognise this word" and a sentence
-// that happens to contain the word, so the check lives here instead.
+// citty reports an unknown command unquoted, after the usage text.
 const COMMANDS = new Set(['generate', 'init', 'typegen']);
 const [first] = process.argv.slice(2);
 

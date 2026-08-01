@@ -10,10 +10,8 @@ declare module 'shinro/app' {
   }
 }
 
-// `basePath` is Hono's, not Shinro's. One mechanism prefixes the manual route
-// and the mounted file routes alike, and it stays in the schema — so the
-// generated client's URLs follow it for free, and there is no second prefix to
-// keep in sync by hand.
+// `basePath` is Hono's, not Shinro's: it prefixes the manual route and the
+// mounted file routes alike, and stays in the schema the client is built from.
 const app = defineApp()
   .basePath('/v1')
   .use('*', async (c, next) => {

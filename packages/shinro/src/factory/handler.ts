@@ -35,19 +35,10 @@ type RoutePath<Route extends AnyRoute | undefined> = Route extends AnyRoute
 
 /**
  * A ladder mirroring `hono/factory`, one signature per arity up to ten.
- *
  * Accumulation rides on the generic defaults: each input falls back to the
- * intersection of the ones before it, so the final handler — which has no
- * inference source of its own — sees every validator that precedes it.
- *
- * Those defaults are also the ceiling on the generated route generic. Supplying
- * `Route` explicitly stops TypeScript inferring the parameters after it, so the
- * inputs stay `BlankInput` however many validators precede the handler: the
- * chain still runs and still shapes the RPC contract, but `c.req.valid()` has
- * nothing to read. Middleware carries no input of its own and so pairs with the
- * generic freely, which is why the leading positions stay open in both forms.
- * They each take an `Env` slot because a hoisted handler declares plain `Env`
- * rather than the project's.
+ * intersection of the ones before it, so the final handler sees every validator
+ * that precedes it. Supplying `Route` explicitly stops that inference, so those
+ * forms keep their inputs `BlankInput`.
  */
 type DefineHandler = {
   <

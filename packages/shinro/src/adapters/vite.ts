@@ -8,25 +8,16 @@ import { fromHost } from '../core/logger.ts';
 import type { ShinroLogger } from '../core/logger.ts';
 import { watch } from '../core/watch.ts';
 
-/**
- * Vite's `ResolvedConfig`, reduced to what this adapter reads. Typed
- * structurally on purpose: `vite` is an optional peer, so importing its types
- * here would make the whole package fail to type-check in a project that never
- * installed it.
- */
+/** Structural on purpose: `vite` is an optional peer, so a project that never
+ * installed it must still type-check. */
 type ResolvedViteConfig = {
   command: 'build' | 'serve';
   logger?: Partial<ShinroLogger>;
   root: string;
 };
 
-/**
- * Generation for anyone already on Vite/vp: `configResolved` generates, and dev
- * watches the route tree.
- *
- * Never load-bearing. An app that deletes this plugin and runs `shinro generate`
- * in a script gets byte-identical output.
- */
+/** Never load-bearing: deleting this plugin and running `shinro generate` in a
+ * script gives byte-identical output. */
 export function shinro(config?: ShinroConfig & { cwd?: string }): {
   buildEnd: () => Promise<void>;
   configResolved: (resolved: ResolvedViteConfig) => Promise<void>;
@@ -52,21 +43,13 @@ export function shinro(config?: ShinroConfig & { cwd?: string }): {
         return;
       }
 
-      // In dev the watcher generates once before it starts watching, so this
-      // covers both halves. Vite's own watcher is not involved: it watches the
-      // module graph, and a brand-new route file is not in it.
       watcher = await watch({
         config: shinroConfig,
         initial: 'report',
         logger,
       });
     },
-    /**
-     * The bare specifiers, kept working. `#shinro/routes` is the documented form
-     * because it resolves in every runner; these aliases point at the same files
-     * and only this adapter offers them, so a project relying on them is relying
-     * on Vite.
-     */
+    /** The bare specifiers, which only this adapter can resolve. */
     resolveId: (id) => {
       if (!outputDirectory) {
         return undefined;

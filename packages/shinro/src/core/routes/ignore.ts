@@ -8,13 +8,6 @@ export function isDirectoryMiddleware(file: string): boolean {
   return name === '_middleware.ts' || name === '_middleware.js';
 }
 
-/**
- * Whether a file is eligible to become a route, by name alone.
- *
- * A leading `-` excludes the file so the schemas, queries, and fixtures a route
- * needs can sit beside it. `[-]name.ts` still serves `/-name`, because the escape
- * puts `[` at the front of the name that this reads.
- */
 export function isRouteCandidate(
   routesDirectory: string,
   file: string
@@ -33,7 +26,6 @@ export function isRouteCandidate(
   );
 }
 
-/** Whether a file matches the project's `ignoredRouteFiles` globs. */
 export function matchesIgnorePattern(
   routesDirectory: string,
   file: string,
@@ -50,11 +42,6 @@ export function matchesIgnorePattern(
   return patterns.some((pattern) => matchesGlob(routeRelativeFile, pattern));
 }
 
-/**
- * Whether a file inside the routes directory can change the route tree, so a
- * watcher can skip regenerating for READMEs, fixtures, snapshots, and the other
- * files that live alongside routes.
- */
 export function affectsRouteTree(
   routesDirectory: string,
   file: string,
@@ -67,10 +54,6 @@ export function affectsRouteTree(
   return isDirectoryMiddleware(file) || isRouteCandidate(routesDirectory, file);
 }
 
-/**
- * Whether a file sits under a directory the scan never descends into. Applies to
- * directory middleware too, which `isRouteCandidate` rejects on its own name.
- */
 export function isInIgnoredDirectory(
   routesDirectory: string,
   file: string

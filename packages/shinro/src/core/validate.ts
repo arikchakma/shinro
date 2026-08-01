@@ -4,6 +4,7 @@ import { relative, resolve, sep } from 'node:path';
 import {
   CLIENT_FILE,
   CLIENT_SPECIFIER,
+  EXTENDS_SHIPPED_TSCONFIG,
   OUTPUT_DIRECTORY,
   ROUTES_FILE,
   ROUTES_SPECIFIER,
@@ -11,11 +12,6 @@ import {
 import type { ShinroLogger } from './logger.ts';
 import { toRelativeSpecifier } from './path.ts';
 
-/**
- * Warns unless the project's tsconfig knows about the generated types, which is
- * the one question worth asking: `${configDir}` in the shipped base config
- * carries `rootDirs` and `include` for everyone who extends it.
- */
 export async function validateTypeScriptConfig(options: {
   logger: ShinroLogger;
   root: string;
@@ -29,24 +25,13 @@ export async function validateTypeScriptConfig(options: {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
       throw error;
     }
-    // A project with no tsconfig is a project not using tsc, which is a
-    // supported way to run Shinro. Nothing to check.
     return;
   }
 
-  // Read as text rather than parsed: tsconfig is JSONC, and a JSONC parser plus
-  // an extends-chain resolver is a lot of dependency for a question the string
-  // already answers.
-  //
-  // Two spellings pass. Extending the shipped base is the recommended one. Naming
-  // the generated types directory yourself is the other — a project that wired
-  // `rootDirs` by hand, or extends a base of its own that does, has answered the
-  // question and does not need advice about it.
-  const extendsShippedBase =
-    /"extends"\s*:\s*(?:"shinro\/tsconfig|\[[^\]]*"shinro\/tsconfig)/.test(
-      source
-    );
-  if (extendsShippedBase || source.includes(`${OUTPUT_DIRECTORY}/types`)) {
+  if (
+    EXTENDS_SHIPPED_TSCONFIG.test(source) ||
+    source.includes(`${OUTPUT_DIRECTORY}/types`)
+  ) {
     return;
   }
 
@@ -55,18 +40,9 @@ export async function validateTypeScriptConfig(options: {
   );
 }
 
-/**
- * `#shinro/*` has to be declared in the app's package.json `imports`, so warn
- * with the exact snippet when it is missing or points somewhere other than
- * `.shinro`. `shinro init` writes the block, so this warning is for hand-wired
- * projects and for someone who edited it by hand.
- *
- * A relative import is NOT a mistake and must never warn. `import { routes } from
- * '../.shinro/routes.ts'` needs no package.json at all and resolves in every
- * runner and in tsc by construction — it is the escape hatch for anyone whose
- * package.json is generated or locked down. `#shinro/routes` is the documented
- * default only because it survives moving `app.ts`.
- */
+/** Warns when the `imports` block is missing or points somewhere other than
+ * `.shinro`. A relative import of the generated file is an equally supported
+ * spelling and must never warn. */
 export async function validatePackageImports(options: {
   logger: ShinroLogger;
   outputDirectory: string;
@@ -109,10 +85,6 @@ export async function validatePackageImports(options: {
     ([specifier]) => !(specifier in imports)
   );
 
-  // Nothing declared at all is the cold-clone case: the app may well import the
-  // generated file by relative path, which needs no declaration and is not worth
-  // a warning on every generation. A half-declared block is different — someone
-  // meant to use the specifiers.
   if (missing.length === expected.size && wrong.length === 0) {
     return;
   }

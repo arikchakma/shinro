@@ -11,12 +11,24 @@ import {
   validateTypeScriptConfig,
 } from './validate.ts';
 
+/** One entry of `.shinro/manifest.json`, which is the record of what was written. */
+export type ManifestRoute = {
+  file: string;
+  kind: 'methods' | 'sub-router';
+  methods?: string[];
+  middleware: string[];
+  mountPath?: string;
+  path?: string;
+};
+
+export type Manifest = {
+  format?: number;
+  routes?: ManifestRoute[];
+};
+
 export type GenerateResult = {
-  /**
-   * The format number of the artifacts already on disk, when it differs from
-   * this version's. `--check` reads it so an upgrade reports "run shinro
-   * generate" instead of a byte diff nobody can act on.
-   */
+  /** The format of the artifacts on disk, when it differs from this version's,
+   * so `--check` can report an upgrade rather than a byte diff. */
   onDiskFormat?: number;
   outputDirectory: string;
   /** Generated files that no longer belong to the route tree. */
@@ -25,13 +37,6 @@ export type GenerateResult = {
   written: string[];
 };
 
-/**
- * The single entry point for everything Shinro does: scan, validate, emit.
- *
- * `check` compares the generation against disk and writes nothing. It is the
- * same code path, one flag deep, which is the only way the CI gate and the build
- * can be guaranteed to agree.
- */
 export async function generate(options: {
   check?: boolean;
   config: ResolvedShinroConfig;
@@ -52,28 +57,27 @@ export async function generate(options: {
     ]);
   }
 
+  const onDisk = check
+    ? (await readManifest(config.outputDirectory))?.format
+    : undefined;
+
   return {
     ...result,
-    ...(check ? await onDiskFormat(config.outputDirectory) : {}),
+    ...(typeof onDisk === 'number' && onDisk !== GENERATED_FORMAT
+      ? { onDiskFormat: onDisk }
+      : {}),
     outputDirectory: config.outputDirectory,
   };
 }
 
-async function onDiskFormat(
+export async function readManifest(
   outputDirectory: string
-): Promise<{ onDiskFormat?: number }> {
+): Promise<Manifest | undefined> {
   try {
-    const manifest = JSON.parse(
+    return JSON.parse(
       await readFile(resolve(outputDirectory, MANIFEST_FILE), 'utf8')
-    ) as { format?: unknown };
-
-    return typeof manifest.format === 'number' &&
-      manifest.format !== GENERATED_FORMAT
-      ? { onDiskFormat: manifest.format }
-      : {};
+    ) as Manifest;
   } catch {
-    // No manifest, or one nobody can parse: the byte diff already says the tree
-    // needs regenerating, and guessing at a format would only add noise.
-    return {};
+    return undefined;
   }
 }

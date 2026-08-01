@@ -1,39 +1,21 @@
-import { readFile } from 'node:fs/promises';
 import { relative, resolve } from 'node:path';
 
 import { defineCommand } from 'citty';
 
 import type { ResolvedShinroConfig } from '../config.ts';
 import { findProjectRoot, loadConfig } from '../config.ts';
-import { GENERATED_FORMAT, MANIFEST_FILE } from '../constants.ts';
-import { generate as generateCore } from '../core/generate.ts';
+import { GENERATED_FORMAT } from '../constants.ts';
+import { generate as generateCore, readManifest } from '../core/generate.ts';
 import type { ShinroLogger } from '../core/logger.ts';
 import { watch } from '../core/watch.ts';
 import { unknownOptions } from './args.ts';
 import { createReporter } from './report.ts';
 import { dim, green } from './style.ts';
-import type { ManifestRoute } from './tree.ts';
 import { routeTree } from './tree.ts';
 
-/**
- * `shinro generate [--watch] [--check]`
- *
- * Load config, generate, exit. Named for the core function it calls rather than
- * for its output, because `.shinro/routes.ts` is runtime code and a name like
- * `typegen` describes a third of it.
- *
- * `--watch` debounces a watcher on the routes directory and regenerates. It
- * spawns nothing and restarts nothing; the runner is the user's business. It
- * generates once, synchronously, before it starts watching, so the artifacts
- * exist by the time anything else reads them. Only needed for a runner that
- * can't do either half itself — with `node --watch`, `shinro/watch` as an
- * `--import` preload covers dev in one process.
- *
- * `--check` generates into memory and compares against disk. Exits non-zero on
- * a route conflict, an invalid module, or a stale artifact, and writes nothing.
- * No bundler is guaranteed to run, so this is the CI gate — and what makes
- * committing `.shinro/` a supported choice rather than a trap.
- */
+/** `--watch` regenerates whenever the route tree changes, spawning nothing.
+ * `--check` compares against disk and writes nothing: the CI gate that makes
+ * committing `.shinro/` a supported choice. */
 export const generate = defineCommand({
   args: {
     check: {
@@ -73,12 +55,6 @@ export const generate = defineCommand({
   },
 });
 
-/**
- * `generate` under its former name, resolved but never listed, so existing
- * scripts keep running. The fields are restated rather than spread, because citty
- * types `meta` and `args` as `Resolvable` — possibly a promise — and spreading
- * one of those is a bug in every case but this one.
- */
 export const typegen = defineCommand({
   args: generate.args,
   meta: {
@@ -120,7 +96,7 @@ async function run(flags: {
     const drifted = [...result.written, ...result.removed];
 
     if (flags.check !== true) {
-      const routes = await readManifest(config);
+      const routes = (await readManifest(config.outputDirectory))?.routes ?? [];
       const where = relative(root, result.outputDirectory);
 
       logger.info(
@@ -144,10 +120,6 @@ async function run(flags: {
       return 0;
     }
 
-    // Stale artifacts and a package upgrade produce the same byte diff and want
-    // opposite reactions, so the format number decides which message this is.
-    // Without it, a committed `.shinro/` becomes the confusing part of an
-    // upgrade.
     logger.error(
       result.onDiskFormat === undefined
         ? [
@@ -168,14 +140,8 @@ async function watchLines(
   logger: ShinroLogger,
   root: string
 ): Promise<number> {
-  // The first generation runs inside `watch`, before the line below has been
-  // printed. Its writes are worth announcing; its "nothing changed" is not,
-  // because nothing has told the user a watcher exists yet.
   let started = false;
   const base = resolve(root, config.routes);
-  // Named relative to the routes directory, which the `watching …` line above
-  // already spelled out in full. Repeating `tests/fixtures/basic/src/routes/`
-  // on every save was most of the line and none of the information.
   const trigger = (changed: string[]): string => {
     const names = changed.map((file) => relative(base, file));
 
@@ -196,11 +162,6 @@ async function watchLines(
     onGenerate: (result, changed) => {
       const drifted = result.written.length + result.removed.length;
 
-      // Most edits change a handler body without changing the route tree, so
-      // `.shinro` is already correct and nothing is written. Saying nothing
-      // then is indistinguishable from a dead watcher — but announcing it
-      // before `watching …` has printed would announce a watcher the user has
-      // not been told about.
       if (drifted === 0) {
         if (started) {
           logger.info(`[shinro] ${trigger(changed)}${dim('up to date')}`);
@@ -208,10 +169,6 @@ async function watchLines(
         return;
       }
 
-      // One line per action rather than one per file. A single new route
-      // touches three artifacts, and three lines that each say `wrote` are
-      // three copies of the same fact. Written past the reporter because the
-      // hanging indent is a layout the `- item` convention cannot express.
       for (const line of [
         ...action('wrote', result.written, root),
         ...action('removed', result.removed, root),
@@ -222,34 +179,7 @@ async function watchLines(
   });
   logger.info(`[shinro] watching ${config.routes}`);
   started = true;
-  // No tree here. A watcher prints once per edit and the tree is fifteen lines;
-  // reprinting it on every save buries the one line that says what changed, and
-  // the tree you want is the one `shinro generate` already showed you.
-  //
-  // Never resolves; the watcher holds the event loop open. Nothing here installs
-  // a signal handler, so Ctrl-C behaves the way Ctrl-C behaves.
   return await new Promise<number>(() => {});
-}
-
-/**
- * What was actually written, read back from the manifest rather than from the
- * scan — the manifest is the record of the generation, so it describes what is
- * on disk instead of what the scanner believed a moment earlier.
- */
-async function readManifest(
-  config: ResolvedShinroConfig
-): Promise<ManifestRoute[]> {
-  try {
-    const manifest = JSON.parse(
-      await readFile(resolve(config.outputDirectory, MANIFEST_FILE), 'utf8')
-    ) as { routes?: ManifestRoute[] };
-
-    return manifest.routes ?? [];
-  } catch {
-    // No manifest, or one nobody can parse. The generation it describes either
-    // failed or never ran, and both already said so.
-    return [];
-  }
 }
 
 function count(routes: number): string {
@@ -261,11 +191,6 @@ const LABEL = 'removed'.length;
 /** `✓ ` plus the label column plus its trailing space. */
 const HANGING = 2 + LABEL + 1;
 
-/**
- * One `wrote`/`removed` line, its file list filled to the terminal width and
- * wrapped under a hanging indent so continuations line up with the first name
- * instead of the symbol.
- */
 function action(label: string, paths: string[], root: string): string[] {
   if (paths.length === 0) {
     return [];

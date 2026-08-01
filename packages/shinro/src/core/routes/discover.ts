@@ -20,12 +20,6 @@ import { toRoutePath } from './url.ts';
 
 export type Route = {
   file: string;
-  /**
-   * Handler tuple length per method, or `null` when a spread makes it unknown.
-   * Hono's typed overloads end at path plus ten handlers and degrade silently
-   * past that, so the emitter needs to know how many slots a registration will
-   * have before it writes one.
-   */
   handlerCounts: Partial<Record<Method, number | null>>;
   kind: 'methods' | 'sub-router';
   methods: Method[];
@@ -46,7 +40,6 @@ export type RouteTree = {
   routes: Route[];
 };
 
-/** The route tree a directory of route files describes. */
 export async function discoverRoutes(
   routesDirectory: string,
   options: {
@@ -60,10 +53,6 @@ export async function discoverRoutes(
   const files = entries
     .filter((entry) => entry.isFile())
     .map((entry) => resolve(entry.parentPath, entry.name))
-    // Deterministic input order, so the emitted routes.ts and manifest.json are
-    // byte-identical across platforms and readdir implementations. `--check`
-    // compares bytes, so any ordering that depends on the filesystem is a CI
-    // flake waiting to happen.
     .sort((left, right) => left.localeCompare(right));
 
   const middlewareFiles = files.filter(
@@ -76,8 +65,6 @@ export async function discoverRoutes(
     (file) => isRouteCandidate(routesDirectory, file) && !isIgnored(file)
   );
 
-  // Modules are read and parsed concurrently, then inspected in directory order
-  // so diagnostics stay deterministic regardless of which parse lands first.
   const middlewareCounts = await settleInOrder(
     middlewareFiles.map(readMiddlewareCount)
   );
@@ -101,7 +88,11 @@ export async function discoverRoutes(
 
     const filenameParameters = routeParameterNames(path);
     for (const schemaParameters of routeExports.parameterSchemas) {
-      if (!declaresSameParameters(filenameParameters, schemaParameters)) {
+      // Order-insensitive: a schema is free to declare its keys in any order.
+      if (
+        [...filenameParameters].sort().join() !==
+        [...schemaParameters].sort().join()
+      ) {
         options.warn?.(
           `[shinro] ${file} has a parameter schema declaring [${schemaParameters.join(
             ', '
@@ -151,10 +142,6 @@ async function readEntries(routesDirectory: string): Promise<Dirent[]> {
   }
 }
 
-/**
- * Every applicable middleware directory is an ancestor of this file, so sorting
- * by depth orders the chain from the route root down to the leaf.
- */
 function middlewareChain(middlewareFiles: string[], file: string): string[] {
   return middlewareFiles
     .filter((middlewareFile) => isStrictlyWithin(dirname(middlewareFile), file))
@@ -165,10 +152,6 @@ function middlewareChain(middlewareFiles: string[], file: string): string[] {
     );
 }
 
-/**
- * Awaits everything concurrently but surfaces the first failure in argument
- * order, so parallel work cannot make error reporting depend on scheduling.
- */
 async function settleInOrder<T>(work: Promise<T>[]): Promise<T[]> {
   const settled = await Promise.allSettled(work);
   const values: T[] = [];
@@ -181,14 +164,6 @@ async function settleInOrder<T>(work: Promise<T>[]): Promise<T[]> {
   }
 
   return values;
-}
-
-function declaresSameParameters(left: string[], right: string[]): boolean {
-  return (
-    left.length === right.length &&
-    left.every((value) => right.includes(value)) &&
-    right.every((value) => left.includes(value))
-  );
 }
 
 /** Static segments before dynamic before catch-all, which is Hono's own priority. */

@@ -1,10 +1,7 @@
 import { z } from 'zod';
 
-/**
- * Colocation: the leading `-` keeps this file out of the route tree, so the
- * schemas, type, and fixtures that only `index.ts` and `$id.ts` use sit beside
- * them instead of in a directory away from the endpoints they belong to.
- */
+/** The leading `-` keeps this file out of the route tree, so what only
+ * `index.ts` and `$id.ts` use can sit beside them. */
 
 export type Resource = {
   id: string;
@@ -27,9 +24,7 @@ export const resourceInput = z.object({
   name: z.string().trim().min(1),
 });
 
-// Fixtures rather than a database: enough for the endpoints to agree with one
-// another — an unknown id is a 404 in every method that takes one — without the
-// showcase growing a dependency or state that outlives a request.
+// Fixtures rather than a database, so the showcase carries no state.
 const RESOURCES: Resource[] = [
   { id: 'res_123', name: 'Example resource' },
   { id: 'res_456', name: 'Another resource' },

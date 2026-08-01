@@ -7,6 +7,7 @@ import { findProjectRoot } from '../config.ts';
 import {
   CLIENT_FILE,
   CLIENT_SPECIFIER,
+  EXTENDS_SHIPPED_TSCONFIG,
   OUTPUT_DIRECTORY,
   ROUTES_FILE,
   ROUTES_SPECIFIER,
@@ -14,18 +15,6 @@ import {
 import { unknownOptions } from './args.ts';
 import { createReporter } from './report.ts';
 
-/**
- * `shinro init [--dry-run]`
- *
- * The whole of onboarding, which is why it is a command rather than a
- * parenthetical in the docs: it writes the `imports` block, the tsconfig
- * `extends`, and the three scripts.
- *
- * Idempotent, and it says what it changed. It merges into an existing `imports`
- * block rather than refusing, and it never overwrites a script the project
- * already defines: a project that runs `bun --watch` has made a decision, and
- * `init` is not the place to overrule it.
- */
 export const init = defineCommand({
   args: {
     'dry-run': {
@@ -147,20 +136,16 @@ async function updatePackageJson(
   return changes;
 }
 
-// `--watch-preserve-output` because Node resets the terminal on every restart
-// without it, wiping whatever the last generation printed — a route conflict, a
-// warning, or the stack trace the restart was meant to fix.
+// `--watch-preserve-output` because Node otherwise clears the terminal on every
+// restart, wiping whatever the last generation printed.
 const SCRIPTS = {
   check: 'shinro generate --check && tsc --noEmit',
   dev: 'node --watch --watch-preserve-output --import shinro/watch src/server.ts',
   prepare: 'shinro generate',
 };
 
-/**
- * tsconfig.json is JSONC, and rewriting it would mean either parsing comments or
- * losing them. So a missing file is written and an existing one is only reported
- * on — the user is one line away, and it is their line to add.
- */
+/** tsconfig.json is JSONC, so an existing one is reported on rather than
+ * rewritten: rewriting would mean parsing comments or losing them. */
 async function updateTsconfig(
   root: string,
   dryRun: boolean,
@@ -182,11 +167,7 @@ async function updateTsconfig(
     return [`${name}: create with { "extends": "shinro/tsconfig" }`];
   }
 
-  if (
-    /"extends"\s*:\s*(?:"shinro\/tsconfig|\[[^\]]*"shinro\/tsconfig)/.test(
-      source
-    )
-  ) {
+  if (EXTENDS_SHIPPED_TSCONFIG.test(source)) {
     return [];
   }
 

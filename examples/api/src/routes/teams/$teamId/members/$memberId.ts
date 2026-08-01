@@ -4,9 +4,8 @@ import { z } from 'zod';
 
 import type { Route } from './+types/teams/$teamId/members/$memberId.ts';
 
-// Both halves of nested dynamic typing in one file: the generated `Route.Handler`
-// types `c.req.param`, and the validator types `c.req.valid('param')`. They agree
-// because generate cross-checks the schema's keys against the filename's.
+// The generated `Route.Handler` types `c.req.param`, the validator types
+// `c.req.valid('param')`, and generate cross-checks the two.
 export const GET = defineHandler<Route.Handler>(
   zValidator(
     'param',

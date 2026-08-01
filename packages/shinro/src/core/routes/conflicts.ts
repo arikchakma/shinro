@@ -9,7 +9,6 @@ const GROUP_SEGMENT_HINT =
 
 type Conflict = {
   files: Set<string>;
-  headline: string;
   notes: string[];
 };
 
@@ -19,23 +18,15 @@ export function validateRoutes(
   root: string,
   routesDirectory: string
 ): void {
-  // Each route's shape is derived once. Computing it inside the pairwise scan
-  // ran two regex replacements per comparison, which grows quadratically with
-  // the route count.
   const shapes = routes.map((route) => routeShape(route.path));
   const hasSubRouter = routes.some((route) => route.kind === 'sub-router');
-  // Collected rather than thrown on sight. Conflicts arrive in batches — a
-  // rename that lands `users.ts` next to `users/index.ts` usually did the same
-  // to `$id.ts` — and fixing them one round-trip at a time is the slow way to
-  // find that out. Keyed by the conflicting path so three files on one URL are
-  // one entry with three files, not three pairs.
   const conflicts = new Map<string, Conflict>();
 
   const record = (headline: string, files: string[], notes: string[]): void => {
     const existing = conflicts.get(headline);
 
     if (existing === undefined) {
-      conflicts.set(headline, { files: new Set(files), headline, notes });
+      conflicts.set(headline, { files: new Set(files), notes });
       return;
     }
 
@@ -43,9 +34,6 @@ export function validateRoutes(
       existing.files.add(file);
     }
 
-    // The group hint rides on whichever pair happened to involve the grouped
-    // file, which is not always the first pair for this path. Merging keeps the
-    // explanation attached to the conflict it explains.
     for (const note of notes) {
       if (!existing.notes.includes(note)) {
         existing.notes.push(note);
@@ -71,9 +59,6 @@ export function validateRoutes(
         continue;
       }
 
-      // Two files at different depths collapsing onto one URL reads as a
-      // contradiction unless the message says why, so a group in either path
-      // explains itself here.
       const groupHint =
         isInGroupDirectory(routesDirectory, left.file) ||
         isInGroupDirectory(routesDirectory, right.file)
@@ -110,14 +95,11 @@ export function validateRoutes(
     return;
   }
 
-  // One error carrying every conflict, blocks separated by a blank line. The
-  // `[shinro]` prefix leads only the first: the message is one diagnostic, and
-  // repeating the prefix per block would read as several.
   throw new Error(
-    [...conflicts.values()]
-      .map((conflict, index) =>
+    [...conflicts]
+      .map(([headline, conflict], index) =>
         [
-          `${index === 0 ? '[shinro] ' : ''}${conflict.headline}`,
+          `${index === 0 ? '[shinro] ' : ''}${headline}`,
           ...[...conflict.files].map((file) => `- ${file}`),
           ...conflict.notes,
         ].join('\n')
@@ -126,11 +108,8 @@ export function validateRoutes(
   );
 }
 
-/**
- * Whether a sub-router's mount namespace covers `path`. A dynamic segment on
- * either side matches anything, so `/users/:id` and `/users/settings` both fall
- * inside a sub-router mounted at `/users/:id`.
- */
+/** Whether a sub-router's mount namespace covers `path`. A dynamic segment on
+ * either side matches anything. */
 function reservesPath(route: Route, path: string): boolean {
   if (route.kind !== 'sub-router') {
     return false;

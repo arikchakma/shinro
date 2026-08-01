@@ -1,21 +1,22 @@
 import { parseSync } from 'oxc-parser';
 
-/**
- * The subset of an oxc AST node the scan reads. Route and app modules are
- * inspected structurally rather than type checked, so a narrow structural view
- * keeps the traversal helpers independent of the parser's full node types.
- */
 export type NodeView = {
   argument?: unknown;
   arguments?: unknown[];
   body?: unknown;
   callee?: unknown;
+  computed?: boolean;
   declaration?: unknown;
+  declarations?: unknown[];
   elements?: unknown[];
   expression?: unknown;
+  init?: unknown;
+  key?: unknown;
   name?: string;
   object?: unknown;
+  properties?: unknown[];
   property?: unknown;
+  value?: unknown;
   type: string;
 };
 
@@ -25,6 +26,22 @@ export function toNodeView(value: unknown): NodeView | undefined {
   }
 
   return value as NodeView;
+}
+
+/** Positional metadata every node carries, which is never a child node. */
+const POSITION_KEYS = new Set(['end', 'span', 'start']);
+
+export function* childNodes(node: NodeView): Generator<unknown> {
+  for (const [key, child] of Object.entries(node)) {
+    if (POSITION_KEYS.has(key)) {
+      continue;
+    }
+    if (Array.isArray(child)) {
+      yield* child;
+    } else {
+      yield child;
+    }
+  }
 }
 
 /** Expressions that wrap a value without changing what it evaluates to. */
@@ -39,10 +56,6 @@ export function isTransparentExpression(node: NodeView): boolean {
   return TRANSPARENT_EXPRESSIONS.has(node.type);
 }
 
-/**
- * Whether an expression evaluates to a Hono instance: `new Hono()`, a
- * previously bound instance, or any chained method call on one.
- */
 export function isHonoExpression(
   value: unknown,
   constructors: Set<string>,
@@ -77,13 +90,6 @@ export function isHonoExpression(
   return false;
 }
 
-/**
- * Collects the local names bound to a named import. `fromSource` narrows the
- * match to the modules that count, so an unrelated local that happens to share a
- * name cannot be mistaken for the real binding. It takes a predicate rather than
- * a literal because the app may reach the generated router through
- * `#shinro/routes` or through a relative path, and both are supported spellings.
- */
 export function localNamesForImport(
   ast: ReturnType<typeof parseModule>,
   importedName: string,
@@ -133,13 +139,47 @@ export function containsCallTo(value: unknown, names: Set<string>): boolean {
     }
   }
 
-  return Object.entries(node).some(
-    ([key, child]) =>
-      key !== 'span' &&
-      (Array.isArray(child)
-        ? child.some((item) => containsCallTo(item, names))
-        : containsCallTo(child, names))
-  );
+  for (const child of childNodes(node)) {
+    if (containsCallTo(child, names)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+export function toMethodCall(value: unknown):
+  | {
+      arguments: unknown[];
+      method: string;
+      object: string;
+    }
+  | undefined {
+  const statement = toNodeView(value);
+  if (statement?.type !== 'ExpressionStatement') {
+    return undefined;
+  }
+
+  const expression = toNodeView(statement.expression);
+  const callee = toNodeView(expression?.callee);
+  const object = toNodeView(callee?.object);
+  const property = toNodeView(callee?.property);
+  if (
+    expression?.type !== 'CallExpression' ||
+    callee?.type !== 'MemberExpression' ||
+    object?.type !== 'Identifier' ||
+    object.name === undefined ||
+    property?.type !== 'Identifier' ||
+    property.name === undefined
+  ) {
+    return undefined;
+  }
+
+  return {
+    arguments: expression.arguments ?? [],
+    method: property.name,
+    object: object.name,
+  };
 }
 
 export function specifierNames(specifier: {

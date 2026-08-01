@@ -10,13 +10,6 @@ type ResolvedSegment = {
   literal: string;
 };
 
-/**
- * The URL a route file serves.
- *
- * `reportedFile` exists because directory middleware derives its own URL from a
- * synthetic `index.ts` inside its directory, so every diagnostic here must name
- * the file the user actually wrote rather than one that does not exist.
- */
 export function toRoutePath(
   routesDirectory: string,
   file: string,
@@ -35,9 +28,6 @@ export function toRoutePath(
       continue;
     }
 
-    // Grouping is a property of a directory. A file has no descendants to group,
-    // and dropping its segment would alias the route onto its parent's URL, so
-    // the two readings get two spellings instead of one and a guess.
     if (index === lastIndex) {
       throw new Error(
         `[shinro] Invalid route ${reportedFile}: ${JSON.stringify(
@@ -51,10 +41,6 @@ export function toRoutePath(
     }
 
     assertGroupName(reportedFile, segment);
-    // A group directory contributes middleware ancestry but no URL segment, so
-    // it is dropped before anything below reads the derived path. That ordering
-    // is what makes the catch-all and duplicate-parameter rules describe the URL
-    // a route serves rather than how deeply it nests on disk.
   }
 
   const lastSegment = segments.at(-1);
@@ -73,26 +59,15 @@ export function toRoutePath(
   return path ? `/${path}` : '/';
 }
 
-/**
- * Whether a directory name is written as a route group, `(name)`. Recognition is
- * deliberately looser than a valid name so that `()` reads as a malformed group
- * and can say so, rather than falling through to a literal URL segment.
- */
 export function isGroupSegment(segment: string): boolean {
   return (
     segment.length >= 2 && segment.startsWith('(') && segment.endsWith(')')
   );
 }
 
-/**
- * Splits a filename segment into escaped and unescaped runs. A `[...]` span is
- * emitted literally, which is what lets a URL contain a character that is
- * otherwise route syntax.
- *
- * Matching `[` to the *next* `]` is deliberate: it makes `[[weird]]` resolve to
- * `[weird]` on its own, and leaves an unmatched `[` as an ordinary character, so
- * escaping never needs a diagnostic of its own.
- */
+/** Splits a filename segment into escaped and unescaped runs. Matching `[` to the
+ * *next* `]` makes `[[weird]]` resolve to `[weird]` and leaves an unmatched `[`
+ * as an ordinary character, so escaping needs no diagnostic of its own. */
 function splitSegmentEscapes(segment: string): SegmentPart[] {
   const parts: SegmentPart[] = [];
   let index = 0;
@@ -116,11 +91,6 @@ function splitSegmentEscapes(segment: string): SegmentPart[] {
   return parts;
 }
 
-/**
- * Resolves one segment's escapes and rejects the shapes that cannot be served.
- * An escape makes a segment static: its text reaches the URL verbatim rather
- * than being read as a parameter or a group.
- */
 function resolvePathSegment(
   file: string,
   parts: SegmentPart[],
@@ -132,8 +102,6 @@ function resolvePathSegment(
     .map((part) => part.text)
     .join('');
 
-  // Reached only for a segment that is not a well-formed group, so any bare
-  // parenthesis left here is a malformed one.
   if (/[()]/.test(unescaped)) {
     throw new Error(
       `[shinro] Invalid route ${file}: ${JSON.stringify(
@@ -154,9 +122,6 @@ function resolvePathSegment(
 
   const literal = parts.map((part) => part.text).join('');
   const dynamic = !escaped && literal.startsWith('$');
-  // A static segment reaches Hono verbatim, so a character Hono treats as path
-  // syntax would silently register something else — most sharply `[:]id`, which
-  // would become a parameter rather than the literal `:id` it asks for.
   const honoSyntax = dynamic ? null : /[:{}*?]/.exec(literal);
   if (honoSyntax) {
     throw new Error(

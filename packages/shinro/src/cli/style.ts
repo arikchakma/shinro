@@ -1,10 +1,3 @@
-/**
- * SGR escapes instead of a colour dependency: the CLI only ever needs eight
- * colours applied to whole strings.
- *
- * `NO_COLOR` and a non-TTY stdout both disable it, which is what keeps
- * `shinro generate` a clean set of lines in a CI log.
- */
 const enabled =
   process.env.NO_COLOR === undefined &&
   process.env.TERM !== 'dumb' &&

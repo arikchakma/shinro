@@ -4,26 +4,17 @@ import { dirname, resolve } from 'node:path';
 import { OUTPUT_DIRECTORY } from './constants.ts';
 import type { ShinroLogger } from './core/logger.ts';
 
-/**
- * Where the app and its routes live, and nothing else. All of it is
- * JSON-serializable, so there is no config loader and no jiti/unconfig
- * dependency — `shinro.config.json` or `package.json#shinro`.
- *
- * There is no `basePath`: `defineApp().basePath('/v1')` is Hono's own, it covers
- * the app's manual routes as well as the file routes, and it stays in the schema
- * so the generated client follows it for free.
- */
+/** All JSON-serializable, so there is no config loader: `shinro.config.json` or
+ * `package.json#shinro`. No `basePath` — `defineApp().basePath('/v1')` is Hono's
+ * own and the generated client follows it for free. */
 export type ShinroConfig = {
   app?: string;
   ignoredRouteFiles?: string[];
   routes?: string;
 };
 
-/**
- * The output directory is not configurable: `shinro/tsconfig` hardcodes
- * `${configDir}/.shinro` in both `rootDirs` and `include`, so any other value
- * type-checks against declarations TypeScript cannot find.
- */
+/** The output directory is not configurable: `shinro/tsconfig` hardcodes
+ * `${configDir}/.shinro` in both `rootDirs` and `include`. */
 export type ResolvedShinroConfig = Required<ShinroConfig> & {
   root: string;
   /** Always `<root>/.shinro`. */
@@ -38,13 +29,7 @@ const DEFAULTS = {
 
 const CONFIG_FILE = 'shinro.config.json';
 
-/**
- * Reads `shinro.config.json`, else `package.json#shinro`, else defaults.
- *
- * `overrides` is how an adapter passes inline options, so config-in-code stays
- * available without the core growing a loader:
- * adapter options > shinro.config.json > package.json#shinro > defaults.
- */
+/** overrides > shinro.config.json > package.json#shinro > defaults. */
 export async function loadConfig(
   root: string,
   logger: ShinroLogger,
@@ -76,13 +61,9 @@ export async function loadConfig(
   };
 }
 
-/**
- * The nearest directory at or above `from` holding a `shinro.config.json` or a
- * `package.json`. The preloads and the CLI both need this, because `node
- * --import shinro/generate src/server.ts` can be run from anywhere in the
- * project — and resolving routes against the wrong root would generate an empty
- * route tree rather than failing.
- */
+/** The nearest directory at or above `from` holding a `shinro.config.json` or a
+ * `package.json`: the CLI and the preloads can both be run from anywhere in the
+ * project, and the wrong root would generate an empty route tree. */
 export async function findProjectRoot(
   from: string = process.cwd()
 ): Promise<string> {
@@ -141,9 +122,8 @@ async function readJson(file: string): Promise<unknown> {
   try {
     return JSON.parse(source) as unknown;
   } catch (error) {
-    // Falling back to defaults on unparseable JSON would generate a route tree
-    // from a directory the user did not choose, so this is fatal rather than a
-    // warning.
+    // Falling back to defaults here would generate a route tree from a
+    // directory the user did not choose.
     throw new Error(
       `[shinro] Could not parse ${file}: ${
         error instanceof Error ? error.message : String(error)
@@ -153,11 +133,7 @@ async function readJson(file: string): Promise<unknown> {
   }
 }
 
-/**
- * Three keys, and anything else is a typo worth naming. `$schema` is allowed
- * through because editors want it and it describes the file rather than
- * configuring anything.
- */
+/** Anything but these is a typo worth naming. `$schema` is for editors. */
 function pickConfig(
   value: unknown,
   source: string,
@@ -202,8 +178,8 @@ function pickConfig(
   return config;
 }
 
-// An adapter that spreads its own options object would otherwise let an explicit
-// `undefined` overwrite a real value from the config file.
+// So an adapter spreading its own options cannot let an explicit `undefined`
+// overwrite a real value from the config file.
 function stripUndefined(config: ShinroConfig): ShinroConfig {
   return Object.fromEntries(
     Object.entries(config).filter(([, value]) => value !== undefined)

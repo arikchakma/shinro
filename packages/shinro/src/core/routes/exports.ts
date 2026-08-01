@@ -6,7 +6,7 @@ import {
   isHonoExpression,
   parseModule,
   specifierNames,
-  toNodeView,
+  toMethodCall,
 } from '../ast.ts';
 import { couldBeHandlerTuple, handlerCount } from './tuples.ts';
 import {
@@ -29,7 +29,6 @@ export type RouteExports = {
   parameterSchemas: string[][];
 };
 
-/** Which methods a route module exports, and in what shape. */
 export async function readRouteExports(file: string): Promise<RouteExports> {
   const ast = parseModule(file, await readFile(file, 'utf8'), 'route module');
   const exports = new Set<string>();
@@ -148,8 +147,6 @@ export async function readRouteExports(file: string): Promise<RouteExports> {
       }
 
       const method = name as Method;
-      // A re-export cannot be inspected here, so it is rejected rather than
-      // allowed to fail later as a spread of something unknown.
       if (statement.source !== null) {
         invalidMethods.add(method);
         continue;
@@ -204,9 +201,13 @@ export async function readRouteExports(file: string): Promise<RouteExports> {
     hasDefault,
     hasUnchainedRoutes:
       defaultHonoName !== undefined &&
-      ast.body.some((statement) =>
-        isUnchainedRouteMutation(statement, defaultHonoName)
-      ),
+      ast.body.some((statement) => {
+        const call = toMethodCall(statement);
+        return (
+          call?.object === defaultHonoName &&
+          HONO_ROUTE_METHODS.has(call.method)
+        );
+      }),
     invalidMethods: HTTP_METHODS.filter((method) => invalidMethods.has(method)),
     isDefaultHono,
     methods,
@@ -250,10 +251,6 @@ export function assertRouteExports(
   }
 }
 
-/**
- * How many middleware a `_middleware.ts` default-exports, or `null` when a
- * spread makes the length unknown.
- */
 export async function readMiddlewareCount(
   file: string
 ): Promise<number | null> {
@@ -347,25 +344,3 @@ const HONO_ROUTE_METHODS = new Set([
   'route',
   'use',
 ]);
-
-function isUnchainedRouteMutation(value: unknown, honoName: string): boolean {
-  const statement = toNodeView(value);
-  if (statement?.type !== 'ExpressionStatement') {
-    return false;
-  }
-
-  const expression = toNodeView(statement.expression);
-  const callee = toNodeView(expression?.callee);
-  const object = toNodeView(callee?.object);
-  const property = toNodeView(callee?.property);
-
-  return (
-    expression?.type === 'CallExpression' &&
-    callee?.type === 'MemberExpression' &&
-    object?.type === 'Identifier' &&
-    object.name === honoName &&
-    property?.type === 'Identifier' &&
-    property.name !== undefined &&
-    HONO_ROUTE_METHODS.has(property.name)
-  );
-}
