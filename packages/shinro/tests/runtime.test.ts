@@ -12,14 +12,11 @@ import { APP_SOURCE, route } from './helpers.ts';
 
 const PACKAGE_ROOT = fileURLToPath(new URL('..', import.meta.url));
 
-// Every project here is created inside the package so `@hono/node-server` and
-// `hono` resolve by walking up, the way they resolve for an installed app.
+// Every project here is created inside the package so `hono` and
+// `@hono/node-server` resolve by walking up, as they do for an installed app.
 
 test('a Node entry runs the generated router straight from source', async () => {
   await withRuntimeProject('node-source', async (project) => {
-    // No build step, no bundler, no plugin: `routes.ts` imports its route
-    // modules by relative path with `.ts` intact, and Node's type stripping does
-    // the rest.
     const server = await project.run([`${project.root}/src/server.ts`]);
     const response = await fetch(`http://127.0.0.1:${server.port}/health`);
 
@@ -32,8 +29,6 @@ test('a Node entry owns its listener and graceful shutdown', async () => {
   await withRuntimeProject('node-shutdown', async (project) => {
     const server = await project.run([`${project.root}/src/server.ts`]);
 
-    // Shinro registers no signal handler anywhere, so SIGTERM reaches the user's
-    // own drain and nothing else.
     server.child.kill('SIGTERM');
     await server.waitFor(/STOPPED/);
     await expect(server.exitCode()).resolves.toBe(0);
@@ -45,8 +40,7 @@ test('the same generated router runs under Bun', async () => {
     const server = await project
       .run([`${project.root}/src/server.ts`], 'bun')
       .catch((error: unknown) => {
-        // Bun is not part of the toolchain, only a supported runner. Skipping when
-        // it is absent keeps the claim honest without pinning CI to it.
+        // Bun is a supported runner, not part of the toolchain: skip when absent.
         if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
           return undefined;
         }
@@ -66,8 +60,6 @@ test('tsdown builds the app and the generated specifier does not survive', async
   await withRuntimeProject('tsdown-build', async (project) => {
     await build({
       config: false,
-      // A server bundle has no consumers to hand types to, and the app's own
-      // `tsc` already checked it.
       dts: false,
       entry: [`${project.root}/src/server.ts`],
       format: 'esm',

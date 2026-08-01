@@ -29,8 +29,6 @@ defineHandler();
 // @ts-expect-error A directory middleware tuple requires at least one middleware.
 defineMiddleware();
 
-// Hono's own middleware declares a bare `Env`, which an augmented `ShinroEnv` is
-// not assignable to. It belongs in a directory middleware all the same.
 defineMiddleware(bearerAuth({ token: 'demo' }));
 defineMiddleware(cors());
 defineMiddleware(every(cors(), bearerAuth({ token: 'demo' })));
@@ -43,14 +41,12 @@ declare const foreignMiddleware: MiddlewareHandler<
 >;
 defineMiddleware(foreignMiddleware);
 
-// Standing beside one, an inline middleware keeps the project env.
 defineMiddleware(bearerAuth({ token: 'demo' }), async (c, next) => {
   const requestId: string = c.var.requestId;
   void requestId;
   await next();
 });
 
-// And its short-circuit response still reaches the route's client contract.
 const guard = defineMiddleware(async (c, next) => {
   if (!c.req.header('authorization')) {
     return c.json({ error: 'UNAUTHORIZED' as const }, 401);
@@ -99,8 +95,6 @@ defineHandler<TeamRoute>((c) => {
 const routeParams = z.object({ id: z.string().min(3) });
 const routeBody = z.object({ name: z.string().min(1) });
 
-// Each validator contributes its own key, and the final handler reads the
-// accumulation of everything before it.
 defineHandler(
   zValidator('param', routeParams),
   zValidator('json', routeBody),
@@ -112,8 +106,6 @@ defineHandler(
   }
 );
 
-// Plain middleware carries no input of its own and must not interrupt the
-// accumulation of the validators that follow it.
 defineHandler(
   async (_c, next) => {
     await next();
@@ -136,7 +128,6 @@ defineHandler(
 const validateParams = zValidator('param', routeParams);
 const validateBody = zValidator('json', routeBody);
 
-// Hoisting the validators must stay equivalent to spelling them inline.
 defineHandler(validateParams, validateBody, (c) =>
   c.json({
     id: c.req.valid('param').id,
@@ -151,8 +142,6 @@ defineHandler(zValidator('param', routeParams), (c) => {
   return c.json({ id: c.req.valid('param').id });
 });
 
-// Route-local middleware is welcome alongside the route generic: it carries no
-// input of its own, so nothing needs inferring past the explicit argument.
 defineHandler<TeamRoute>(
   async (_c, next) => {
     await next();
@@ -168,10 +157,6 @@ defineHandler<TeamRoute>(auditTeam[0], (c) =>
   c.json({ teamId: c.req.param('teamId') })
 );
 
-// A validator may precede the handler here too, but the explicit route generic
-// stops TypeScript inferring its input, so only the filename-derived parameters
-// are readable. It still rejects invalid requests; what it loses is the type,
-// in the handler and in the generated client alike.
 defineHandler<TeamRoute>(zValidator('json', routeBody), (c) => {
   const teamId: string = c.req.param('teamId');
 

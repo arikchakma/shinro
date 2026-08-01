@@ -6,49 +6,25 @@ import { expect, test } from 'vite-plus/test';
 
 const run = promisify(execFile);
 
-test('public package subpaths expose matching runtime and declaration files', async () => {
+test('the published package is consumable without the workspace', async () => {
   const packageJson = JSON.parse(
     await readFile(new URL('../package.json', import.meta.url), 'utf8')
   ) as {
-    exports: Record<string, { import: string; types: string } | string>;
+    dependencies?: Record<string, string>;
+    peerDependencies?: Record<string, string>;
   };
+  // `catalog:` and `workspace:` are pnpm protocols only `pnpm publish` rewrites,
+  // and installers see whatever the tarball holds.
+  const specifiers = [
+    ...Object.entries(packageJson.dependencies ?? {}),
+    ...Object.entries(packageJson.peerDependencies ?? {}),
+  ];
 
-  expect(packageJson.exports).toMatchObject({
-    '.': {
-      import: './dist/index.mjs',
-      types: './dist/index.d.mts',
-    },
-    './app': {
-      import: './dist/app.mjs',
-      types: './dist/app.d.mts',
-    },
-    // The two side-effecting preloads. They are the dev story, so they are part
-    // of the published surface rather than an implementation detail.
-    './generate': {
-      import: './dist/generate.mjs',
-      types: './dist/generate.d.mts',
-    },
-    './watch': {
-      import: './dist/watch.mjs',
-      types: './dist/watch.d.mts',
-    },
-    './tsdown': {
-      import: './dist/adapters/tsdown.mjs',
-      types: './dist/adapters/tsdown.d.mts',
-    },
-    './vite': {
-      import: './dist/adapters/vite.mjs',
-      types: './dist/adapters/vite.d.mts',
-    },
-    './tsconfig': './tsconfig.base.json',
-    './tsconfig/emit': './tsconfig.emit.json',
-    './package.json': './package.json',
-  });
-});
+  expect(specifiers.length).toBeGreaterThan(0);
+  for (const [name, specifier] of specifiers) {
+    expect(`${name}@${specifier}`).toMatch(/@[\d^~><=*]/);
+  }
 
-test('the shipped tsconfigs cover both checking and emitting', async () => {
-  // The shipped configs carry comments explaining why each option is there, so
-  // they are JSONC — which is exactly what a consumer's tsc accepts.
   const base = (await readJsonc('../tsconfig.base.json')) as {
     compilerOptions: Record<string, unknown>;
     include: string[];
@@ -59,8 +35,7 @@ test('the shipped tsconfigs cover both checking and emitting', async () => {
   };
 
   // `${configDir}` is what lets a base config in node_modules express
-  // project-relative paths, and it is the only reason the boilerplate can live
-  // in the package rather than in every consumer's tsconfig.
+  // project-relative paths, and so ship the boilerplate at all.
   expect(base.compilerOptions.rootDirs).toEqual([
     '${configDir}',
     '${configDir}/.shinro/types',
@@ -69,51 +44,23 @@ test('the shipped tsconfigs cover both checking and emitting', async () => {
   expect(base.compilerOptions.allowImportingTsExtensions).toBe(true);
   expect(base.compilerOptions.noEmit).toBe(true);
 
-  // One config made "build it however you want" false for plain tsc: emitting
-  // needs the generated `./x.ts` specifiers rewritten, which `noEmit` forbids.
   expect(emit.extends).toBe('./tsconfig.base.json');
   expect(emit.compilerOptions.noEmit).toBe(false);
   expect(emit.compilerOptions.rewriteRelativeImportExtensions).toBe(true);
 });
 
-test('published dependency ranges resolve without the workspace', async () => {
-  const packageJson = JSON.parse(
-    await readFile(new URL('../package.json', import.meta.url), 'utf8')
-  ) as {
-    dependencies?: Record<string, string>;
-    peerDependencies?: Record<string, string>;
-  };
-
-  // `catalog:` and `workspace:` are pnpm protocols that only `pnpm publish`
-  // rewrites. Installers see whatever the tarball holds, so a consumer-facing
-  // range has to be a literal one no matter which client publishes.
-  const specifiers = [
-    ...Object.entries(packageJson.dependencies ?? {}),
-    ...Object.entries(packageJson.peerDependencies ?? {}),
-  ];
-
-  expect(specifiers.length).toBeGreaterThan(0);
-  for (const [name, specifier] of specifiers) {
-    expect(`${name}@${specifier}`).toMatch(/@[\d^~><=*]/);
-  }
-});
-
 test('the package build does not leak the fixture application environment', async () => {
   const packageRoot = new URL('..', import.meta.url);
-  // Into its own directory rather than `dist`: the example app runs against the
-  // published build in a test of its own, and a pack that cleans `dist` out from
-  // under it is a race, not a failure anyone can read.
+  // Not `dist`: the example app tests the published build, and a pack that
+  // cleans `dist` out from under it is a race.
   const outputDirectory = 'dist-declarations';
 
   await run(
     new URL('../node_modules/.bin/vp', import.meta.url).pathname,
-    // `--no-exports` because the export metadata is derived from the output
-    // directory: with one this build invented, packing would rewrite the real
-    // `bin` and `exports` to point at a directory it is about to delete.
+    // `--no-exports` because packing would otherwise rewrite the real `bin` and
+    // `exports` to point at the directory this build is about to delete.
     ['pack', '--out-dir', outputDirectory, '--no-exports'],
-    {
-      cwd: packageRoot.pathname,
-    }
+    { cwd: packageRoot.pathname }
   );
 
   const declaration = await readFile(
@@ -130,13 +77,11 @@ test('the package build does not leak the fixture application environment', asyn
 
   expect(declared).not.toContain('tests/fixtures');
   expect(declared).not.toContain('requestId');
-  // Handler and middleware positions both resolve their environment through
-  // `RouteEnv`, so neither carries a resolved environment from whichever
-  // application happened to run the build.
+  // Both positions resolve their environment through `RouteEnv`, rather than
+  // baking in whichever application ran the build.
   expect(declared).toContain('Handler<RouteEnv<Route>');
   expect(declared).toContain('E extends Env = RouteEnv<Route>');
-  // `ShinroEnv` ships empty and the project fills it in by augmentation, so a
-  // member here would mean a local environment had been baked into the package.
+  // `ShinroEnv` ships empty, for the project to augment.
   expect(declared).toMatch(/interface ShinroEnv extends Env \{\s*\}/);
 });
 

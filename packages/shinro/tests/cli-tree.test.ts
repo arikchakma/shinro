@@ -1,8 +1,8 @@
 import { expect, test } from 'vite-plus/test';
 
 import { unknownOptions } from '../src/cli/args.ts';
-import type { ManifestRoute } from '../src/cli/tree.ts';
 import { routeTree } from '../src/cli/tree.ts';
+import type { ManifestRoute } from '../src/core/generate.ts';
 
 function methods(
   path: string,
@@ -18,8 +18,7 @@ function methods(
   };
 }
 
-// Colour is disabled under a piped stdout, so these read the plain text.
-test('the tree nests routes by path segment', () => {
+test('the tree nests routes by path segment, in a stable order', () => {
   const lines = routeTree([
     methods('/health', ['GET', 'POST']),
     methods('/api', ['GET']),
@@ -36,28 +35,15 @@ test('the tree nests routes by path segment', () => {
       '  └─ health     GET POST',
     ].join('\n')
   );
+  expect(routeTree([methods('/', ['GET'])])[0]).toBe('  /  GET');
+  expect(routeTree([methods('/a', ['GET']), methods('/b', ['GET'])])).toEqual(
+    routeTree([methods('/b', ['GET']), methods('/a', ['GET'])])
+  );
 });
 
 test('a segment no route lands on still holds its children up', () => {
   const lines = routeTree([
     methods('/teams/:teamId/members/:memberId', ['GET']),
-  ]);
-
-  // `teams`, `:teamId` and `members` have no methods of their own. Dropping
-  // them would leave the leaf indented under nothing.
-  expect(lines.join('\n')).toBe(
-    [
-      '  /',
-      '  └─ teams',
-      '     └─ :teamId',
-      '        └─ members',
-      '           └─ :memberId  GET',
-    ].join('\n')
-  );
-});
-
-test('a sub-router is labelled rather than given methods', () => {
-  const lines = routeTree([
     {
       file: 'src/routes/admin.ts',
       kind: 'sub-router',
@@ -66,18 +52,17 @@ test('a sub-router is labelled rather than given methods', () => {
     },
   ]);
 
-  expect(lines.join('\n')).toContain('└─ admin  sub-router');
-});
-
-test('a route at the root sits on the root line', () => {
-  expect(routeTree([methods('/', ['GET'])])[0]).toBe('  /  GET');
-});
-
-test('branches are sorted so the tree does not reshuffle between runs', () => {
-  const forward = routeTree([methods('/a', ['GET']), methods('/b', ['GET'])]);
-  const backward = routeTree([methods('/b', ['GET']), methods('/a', ['GET'])]);
-
-  expect(forward).toEqual(backward);
+  // `teams`, `:teamId` and `members` have no methods of their own. Dropping
+  // them would leave the leaf indented under nothing.
+  expect(lines.join('\n')).toContain(
+    [
+      '  ├─ admin               sub-router',
+      '  └─ teams',
+      '     └─ :teamId',
+      '        └─ members',
+      '           └─ :memberId  GET',
+    ].join('\n')
+  );
 });
 
 test('unknown options are named and known ones are not', () => {

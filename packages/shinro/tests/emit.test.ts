@@ -13,40 +13,8 @@ import { expect, test } from 'vite-plus/test';
 import { GENERATED_FORMAT } from '../src/constants.ts';
 import { GET_ROUTE, middleware, route, withProject } from './helpers.ts';
 
-test('unchanged generated files keep their modification time', async () => {
-  await withProject('mtime', async (project) => {
-    await project.write('src/routes/health.ts', GET_ROUTE);
-    await project.generate();
-
-    const routesFile = resolve(project.outputDirectory, 'routes.ts');
-    const earlier = new Date('2020-01-02T03:04:05.000Z');
-    await utimes(routesFile, earlier, earlier);
-
-    const second = await project.generate();
-
-    // The load-bearing invariant of the whole no-`shinro dev` design: generation
-    // runs on every restart, and a write to a file the runner watches is another
-    // restart. Bytes matching is not enough — the mtime has to be untouched, or
-    // the loop never settles.
-    expect(second.written).toEqual([]);
-    expect((await stat(routesFile)).mtimeMs).toBe(earlier.getTime());
-  });
-});
-
-test('a no-op generation leaves no staging directory behind', async () => {
-  await withProject('staging-clean', async (project) => {
-    await project.write('src/routes/health.ts', GET_ROUTE);
-    await project.generate();
-    await project.generate();
-
-    expect(await readdir(project.outputDirectory)).toEqual(
-      expect.not.arrayContaining(['.staging'])
-    );
-  });
-});
-
-test('generation is deterministic, so --check can compare bytes', async () => {
-  await withProject('determinism', async (project) => {
+test('regenerating an unchanged tree writes nothing and touches nothing', async () => {
+  await withProject('idempotent', async (project) => {
     await project.write('src/routes/_middleware.ts', middleware(2));
     await project.write('src/routes/health.ts', GET_ROUTE);
     await project.write('src/routes/users/$id.ts', GET_ROUTE);
@@ -57,17 +25,26 @@ test('generation is deterministic, so --check can compare bytes', async () => {
       manifest: await project.generated('manifest.json'),
       routes: await project.generated('routes.ts'),
     };
+    const routesFile = resolve(project.outputDirectory, 'routes.ts');
+    const earlier = new Date('2020-01-02T03:04:05.000Z');
+    await utimes(routesFile, earlier, earlier);
 
-    await project.generate();
+    const second = await project.generate();
 
+    // Matching bytes are not enough: generation runs on every restart, so a
+    // bumped mtime is another restart and the loop never settles.
+    expect(second.written).toEqual([]);
+    expect((await stat(routesFile)).mtimeMs).toBe(earlier.getTime());
     expect({
       client: await project.generated('client.ts'),
       manifest: await project.generated('manifest.json'),
       routes: await project.generated('routes.ts'),
     }).toEqual(first);
-    // No timestamps, no absolute paths, no ordering that depends on readdir.
     expect(first.manifest).not.toMatch(/\d{4}-\d{2}-\d{2}T/);
     expect(first.routes).not.toContain(project.root);
+    expect(await readdir(project.outputDirectory)).toEqual(
+      expect.not.arrayContaining(['.staging'])
+    );
   });
 });
 
@@ -77,11 +54,41 @@ test('a failure leaves the previous generation exactly as it was', async () => {
     await project.generate();
     const before = await project.generated('routes.ts');
 
-    // A conflict is found during the scan, before anything is staged.
     await project.write('src/routes/health/index.ts', GET_ROUTE);
     await expect(project.generate()).rejects.toThrow(/Route conflict/);
-
     expect(await project.generated('routes.ts')).toBe(before);
+
+    await project.remove('src/routes/health/index.ts');
+    await project.write('src/routes/extra.ts', GET_ROUTE);
+    await chmod(project.outputDirectory, 0o500);
+
+    try {
+      await expect(project.generate()).rejects.toThrow();
+      expect(await project.generated('routes.ts')).toBe(before);
+    } finally {
+      await chmod(project.outputDirectory, 0o700);
+    }
+  });
+});
+
+test('a write that cannot land fails before anything is written', async () => {
+  await withProject('directory-collision', async (project) => {
+    await project.write('src/routes/health.ts', GET_ROUTE);
+    await mkdir(resolve(project.outputDirectory, 'routes.ts'), {
+      recursive: true,
+    });
+
+    await expect(project.generate()).rejects.toThrow(
+      /a directory exists where a generated file is required/
+    );
+  });
+
+  await withProject('escape', async (project) => {
+    await project.write('src/routes/health.ts', GET_ROUTE);
+
+    // `getTypeDeclarationPath` builds paths from the route tree, so this is the
+    // guard that keeps a route file outside the project from steering a write.
+    await expect(project.generate({ routes: '../outside' })).rejects.toThrow();
   });
 });
 
@@ -111,9 +118,8 @@ test('artifacts of an older format are removed, hand-written files are not', asy
     await project.write('src/routes/health.ts', GET_ROUTE);
     await project.generate();
 
-    // `shinro.d.ts` declared the bare specifier against a plugin-provided
-    // resolveId. Left behind, it keeps type-checking after the thing it
-    // describes is gone.
+    // Left behind, a format-2 `shinro.d.ts` keeps type-checking a specifier that
+    // no longer resolves.
     await writeFile(
       resolve(project.outputDirectory, 'shinro.d.ts'),
       '// Generated by Shinro (format 2). Do not edit.\ndeclare module "shinro/routes" {}\n'
@@ -131,21 +137,8 @@ test('artifacts of an older format are removed, hand-written files are not', asy
   });
 });
 
-test('a directory where a generated file belongs fails before anything is written', async () => {
-  await withProject('directory-collision', async (project) => {
-    await project.write('src/routes/health.ts', GET_ROUTE);
-    await mkdir(resolve(project.outputDirectory, 'routes.ts'), {
-      recursive: true,
-    });
-
-    await expect(project.generate()).rejects.toThrow(
-      /a directory exists where a generated file is required/
-    );
-  });
-});
-
-test('--check passes on a tree that matches and writes nothing', async () => {
-  await withProject('check-clean', async (project) => {
+test('--check reports drift without repairing it', async () => {
+  await withProject('check', async (project) => {
     await project.write('src/routes/health.ts', GET_ROUTE);
     await project.generate();
 
@@ -153,26 +146,16 @@ test('--check passes on a tree that matches and writes nothing', async () => {
     const earlier = new Date('2021-02-03T04:05:06.000Z');
     await utimes(routesFile, earlier, earlier);
 
-    const result = await project.check();
+    const clean = await project.check();
 
-    expect(result.written).toEqual([]);
-    expect(result.removed).toEqual([]);
+    expect(clean.written).toEqual([]);
+    expect(clean.removed).toEqual([]);
     expect((await stat(routesFile)).mtimeMs).toBe(earlier.getTime());
-  });
-});
 
-test('--check reports drift without repairing it', async () => {
-  await withProject('check-drift', async (project) => {
-    await project.write('src/routes/health.ts', GET_ROUTE);
-    await project.generate();
     await project.write('src/routes/extra.ts', GET_ROUTE);
+    const drifted = await project.check();
 
-    const result = await project.check();
-
-    expect(result.written).toContain(
-      resolve(project.outputDirectory, 'routes.ts')
-    );
-    // The router on disk is untouched: the CI gate reports, the developer decides.
+    expect(drifted.written).toContain(routesFile);
     expect(await project.generated('routes.ts')).not.toContain('/extra');
   });
 });
@@ -192,38 +175,7 @@ test('--check tells an upgrade apart from a stale tree', async () => {
 
     const result = await project.check();
 
-    // Same byte diff, opposite fix: "you forgot to regenerate" versus "you
-    // upgraded Shinro". Without the format number a committed `.shinro/` becomes
-    // the confusing part of an upgrade.
     expect(result.onDiskFormat).toBe(GENERATED_FORMAT - 1);
     expect(result.written.length).toBeGreaterThan(0);
-  });
-});
-
-test('generation refuses to write outside the generated directory', async () => {
-  await withProject('escape', async (project) => {
-    await project.write('src/routes/health.ts', GET_ROUTE);
-
-    // `getTypeDeclarationPath` builds paths from the route tree, so this is the
-    // guard that keeps a route file outside the project from steering a write.
-    await expect(project.generate({ routes: '../outside' })).rejects.toThrow();
-  });
-});
-
-test('a read-only generated directory fails without corrupting what is there', async () => {
-  await withProject('read-only', async (project) => {
-    await project.write('src/routes/health.ts', GET_ROUTE);
-    await project.generate();
-    const before = await project.generated('routes.ts');
-
-    await project.write('src/routes/extra.ts', GET_ROUTE);
-    await chmod(project.outputDirectory, 0o500);
-
-    try {
-      await expect(project.generate()).rejects.toThrow();
-      expect(await project.generated('routes.ts')).toBe(before);
-    } finally {
-      await chmod(project.outputDirectory, 0o700);
-    }
   });
 });

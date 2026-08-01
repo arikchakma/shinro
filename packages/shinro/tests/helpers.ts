@@ -8,20 +8,10 @@ import type { ShinroConfig } from '../src/config.ts';
 import { generate } from '../src/core/generate.ts';
 import type { GenerateResult } from '../src/core/generate.ts';
 
-/**
- * A throwaway project on disk, plus the one call that drives Shinro over it.
- *
- * The old suite reached for `resolveConfig({ plugins: [shinro()] })` to make
- * generation happen, which meant every test carried a Vite config it did not
- * care about — and meant a test could only assert what a plugin lifecycle
- * exposed. `generate()` is the whole product now, so the harness is a temp
- * directory and a function call.
- */
+/** A throwaway project on disk, plus the one call that drives Shinro over it. */
 export type Project = {
   errors: string[];
-  /** Runs the real pipeline: scan, validate, emit. Rejects the way the CLI does. */
   generate: (overrides?: ShinroConfig) => Promise<GenerateResult>;
-  /** Same, with `--check` semantics: compare against disk, write nothing. */
   check: (overrides?: ShinroConfig) => Promise<GenerateResult>;
   generated: (path: string) => Promise<string>;
   manifest: () => Promise<Manifest>;
@@ -78,11 +68,8 @@ export function middleware(count = 1): string {
   ].join('\n');
 }
 
-/**
- * An app module that mounts the generated router through `#shinro/routes` — the
- * documented specifier, resolved by the `imports` block `withProject` seeds, so
- * these projects fail the same way a user's would.
- */
+/** An app module that mounts the router through `#shinro/routes`, the documented
+ * specifier, so these projects fail the same way a user's would. */
 export const APP_SOURCE = [
   `import { defineApp } from ${JSON.stringify(APP_MODULE)};`,
   'import { routes } from "#shinro/routes";',

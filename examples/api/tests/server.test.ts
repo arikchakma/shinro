@@ -10,10 +10,6 @@ test('the production entry serves requests and shuts down gracefully', async () 
   let child: ChildProcess | undefined;
 
   try {
-    // The app owns its build, and this is that build: `vp pack` over the app's
-    // own config, with the Shinro adapter regenerating `.shinro` before rolldown
-    // reads the graph. Spawned rather than called, because the pack options live
-    // under `pack` in `vite.config.ts` — the CLI is what knows to read them.
     await expect(pack(root)).resolves.toBe(0);
 
     const javascript = (await readdir(`${root}/dist`)).filter((file) =>
