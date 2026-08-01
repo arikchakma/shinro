@@ -94,7 +94,7 @@ async function readConfigFile(
   const contents = await readJson(file);
   return contents === undefined
     ? undefined
-    : pickConfig(contents, file, logger);
+    : parseConfig(contents, file, logger);
 }
 
 async function readPackageConfig(
@@ -105,7 +105,7 @@ async function readPackageConfig(
   const shinro = (contents as { shinro?: unknown } | undefined)?.shinro;
   return shinro === undefined
     ? undefined
-    : pickConfig(shinro, `${file}#shinro`, logger);
+    : parseConfig(shinro, `${file}#shinro`, logger);
 }
 
 async function readJson(file: string): Promise<unknown> {
@@ -134,7 +134,7 @@ async function readJson(file: string): Promise<unknown> {
 }
 
 /** Anything but these is a typo worth naming. `$schema` is for editors. */
-function pickConfig(
+function parseConfig(
   value: unknown,
   source: string,
   logger: ShinroLogger

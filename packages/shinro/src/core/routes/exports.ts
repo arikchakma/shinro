@@ -12,7 +12,7 @@ import { couldBeHandlerTuple, handlerCount } from './tuples.ts';
 import {
   isValidatorImport,
   objectSchemaKeys,
-  parameterSchemasIn,
+  findParameterSchemas,
 } from './validators.ts';
 
 export type RouteExports = {
@@ -102,7 +102,7 @@ export async function readRouteExports(file: string): Promise<RouteExports> {
         );
         schemasByTuple.set(
           declaration.id.name,
-          parameterSchemasIn(declaration.init, validators, namedSchemas)
+          findParameterSchemas(declaration.init, validators, namedSchemas)
         );
       }
     }

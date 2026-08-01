@@ -13,7 +13,7 @@ export function isValidatorImport(
 }
 
 /** The parameter keys every `("param", schema)` validator in an expression declares. */
-export function parameterSchemasIn(
+export function findParameterSchemas(
   value: unknown,
   validators: Set<string>,
   namedSchemas: Map<string, string[]>

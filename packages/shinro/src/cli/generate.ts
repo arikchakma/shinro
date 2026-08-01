@@ -85,7 +85,7 @@ async function run(flags: {
     const config = await loadConfig(root, logger);
 
     if (flags.watch === true) {
-      return await watchLines(config, logger, root);
+      return await runWatch(config, logger, root);
     }
 
     const result = await generateCore({
@@ -135,7 +135,7 @@ async function run(flags: {
   }
 }
 
-async function watchLines(
+async function runWatch(
   config: ResolvedShinroConfig,
   logger: ShinroLogger,
   root: string

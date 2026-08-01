@@ -7,6 +7,6 @@ export { findProjectRoot, loadConfig } from './config.ts';
 export type { ResolvedShinroConfig, ShinroConfig } from './config.ts';
 export { generate } from './core/generate.ts';
 export type { GenerateResult } from './core/generate.ts';
-export { createLogger, fromHost } from './core/logger.ts';
+export { createLogger, hostLogger } from './core/logger.ts';
 export type { ShinroLogger } from './core/logger.ts';
 export { watch } from './core/watch.ts';

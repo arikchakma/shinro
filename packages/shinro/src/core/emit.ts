@@ -58,7 +58,7 @@ export async function emit(
     }
   }
 
-  const stale = await staleFiles(
+  const stale = await findStaleFiles(
     outputDirectory,
     new Set(targets.map(([file]) => file))
   );
@@ -132,7 +132,7 @@ async function isUpToDate(file: string, source: string): Promise<boolean> {
   }
 }
 
-async function staleFiles(
+async function findStaleFiles(
   outputDirectory: string,
   current: Set<string>
 ): Promise<string[]> {

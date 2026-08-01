@@ -12,7 +12,7 @@ export function createLogger(): ShinroLogger {
   };
 }
 
-export function fromHost(host: Partial<ShinroLogger>): ShinroLogger {
+export function hostLogger(host: Partial<ShinroLogger>): ShinroLogger {
   const fallback = createLogger();
 
   return {

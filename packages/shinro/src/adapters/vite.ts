@@ -4,7 +4,7 @@ import { findProjectRoot, loadConfig } from '../config.ts';
 import type { ShinroConfig } from '../config.ts';
 import { CLIENT_FILE, ROUTES_FILE } from '../constants.ts';
 import { generate } from '../core/generate.ts';
-import { fromHost } from '../core/logger.ts';
+import { hostLogger } from '../core/logger.ts';
 import type { ShinroLogger } from '../core/logger.ts';
 import { watch } from '../core/watch.ts';
 
@@ -33,7 +33,7 @@ export function shinro(config?: ShinroConfig & { cwd?: string }): {
     name: 'shinro',
     enforce: 'pre',
     configResolved: async (resolved) => {
-      const logger = fromHost(resolved.logger ?? {});
+      const logger = hostLogger(resolved.logger ?? {});
       const root = await findProjectRoot(cwd ?? resolved.root);
       const shinroConfig = await loadConfig(root, logger, overrides);
       outputDirectory = shinroConfig.outputDirectory;
