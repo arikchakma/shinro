@@ -1,5 +1,5 @@
 import type { NodeView } from '../ast.ts';
-import { childNodes, toNodeView } from '../ast.ts';
+import { toChildNodes, toNodeView } from '../ast.ts';
 
 export function isValidatorImport(
   source: string,
@@ -98,7 +98,7 @@ function visitNodes(value: unknown, visit: (node: NodeView) => void): void {
   }
 
   visit(node);
-  for (const child of childNodes(node)) {
+  for (const child of toChildNodes(node)) {
     visitNodes(child, visit);
   }
 }

@@ -3,9 +3,9 @@ import { readFile } from 'node:fs/promises';
 import type { Method } from '../../constants.ts';
 import { HTTP_METHODS } from '../../constants.ts';
 import {
-  isHonoExpression,
+  isHonoInstance,
   parseModule,
-  specifierNames,
+  toSpecifierNames,
   toMethodCall,
 } from '../ast.ts';
 import { couldBeHandlerTuple, handlerCount } from './tuples.ts';
@@ -91,7 +91,7 @@ export async function readRouteExports(file: string): Promise<RouteExports> {
       if (schemaKeys) {
         namedSchemas.set(declaration.id.name, schemaKeys);
       }
-      if (isHonoExpression(declaration.init, honoConstructors, honoInstances)) {
+      if (isHonoInstance(declaration.init, honoConstructors, honoInstances)) {
         honoInstances.add(declaration.id.name);
       }
       if (couldBeHandlerTuple(declaration.init, handlerFactories)) {
@@ -111,7 +111,7 @@ export async function readRouteExports(file: string): Promise<RouteExports> {
   for (const statement of ast.body) {
     if (statement.type === 'ExportDefaultDeclaration') {
       hasDefault = true;
-      isDefaultHono = isHonoExpression(
+      isDefaultHono = isHonoInstance(
         statement.declaration,
         honoConstructors,
         honoInstances
@@ -131,7 +131,7 @@ export async function readRouteExports(file: string): Promise<RouteExports> {
         continue;
       }
 
-      const { exported: name, local: localName } = specifierNames(specifier);
+      const { exported: name, local: localName } = toSpecifierNames(specifier);
       if (name === 'default') {
         hasDefault = true;
         if (statement.source === null && honoInstances.has(localName)) {
@@ -314,7 +314,7 @@ export async function readMiddlewareCount(
     }
 
     for (const specifier of statement.specifiers) {
-      const names = specifierNames(specifier);
+      const names = toSpecifierNames(specifier);
       if (names.exported === 'default' && middlewareTuples.has(names.local)) {
         count = middlewareTuples.get(names.local);
       }

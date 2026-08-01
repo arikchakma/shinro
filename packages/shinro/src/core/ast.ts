@@ -31,7 +31,7 @@ export function toNodeView(value: unknown): NodeView | undefined {
 /** Positional metadata every node carries, which is never a child node. */
 const POSITION_KEYS = new Set(['end', 'span', 'start']);
 
-export function* childNodes(node: NodeView): Generator<unknown> {
+export function* toChildNodes(node: NodeView): Generator<unknown> {
   for (const [key, child] of Object.entries(node)) {
     if (POSITION_KEYS.has(key)) {
       continue;
@@ -45,18 +45,18 @@ export function* childNodes(node: NodeView): Generator<unknown> {
 }
 
 /** Expressions that wrap a value without changing what it evaluates to. */
-const TRANSPARENT_EXPRESSIONS = new Set([
+const WRAPPER_EXPRESSIONS = new Set([
   'ChainExpression',
   'TSAsExpression',
   'TSNonNullExpression',
   'TSSatisfiesExpression',
 ]);
 
-export function isTransparentExpression(node: NodeView): boolean {
-  return TRANSPARENT_EXPRESSIONS.has(node.type);
+export function isWrapperExpression(node: NodeView): boolean {
+  return WRAPPER_EXPRESSIONS.has(node.type);
 }
 
-export function isHonoExpression(
+export function isHonoInstance(
   value: unknown,
   constructors: Set<string>,
   instances: Set<string>
@@ -80,20 +80,20 @@ export function isHonoExpression(
   if (node.type === 'CallExpression') {
     const callee = toNodeView(node.callee);
     return callee?.type === 'MemberExpression'
-      ? isHonoExpression(callee.object, constructors, instances)
+      ? isHonoInstance(callee.object, constructors, instances)
       : false;
   }
-  if (isTransparentExpression(node)) {
-    return isHonoExpression(node.expression, constructors, instances);
+  if (isWrapperExpression(node)) {
+    return isHonoInstance(node.expression, constructors, instances);
   }
 
   return false;
 }
 
-export function localNamesForImport(
+export function toLocalNames(
   ast: ReturnType<typeof parseModule>,
   importedName: string,
-  fromSource?: (source: string) => boolean
+  matchesSource?: (source: string) => boolean
 ): Set<string> {
   const locals = new Set<string>();
 
@@ -104,7 +104,7 @@ export function localNamesForImport(
 
     const source =
       typeof statement.source.value === 'string' ? statement.source.value : '';
-    if (fromSource !== undefined && !fromSource(source)) {
+    if (matchesSource !== undefined && !matchesSource(source)) {
       continue;
     }
 
@@ -122,7 +122,7 @@ export function localNamesForImport(
   return locals;
 }
 
-export function containsCallTo(value: unknown, names: Set<string>): boolean {
+export function hasCallTo(value: unknown, names: Set<string>): boolean {
   const node = toNodeView(value);
   if (!node || names.size === 0) {
     return false;
@@ -139,8 +139,8 @@ export function containsCallTo(value: unknown, names: Set<string>): boolean {
     }
   }
 
-  for (const child of childNodes(node)) {
-    if (containsCallTo(child, names)) {
+  for (const child of toChildNodes(node)) {
+    if (hasCallTo(child, names)) {
       return true;
     }
   }
@@ -182,7 +182,7 @@ export function toMethodCall(value: unknown):
   };
 }
 
-export function specifierNames(specifier: {
+export function toSpecifierNames(specifier: {
   exported: { name?: string; value?: unknown; type: string };
   local: { name?: string; value?: unknown; type: string };
 }): { exported: string; local: string } {

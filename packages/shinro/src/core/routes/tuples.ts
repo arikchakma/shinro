@@ -1,5 +1,5 @@
 import type { NodeView } from '../ast.ts';
-import { isTransparentExpression, toNodeView } from '../ast.ts';
+import { isWrapperExpression, toNodeView } from '../ast.ts';
 
 export function handlerCount(
   value: unknown,
@@ -26,7 +26,7 @@ export function handlerCount(
       ? lengthUnlessSpread(arguments_)
       : undefined;
   }
-  if (isTransparentExpression(node)) {
+  if (isWrapperExpression(node)) {
     return handlerCount(node.expression, factories, tuples);
   }
 
@@ -42,7 +42,7 @@ export function couldBeHandlerTuple(
     return false;
   }
 
-  if (isTransparentExpression(node)) {
+  if (isWrapperExpression(node)) {
     return couldBeHandlerTuple(node.expression, factories);
   }
 
@@ -99,7 +99,7 @@ function isHandlerValue(value: unknown): boolean {
   if (node.type === 'SpreadElement') {
     return isHandlerValue(node.argument);
   }
-  if (isTransparentExpression(node)) {
+  if (isWrapperExpression(node)) {
     return isHandlerValue(node.expression);
   }
 

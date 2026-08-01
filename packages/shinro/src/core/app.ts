@@ -2,13 +2,13 @@ import { readFile } from 'node:fs/promises';
 
 import { ROUTES_FILE, ROUTES_SPECIFIER } from '../constants.ts';
 import {
-  childNodes,
-  containsCallTo,
-  isHonoExpression,
-  isTransparentExpression,
-  localNamesForImport,
+  toChildNodes,
+  hasCallTo,
+  isHonoInstance,
+  isWrapperExpression,
+  toLocalNames,
   parseModule,
-  specifierNames,
+  toSpecifierNames,
   toMethodCall,
   toNodeView,
 } from './ast.ts';
@@ -24,7 +24,7 @@ export async function validateAppModule(
 ): Promise<AppModuleAnalysis> {
   const source = await readFile(file, 'utf8');
   const ast = parseModule(file, source, 'app module');
-  const routers = localNamesForImport(
+  const routers = toLocalNames(
     ast,
     'routes',
     (source) =>
@@ -32,8 +32,8 @@ export async function validateAppModule(
       source === 'shinro/routes' ||
       source.endsWith(`/${ROUTES_FILE}`)
   );
-  const factories = localNamesForImport(ast, 'defineApp');
-  const constructors = localNamesForImport(ast, 'Hono');
+  const factories = toLocalNames(ast, 'defineApp');
+  const constructors = toLocalNames(ast, 'Hono');
   const apps = new Set<string>();
   const scope: AppScope = { apps, constructors, factories };
 
@@ -49,7 +49,7 @@ export async function validateAppModule(
     for (const variable of declaration.declarations) {
       if (
         variable.id.type === 'Identifier' &&
-        isAppExpression(variable.init, scope)
+        isAppInstance(variable.init, scope)
       ) {
         apps.add(variable.id.name);
       }
@@ -58,7 +58,7 @@ export async function validateAppModule(
 
   const validDefault = ast.body.some((statement) => {
     if (statement.type === 'ExportDefaultDeclaration') {
-      return isAppExpression(statement.declaration, scope);
+      return isAppInstance(statement.declaration, scope);
     }
 
     if (
@@ -73,7 +73,7 @@ export async function validateAppModule(
         return false;
       }
 
-      const names = specifierNames(specifier);
+      const names = toSpecifierNames(specifier);
       return names.exported === 'default' && apps.has(names.local);
     });
   });
@@ -88,9 +88,7 @@ export async function validateAppModule(
     hasEarlyResponseMiddleware: ast.body.some((statement) =>
       toAppUse(statement, apps)?.arguments.some(middlewareReturnsResponse)
     ),
-    mountsRoutes: ast.body.some((statement) =>
-      containsCallTo(statement, routers)
-    ),
+    mountsRoutes: ast.body.some((statement) => hasCallTo(statement, routers)),
     registersMiddlewareAfterMount: registersMiddlewareAfterMount(
       ast,
       apps,
@@ -129,7 +127,7 @@ function registersMiddlewareAfterMount(
     if (mounted && toAppUse(statement, apps) !== undefined) {
       return true;
     }
-    if (containsCallTo(statement, routers)) {
+    if (hasCallTo(statement, routers)) {
       mounted = true;
     }
   }
@@ -156,7 +154,7 @@ function appChains(value: unknown, routers: Set<string>): ChainCall[][] {
   ) {
     return appChains(node.expression ?? node.declaration, routers);
   }
-  if (isTransparentExpression(node)) {
+  if (isWrapperExpression(node)) {
     return appChains(node.expression, routers);
   }
 
@@ -168,7 +166,7 @@ function chainCalls(value: unknown, routers: Set<string>): ChainCall[] {
   if (!node) {
     return [];
   }
-  if (isTransparentExpression(node)) {
+  if (isWrapperExpression(node)) {
     return chainCalls(node.expression, routers);
   }
   if (node.type !== 'CallExpression') {
@@ -186,7 +184,7 @@ function chainCalls(value: unknown, routers: Set<string>): ChainCall[] {
     ...chainCalls(callee.object, routers),
     {
       mountsRoutes: (node.arguments ?? []).some((argument) =>
-        containsCallTo(argument, routers)
+        hasCallTo(argument, routers)
       ),
       name: property?.type === 'Identifier' ? (property.name ?? '') : '',
     },
@@ -208,7 +206,7 @@ type AppScope = {
   factories: Set<string>;
 };
 
-function isAppExpression(value: unknown, scope: AppScope): boolean {
+function isAppInstance(value: unknown, scope: AppScope): boolean {
   const node = toNodeView(value);
   if (!node) {
     return false;
@@ -220,14 +218,14 @@ function isAppExpression(value: unknown, scope: AppScope): boolean {
       return callee.name !== undefined && scope.factories.has(callee.name);
     }
     return callee?.type === 'MemberExpression'
-      ? isAppExpression(callee.object, scope)
+      ? isAppInstance(callee.object, scope)
       : false;
   }
-  if (isTransparentExpression(node)) {
-    return isAppExpression(node.expression, scope);
+  if (isWrapperExpression(node)) {
+    return isAppInstance(node.expression, scope);
   }
 
-  return isHonoExpression(value, scope.constructors, scope.apps);
+  return isHonoInstance(value, scope.constructors, scope.apps);
 }
 
 function middlewareReturnsResponse(value: unknown): boolean {
@@ -239,10 +237,10 @@ function middlewareReturnsResponse(value: unknown): boolean {
     return false;
   }
 
-  return containsResponseReturn(middleware.body);
+  return hasResponseReturn(middleware.body);
 }
 
-function containsResponseReturn(value: unknown): boolean {
+function hasResponseReturn(value: unknown): boolean {
   const node = toNodeView(value);
   if (!node) {
     return false;
@@ -260,7 +258,7 @@ function containsResponseReturn(value: unknown): boolean {
     );
   }
   if (node.type === 'ReturnStatement') {
-    return containsResponseReturn(node.argument);
+    return hasResponseReturn(node.argument);
   }
   if (
     node.type === 'ArrowFunctionExpression' ||
@@ -270,8 +268,8 @@ function containsResponseReturn(value: unknown): boolean {
     return false;
   }
 
-  for (const child of childNodes(node)) {
-    if (containsResponseReturn(child)) {
+  for (const child of toChildNodes(node)) {
+    if (hasResponseReturn(child)) {
       return true;
     }
   }
