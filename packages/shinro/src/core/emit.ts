@@ -25,7 +25,7 @@ export type EmitResult = {
   written: string[];
 };
 
-let stagingCounter = 0;
+let promotions: Promise<unknown> = Promise.resolve();
 
 /**
  * Every write goes through here, because the user's runner is watching the
@@ -86,39 +86,53 @@ export async function emit(
 }
 
 /** Staging lives inside `.shinro` so `rename` stays within one filesystem: across
- * a mount point it is a copy, and a copy is not atomic. */
-async function promote(
+ * a mount point it is a copy, and a copy is not atomic. One path per process,
+ * constant across generations, cleared on the way in: a fresh name each time left
+ * an entry in every path-keyed watcher table on this tree, and those never shrink.
+ * Promotions queue so that sharing the one path stays safe. */
+function promote(
   outputDirectory: string,
   changed: Array<readonly [string, string]>
 ): Promise<void> {
-  stagingCounter += 1;
-  const staging = resolve(
-    outputDirectory,
-    STAGING_DIRECTORY,
-    `${process.pid}-${stagingCounter}`
-  );
+  const run = async (): Promise<void> => {
+    const staging = resolve(
+      outputDirectory,
+      STAGING_DIRECTORY,
+      String(process.pid)
+    );
 
-  const staged = changed.map(
-    ([file, source]) =>
-      [resolve(staging, relative(outputDirectory, file)), file, source] as const
-  );
+    const staged = changed.map(
+      ([file, source]) =>
+        [
+          resolve(staging, relative(outputDirectory, file)),
+          file,
+          source,
+        ] as const
+    );
 
-  try {
-    for (const [stagedFile, , source] of staged) {
-      await mkdir(dirname(stagedFile), { recursive: true });
-      await writeFile(stagedFile, source);
+    try {
+      await rm(staging, { force: true, recursive: true });
+
+      for (const [stagedFile, , source] of staged) {
+        await mkdir(dirname(stagedFile), { recursive: true });
+        await writeFile(stagedFile, source);
+      }
+
+      for (const [stagedFile, file] of staged) {
+        await mkdir(dirname(file), { recursive: true });
+        await rename(stagedFile, file);
+      }
+    } finally {
+      await rm(staging, { force: true, recursive: true });
+      // Fails while another process still has a staging directory of its own,
+      // which is exactly when it should be left alone.
+      await rmdir(resolve(outputDirectory, STAGING_DIRECTORY)).catch(() => {});
     }
+  };
 
-    for (const [stagedFile, file] of staged) {
-      await mkdir(dirname(file), { recursive: true });
-      await rename(stagedFile, file);
-    }
-  } finally {
-    await rm(staging, { force: true, recursive: true });
-    // Fails while another process still has a staging directory of its own,
-    // which is exactly when it should be left alone.
-    await rmdir(resolve(outputDirectory, STAGING_DIRECTORY)).catch(() => {});
-  }
+  const promotion = promotions.then(run, run);
+  promotions = promotion.catch(() => {});
+  return promotion;
 }
 
 async function isUpToDate(file: string, source: string): Promise<boolean> {
