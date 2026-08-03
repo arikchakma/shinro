@@ -4,6 +4,11 @@ export default defineConfig({
   staged: {
     '*': 'vp check --fix',
   },
+  test: {
+    // The watcher tests wait on real fs events, and the tsc the typecheck
+    // suites spawn saturates the machine long enough to miss them.
+    fileParallelism: false,
+  },
   lint: {
     plugins: ['typescript', 'import'],
     rules: {

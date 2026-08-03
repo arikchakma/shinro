@@ -230,6 +230,9 @@ function routesModule(options: {
     'import { Hono } from "hono";',
     // Runtime-neutral: `hono/combine` is not a `node:` specifier.
     ...(compose.size > 0 ? ['import { every } from "hono/combine";'] : []),
+    ...(routes.length > 0
+      ? ['import type { ExtractSchema } from "hono/types";']
+      : []),
     'import type { ProjectEnv } from "shinro/app";',
     ...usedMiddleware.map(
       ([file, name]) =>
@@ -297,8 +300,35 @@ function routesModule(options: {
     '}',
     '',
     'export type Routes = ReturnType<typeof routes>;',
+    ...(routes.length > 0 ? ['', ...schemaGuard(routes.length)] : []),
     '',
   ].join('\n');
+}
+
+/**
+ * A registration Hono cannot type falls through to its variadic overload, which
+ * drops the route from the schema instead of failing. The client silently
+ * empties out, which is the one failure worth a compile error of its own.
+ *
+ * TypeScript truncates a literal in a diagnostic at roughly 300 characters, so
+ * only the fix goes in the message.
+ */
+function schemaGuard(count: number): string[] {
+  const message = `[shinro] ${count} ${
+    count === 1 ? 'route' : 'routes'
+  } generated, but Hono kept no RPC schema, so the client has no routes. Add "dom" to compilerOptions.lib, or your runtime's types to compilerOptions.types, so Hono's response types can resolve the global Response.`;
+
+  return [
+    '/** Fails to compile when the registrations above produced no RPC schema:',
+    ' * a missing global `Response`, or a method export that is not a',
+    ' * fixed-length handler tuple. */',
+    'type SchemaPresent<Message extends never> = Message;',
+    'export type ShinroSchemaCheck = SchemaPresent<',
+    '  [keyof ExtractSchema<Routes>] extends [never]',
+    `    ? ${JSON.stringify(message)}`,
+    '    : never',
+    '>;',
+  ];
 }
 
 function clientModule(outputDirectory: string, appFile: string): string {
