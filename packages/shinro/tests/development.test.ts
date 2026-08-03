@@ -236,7 +236,8 @@ test('node --watch plus the preload restarts once for a brand-new route', async 
     child = spawn(
       process.execPath,
       ['--watch', '--import', WATCH_PRELOAD, `${root}/src/server.ts`],
-      { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] }
+      // Its own process group, so teardown can take the server with it.
+      { cwd: root, detached: true, stdio: ['ignore', 'pipe', 'pipe'] }
     );
     const output = collectOutput(child);
     const firstPort = Number((await output.waitFor(/READY:(\d+)/))[1]);
@@ -257,8 +258,14 @@ test('node --watch plus the preload restarts once for a brand-new route', async 
     await new Promise((settle) => setTimeout(settle, 1_500));
     expect(output.matches(/READY:/g)).toHaveLength(2);
   } finally {
-    if (child && child.exitCode === null) {
-      child.kill('SIGKILL');
+    if (child?.pid !== undefined && child.exitCode === null) {
+      // Killing `node --watch` on its own leaves the server it supervises behind,
+      // holding its watchers, reparented to init, for the life of the machine.
+      try {
+        process.kill(-child.pid, 'SIGKILL');
+      } catch {
+        child.kill('SIGKILL');
+      }
     }
     await rm(root, { force: true, recursive: true });
   }
