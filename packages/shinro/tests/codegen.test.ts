@@ -33,7 +33,7 @@ test('the generated router imports route modules directly and stays runtime-neut
     expect(routes).not.toMatch(/from "node:/);
     expect(
       [...routes.matchAll(/from "([^".][^"]*)"/g)].map((m) => m[1])
-    ).toEqual(['hono', 'shinro/app']);
+    ).toEqual(['hono', 'hono/types', 'shinro/app']);
   });
 });
 

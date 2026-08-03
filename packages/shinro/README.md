@@ -76,6 +76,15 @@ declarations need. It uses `${configDir}`, so a base config living in
 `node_modules` still expresses paths relative to _your_ project. `.shinro` is
 where Shinro generates, always — that is what makes the shipped config possible.
 
+It also carries `"lib": ["es2023", "dom", "dom.iterable"]`, which is about
+`Response` rather than the browser. Hono builds every RPC response type on the
+global `Response`, so a config without it types `c.json()` as `any`, drops every
+route out of the schema, and leaves you with a client that has no routes and no
+error explaining why. Override `lib` freely when your runtime's types supply
+those globals — `@types/node`, `@cloudflare/workers-types` — because
+`.shinro/routes.ts` carries a compile-time guard that fails loudly if the schema
+ever does come out empty.
+
 `shinro/tsconfig` is check-only (`noEmit`, which is what makes
 `allowImportingTsExtensions` legal). A project that wants plain `tsc` to _emit_
 extends `shinro/tsconfig/emit` instead, which swaps `noEmit` for

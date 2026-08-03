@@ -32,8 +32,12 @@ export async function watch(options: {
   keepAlive?: boolean;
   logger: ShinroLogger;
   onGenerate?: (result: GenerateResult, changed: string[]) => void;
+  /** Defaults to the platform's support. `false` is the watcher-per-directory
+   * path, which is what Linux gets. */
+  recursive?: boolean;
 }): Promise<{ close: () => Promise<void> }> {
   const { config, initial = 'throw', keepAlive = false, logger } = options;
+  const recursive = options.recursive ?? SUPPORTS_RECURSIVE;
   const routesDirectory = resolve(config.root, config.routes);
   const watchers = new Map<string, FSWatcher>();
   const triggers = new Set<string>();
@@ -41,6 +45,7 @@ export async function watch(options: {
   let timer: NodeJS.Timeout | undefined;
   let generating = false;
   let queued = false;
+  let running: Promise<void> | undefined;
 
   const run = async (rethrow = false): Promise<void> => {
     if (generating) {
@@ -49,23 +54,27 @@ export async function watch(options: {
     }
 
     generating = true;
-    try {
-      const result = await generate({ config, logger });
-      const changed = [...triggers];
-      triggers.clear();
-      options.onGenerate?.(result, changed);
-    } catch (error) {
-      if (rethrow) {
-        throw error;
+    running = (async () => {
+      try {
+        const result = await generate({ config, logger });
+        const changed = [...triggers];
+        triggers.clear();
+        options.onGenerate?.(result, changed);
+      } catch (error) {
+        if (rethrow) {
+          throw error;
+        }
+        logger.error(error instanceof Error ? error.message : String(error));
+      } finally {
+        generating = false;
+        if (queued && !closed) {
+          queued = false;
+          schedule();
+        }
       }
-      logger.error(error instanceof Error ? error.message : String(error));
-    } finally {
-      generating = false;
-      if (queued && !closed) {
-        queued = false;
-        schedule();
-      }
-    }
+    })();
+
+    await running;
   };
 
   const schedule = (): void => {
@@ -94,7 +103,7 @@ export async function watch(options: {
     const file = resolve(directory, filename);
 
     if (extname(file) === '') {
-      if (SUPPORTS_RECURSIVE) {
+      if (recursive) {
         schedule();
       } else {
         void syncWatchers().then(schedule);
@@ -116,7 +125,7 @@ export async function watch(options: {
     try {
       const watcher = watchDirectory(
         directory,
-        { recursive: SUPPORTS_RECURSIVE },
+        { recursive },
         (_event, filename) => onEvent(directory, filename)
       );
       // A deleted directory raises here, and is an ordinary edit.
@@ -138,8 +147,11 @@ export async function watch(options: {
     }
   };
 
+  /** One watcher per live directory: adds the ones that appeared, closes the ones
+   * whose directory is gone. Closing is the point — a watcher on a deleted
+   * directory never fires again but still holds a handle the OS caps per user. */
   const syncWatchers = async (): Promise<void> => {
-    if (SUPPORTS_RECURSIVE || closed) {
+    if (recursive || closed) {
       return;
     }
 
@@ -147,10 +159,20 @@ export async function watch(options: {
       recursive: true,
       withFileTypes: true,
     }).catch(() => []);
+    const live = new Set([routesDirectory]);
 
     for (const entry of entries) {
       if (entry.isDirectory()) {
-        addWatcher(resolve(entry.parentPath, entry.name));
+        const directory = resolve(entry.parentPath, entry.name);
+        live.add(directory);
+        addWatcher(directory);
+      }
+    }
+
+    for (const [directory, watcher] of watchers) {
+      if (!live.has(directory)) {
+        watchers.delete(directory);
+        watcher.close();
       }
     }
   };
@@ -168,6 +190,8 @@ export async function watch(options: {
         watcher.close();
       }
       watchers.clear();
+      // Closed means nothing more will be written, in-flight generation included.
+      await running?.catch(() => {});
     },
   };
 }

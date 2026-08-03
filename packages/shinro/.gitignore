@@ -4,3 +4,6 @@ dist
 dist-declarations
 *.log
 .DS_Store
+
+# Type-checked scratch projects, removed by the tests that write them.
+tests/.tmp-typecheck

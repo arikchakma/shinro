@@ -10,7 +10,8 @@ import { resolve } from 'node:path';
 
 import { expect, test } from 'vite-plus/test';
 
-import { GENERATED_FORMAT } from '../src/constants.ts';
+import { GENERATED_FORMAT, STAGING_DIRECTORY } from '../src/constants.ts';
+import { emit } from '../src/core/emit.ts';
 import { GET_ROUTE, middleware, route, withProject } from './helpers.ts';
 
 test('regenerating an unchanged tree writes nothing and touches nothing', async () => {
@@ -45,6 +46,68 @@ test('regenerating an unchanged tree writes nothing and touches nothing', async 
     expect(await readdir(project.outputDirectory)).toEqual(
       expect.not.arrayContaining(['.staging'])
     );
+  });
+});
+
+test('every generation stages through the same path', async () => {
+  await withProject('staging-path', async (project) => {
+    const staging = resolve(project.outputDirectory, STAGING_DIRECTORY);
+    const seen = new Set<string>();
+    let polling = true;
+
+    const poll = (async () => {
+      while (polling) {
+        for (const name of await readdir(staging).catch(() => [])) {
+          seen.add(name);
+        }
+      }
+    })();
+
+    try {
+      for (let round = 0; round < 8; round += 1) {
+        await emit(
+          project.outputDirectory,
+          new Map(
+            Array.from({ length: 40 }, (_, index) => [
+              resolve(project.outputDirectory, `types/staged-${index}.d.ts`),
+              `// round ${round}\nexport {};\n`,
+            ])
+          )
+        );
+      }
+    } finally {
+      polling = false;
+      await poll;
+    }
+
+    expect([...seen]).toEqual([String(process.pid)]);
+    expect(await readdir(project.outputDirectory)).toEqual(
+      expect.not.arrayContaining([STAGING_DIRECTORY])
+    );
+  });
+});
+
+test('generations that overlap do not stage over each other', async () => {
+  await withProject('staging-overlap', async (project) => {
+    const files = (round: number): Map<string, string> =>
+      new Map(
+        Array.from({ length: 20 }, (_, index) => [
+          resolve(project.outputDirectory, `types/overlap-${index}.d.ts`),
+          `// round ${round}\nexport {};\n`,
+        ])
+      );
+
+    const results = await Promise.all([
+      emit(project.outputDirectory, files(1)),
+      emit(project.outputDirectory, files(2)),
+      emit(project.outputDirectory, files(3)),
+    ]);
+
+    expect(results.every((result) => result.written.length === 20)).toBe(true);
+    for (let index = 0; index < 20; index += 1) {
+      const contents = await project.generated(`types/overlap-${index}.d.ts`);
+      expect(contents).toMatch(/^\/\/ round [123]\nexport \{\};\n$/);
+    }
   });
 });
 

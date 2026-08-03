@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { expect, test } from 'vite-plus/test';
@@ -235,7 +236,8 @@ test('node --watch plus the preload restarts once for a brand-new route', async 
     child = spawn(
       process.execPath,
       ['--watch', '--import', WATCH_PRELOAD, `${root}/src/server.ts`],
-      { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] }
+      // Its own process group, so teardown can take the server with it.
+      { cwd: root, detached: true, stdio: ['ignore', 'pipe', 'pipe'] }
     );
     const output = collectOutput(child);
     const firstPort = Number((await output.waitFor(/READY:(\d+)/))[1]);
@@ -256,12 +258,52 @@ test('node --watch plus the preload restarts once for a brand-new route', async 
     await new Promise((settle) => setTimeout(settle, 1_500));
     expect(output.matches(/READY:/g)).toHaveLength(2);
   } finally {
-    if (child && child.exitCode === null) {
-      child.kill('SIGKILL');
+    if (child?.pid !== undefined && child.exitCode === null) {
+      // Killing `node --watch` on its own leaves the server it supervises behind,
+      // holding its watchers, reparented to init, for the life of the machine.
+      try {
+        process.kill(-child.pid, 'SIGKILL');
+      } catch {
+        child.kill('SIGKILL');
+      }
     }
     await rm(root, { force: true, recursive: true });
   }
 }, 30_000);
+
+test('a directory that goes away gives its watcher back', async () => {
+  await withProject('watch-prune', async (project) => {
+    await project.write('src/routes/health.ts', GET_ROUTE);
+    const watcher = await watch({
+      config: await loadConfig(project.root, silentLogger()),
+      // Referenced, because `watchHandles` can only count referenced handles.
+      keepAlive: true,
+      logger: silentLogger(),
+      recursive: false,
+    });
+
+    try {
+      const baseline = watchHandles();
+
+      await project.write('src/routes/a/index.ts', GET_ROUTE);
+      await project.write('src/routes/b/index.ts', GET_ROUTE);
+      await waitFor(() => watchHandles() >= baseline + 2);
+
+      await rm(resolve(project.root, 'src/routes/a'), { recursive: true });
+      await rm(resolve(project.root, 'src/routes/b'), { recursive: true });
+
+      await waitFor(() => watchHandles() === baseline);
+    } finally {
+      await watcher.close();
+    }
+  });
+}, 20_000);
+
+function watchHandles(): number {
+  return process
+    .getActiveResourcesInfo()
+    .filter((resource) => resource === 'FSEventWrap').length;
+}
 
 function silentLogger(): ReturnType<typeof createLogger> {
   return { error: () => {}, info: () => {}, warn: () => {} };
